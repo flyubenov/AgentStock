@@ -79,6 +79,8 @@ def _upsert_sync(result: TickerResult) -> None:
     svc = _get_service()
     sheet_id = _sheet_id()
 
+    _ensure_database_sheet(svc, sheet_id)
+
     # Read existing data
     existing = svc.spreadsheets().values().get(
         spreadsheetId=sheet_id, range="Database!A:A"
@@ -95,15 +97,7 @@ def _upsert_sync(result: TickerResult) -> None:
     new_row = _result_to_row(result)
 
     if target_row is None:
-        # Append
-        if not rows:
-            # Write headers first
-            svc.spreadsheets().values().update(
-                spreadsheetId=sheet_id,
-                range="Database!A1",
-                valueInputOption="RAW",
-                body={"values": [_DB_HEADERS]},
-            ).execute()
+        # Append new row
         svc.spreadsheets().values().append(
             spreadsheetId=sheet_id,
             range="Database!A:A",
@@ -127,12 +121,38 @@ async def read_database() -> list[TickerResult]:
     return await loop.run_in_executor(None, _read_database_sync)
 
 
+def _ensure_database_sheet(svc, sheet_id: str) -> None:
+    """Create the 'Database' sheet tab if it doesn't exist."""
+    meta = svc.spreadsheets().get(spreadsheetId=sheet_id).execute()
+    existing = [s["properties"]["title"] for s in meta.get("sheets", [])]
+    if "Database" not in existing:
+        svc.spreadsheets().batchUpdate(
+            spreadsheetId=sheet_id,
+            body={"requests": [{"addSheet": {"properties": {"title": "Database"}}}]},
+        ).execute()
+        # Write headers on the new sheet
+        svc.spreadsheets().values().update(
+            spreadsheetId=sheet_id,
+            range="Database!A1",
+            valueInputOption="RAW",
+            body={"values": [_DB_HEADERS]},
+        ).execute()
+
+
 def _read_database_sync() -> list[TickerResult]:
     svc = _get_service()
-    result = svc.spreadsheets().values().get(
-        spreadsheetId=_sheet_id(),
-        range="Database!A:P",
-    ).execute()
+    sheet_id = _sheet_id()
+    try:
+        result = svc.spreadsheets().values().get(
+            spreadsheetId=sheet_id,
+            range="Database!A:P",
+        ).execute()
+    except Exception as e:
+        if "Unable to parse range" in str(e) or "400" in str(e):
+            # Sheet tab doesn't exist yet — create it and return empty
+            _ensure_database_sheet(svc, sheet_id)
+            return []
+        raise
     rows = result.get("values", [])
     if len(rows) < 2:
         return []
