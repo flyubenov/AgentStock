@@ -54,11 +54,14 @@ def ddm(div: float, growth: float) -> float | None:
 
 
 def _scenarios(fin: dict) -> tuple[float, float, float]:
-    base_growth = fin["earnings_growth"] or fin["revenue_growth"] or 0.07
+    raw = fin["earnings_growth"] or fin["revenue_growth"] or 0.07
+    # Cap to [2%, 20%] — yfinance can return spike quarterly figures (e.g. 56%)
+    # that produce nonsensical 10-year DCF projections.
+    base = max(0.02, min(float(raw), 0.20))
     return (
-        min(base_growth + 0.05, 0.30),   # optimistic
-        base_growth,                       # realistic
-        max(base_growth - 0.04, 0.01),    # pessimistic
+        min(base + 0.05, 0.25),       # optimistic
+        base,                          # realistic
+        max(base - 0.04, 0.02),       # pessimistic
     )
 
 
@@ -75,8 +78,10 @@ async def run(ticker: str) -> FairValueResult:
         payout = fin["payout_ratio"] or 0.40
         div_rate = fin["dividend_rate"]
         div_yield = fin["dividend_yield"] or 0
-        ev_ebitda_m = info.get("enterpriseToEbitda") or 12.0
-        trailing_pe = fin["trailing_pe"] or 15.0
+        # Cap exit multiples — current market multiples can be very high for growth stocks,
+        # which when projected 10 years forward produces nonsensical valuations.
+        ev_ebitda_m = min(info.get("enterpriseToEbitda") or 12.0, 20.0)
+        trailing_pe = min(fin["trailing_pe"] or 15.0, 35.0)
 
         opt_g, real_g, pess_g = _scenarios(fin)
         breakdown: dict = {}

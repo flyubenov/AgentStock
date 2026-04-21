@@ -80,10 +80,13 @@ async def run(ticker: str) -> FairValueResult:
         revenue = fin["revenue_ttm"]
         eps = fin["eps_ttm"]
         bv = fin["book_value_per_share"]
-        growth = fin["earnings_growth"] or fin["revenue_growth"] or 0.07
-        ev_ebitda_m = info.get("enterpriseToEbitda") or 12.0
-        ev_sales_m = info.get("enterpriseToRevenue") or 3.0
-        trailing_pe = fin["trailing_pe"] or 15.0
+        raw_growth = fin["earnings_growth"] or fin["revenue_growth"] or 0.07
+        # Cap to [2%, 20%] — yfinance quarterly YoY figures can be temporarily very high
+        growth = max(0.02, min(float(raw_growth), 0.20))
+        # Cap exit multiples to prevent compounded forward projections from inflating values
+        ev_ebitda_m = min(info.get("enterpriseToEbitda") or 12.0, 20.0)
+        ev_sales_m = min(info.get("enterpriseToRevenue") or 3.0, 8.0)
+        trailing_pe = min(fin["trailing_pe"] or 15.0, 35.0)
         growth_pct = growth * 100
 
         wacc = _wacc(info, fin)
