@@ -5,9 +5,9 @@ import anthropic
 from models import AgentResult
 
 _PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
-_BACKOFF_BASE = 2.0
-_MAX_BACKOFF = 30.0
-_MAX_RETRIES = 3
+_BACKOFF_BASE = 15.0   # new accounts start at 5 RPM — need longer waits
+_MAX_BACKOFF = 120.0
+_MAX_RETRIES = 5
 
 
 class BaseAgent:
