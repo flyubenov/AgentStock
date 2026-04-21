@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { TickerResult, JobStatus } from '../types'
+import type { TickerResult, JobStatus } from '../types'
 
 interface StreamState {
   status: JobStatus['status']

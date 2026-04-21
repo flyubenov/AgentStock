@@ -1,4 +1,4 @@
-import { FairValueResult, TickerResult } from '../types'
+import type { FairValueResult, TickerResult } from '../types'
 
 interface FairValuePanelProps {
   result: TickerResult
@@ -20,7 +20,7 @@ function FVRow({ label, result }: { label: string; result: FairValueResult | und
   )
 }
 
-export default function FairValuePanel({ result, compact }: FairValuePanelProps) {
+export default function FairValuePanel({ result }: FairValuePanelProps) {
   const fvGemini = result.fair_value_results['gemini_fv']
   const fvCalc1 = result.fair_value_results['calculator_1']
   const fvCalc2 = result.fair_value_results['calculator_2']

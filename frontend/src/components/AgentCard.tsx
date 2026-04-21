@@ -1,4 +1,4 @@
-import { AgentResult } from '../types'
+import type { AgentResult } from '../types'
 import ScoreBadge from './ScoreBadge'
 import { cn } from '../lib/utils'
 

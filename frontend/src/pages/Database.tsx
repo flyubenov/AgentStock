@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { TickerResult, scoreToColor } from '../types'
+import type { TickerResult } from '../types'
+import { scoreToColor } from '../types'
 import ScoreBadge from '../components/ScoreBadge'
 
 const API = 'http://localhost:8000'

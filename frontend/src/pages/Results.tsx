@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useParams, useLocation, Link } from 'react-router-dom'
 import ScoreBadge from '../components/ScoreBadge'
-import { TickerResult, scoreToColor } from '../types'
+import type { TickerResult } from '../types'
+import { scoreToColor } from '../types'
 
 const AGENT_COLS = [
   { key: 'buffett_munger_score' as const, label: 'B-M' },
