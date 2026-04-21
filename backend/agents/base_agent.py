@@ -12,7 +12,7 @@ _MAX_RETRIES = 3
 
 class BaseAgent:
     agent_name: str = "base"
-    model: str = "claude-opus-4-6"
+    model: str = "claude-sonnet-4-6"
     max_tokens: int = 4000
     tools = [{"type": "web_search_20250305", "name": "web_search"}]
 
