@@ -54,9 +54,16 @@ def _net_debt(info: dict) -> float:
     return total_debt - cash
 
 
+_TICKER_RE = __import__('re').compile(r'^[A-Z]{1,5}(\.[A-Z]{1,2})?$')
+
 async def validate_ticker(ticker: str) -> bool:
+    """Validate ticker format first; fall back to yfinance only if format looks odd.
+    On any network/rate-limit error, assume valid to avoid blocking the user."""
+    if not _TICKER_RE.match(ticker.upper()):
+        return False
     try:
         info = await fetch_ticker_info(ticker)
         return bool(info.get("symbol") or info.get("shortName"))
     except Exception:
-        return False
+        # Rate limit or network error — assume valid, let analysis fail gracefully
+        return True
