@@ -27,6 +27,11 @@ def normalise_canslim(raw: float) -> float:
     return max(1.0, min(5.0, ((raw - 7) / 28) * 4 + 1))
 
 
+def normalise_pre_screener(raw: float) -> float:
+    """Direct 1–5 scale (score derived by derive_pre_screener; clamp to valid range)."""
+    return max(1.0, min(5.0, raw))
+
+
 def derive_pre_screener(recommendation: str | None, growth_potential: str | None, financial_state: str | None) -> float:
     """
     1. Map recommendation: BUY=5, HOLD=3, SELL=1
@@ -56,7 +61,7 @@ _NORMALIZERS = {
     "growth_stock": normalise_growth_stock,
     "business_engine": normalise_business_engine,
     "canslim": normalise_canslim,
-    "pre_screener": lambda x: max(1.0, min(5.0, x)),
+    "pre_screener": normalise_pre_screener,
 }
 
 
