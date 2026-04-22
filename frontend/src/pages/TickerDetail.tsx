@@ -1,4 +1,4 @@
-import { useParams, useLocation, Link } from 'react-router-dom'
+import { useLocation, Link } from 'react-router-dom'
 import type { TickerResult } from '../types'
 import ScoreBadge from '../components/ScoreBadge'
 import AgentCard from '../components/AgentCard'
@@ -7,7 +7,6 @@ import FairValuePanel from '../components/FairValuePanel'
 const AGENTS = ['buffett_munger', 'lynch_garp', 'growth_stock', 'business_engine', 'canslim', 'pre_screener']
 
 export default function TickerDetail() {
-  const { jobId } = useParams()
   const location = useLocation()
   const result: TickerResult | undefined = location.state?.result
 
