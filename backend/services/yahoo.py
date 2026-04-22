@@ -91,16 +91,20 @@ async def format_financial_block(ticker: str) -> str | None:
     def _large(val: float | None) -> str:
         if val is None:
             return "N/A"
-        if val >= 1e12:
-            return f"${val / 1e12:.2f}T"
-        if val >= 1e9:
-            return f"${val / 1e9:.2f}B"
-        return f"${val / 1e6:.2f}M"
+        abs_val = abs(val)
+        sign = "-" if val < 0 else ""
+        if abs_val >= 1e12:
+            return f"{sign}${abs_val / 1e12:.2f}T"
+        if abs_val >= 1e9:
+            return f"{sign}${abs_val / 1e9:.2f}B"
+        return f"{sign}${abs_val / 1e6:.2f}M"
 
     def _n(val: float | None, d: int = 2) -> str:
         return "N/A" if val is None else f"{val:.{d}f}"
 
-    price = info.get("currentPrice") or info.get("regularMarketPrice")
+    price = info.get("currentPrice")
+    if price is None:
+        price = info.get("regularMarketPrice")
     mkt_cap = info.get("marketCap")
     ma200 = info.get("twoHundredDayAverage")
     fcf = info.get("freeCashflow")
@@ -110,7 +114,7 @@ async def format_financial_block(ticker: str) -> str | None:
         price_vs_ma = (price - ma200) / ma200 * 100
 
     fcf_yield = None
-    if fcf and mkt_cap and mkt_cap > 0:
+    if fcf is not None and mkt_cap and mkt_cap > 0:
         fcf_yield = fcf / mkt_cap * 100
 
     rec = (info.get("recommendationKey") or "N/A").upper()
