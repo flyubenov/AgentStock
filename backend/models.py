@@ -54,6 +54,7 @@ class TickerResult(BaseModel):
 class AnalyseRequest(BaseModel):
     tickers: list[str] = []
     sheets_url: str | None = None
+    mode: Literal["live", "batch"] = "batch"
 
 
 class JobStatus(BaseModel):

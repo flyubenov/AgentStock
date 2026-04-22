@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from routers.analysis import router as analysis_router
 from routers.database import router as database_router
+from routers.jobs import router as jobs_router
 
 load_dotenv()
 
@@ -17,6 +18,7 @@ app.add_middleware(
 
 app.include_router(analysis_router, prefix="/api")
 app.include_router(database_router, prefix="/api")
+app.include_router(jobs_router, prefix="/api")
 
 
 @app.get("/api/health")

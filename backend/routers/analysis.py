@@ -5,11 +5,11 @@ from sse_starlette.sse import EventSourceResponse
 from models import AnalyseRequest
 from services.yahoo import validate_ticker
 from services.sheets import read_tickers
+from services.batch_service import submit_batch_job
 from orchestrator.batch import run_batch
 
 router = APIRouter()
 
-# In-memory job store (sufficient for local single-machine use)
 _jobs: dict[str, dict] = {}
 _cancel_events: dict[str, asyncio.Event] = {}
 
@@ -18,11 +18,9 @@ _cancel_events: dict[str, asyncio.Event] = {}
 async def start_analysis(request: AnalyseRequest):
     tickers: list[str] = []
 
-    # Input: manual tickers
     if request.tickers:
         tickers.extend([t.strip().upper() for t in request.tickers if t.strip()])
 
-    # Input: Google Sheets (when no manual tickers provided, or sheets_url set)
     if request.sheets_url and not request.tickers:
         try:
             sheet_tickers = await read_tickers()
@@ -34,7 +32,6 @@ async def start_analysis(request: AnalyseRequest):
     if not tickers:
         return {"error": "No tickers provided"}
 
-    # Validate tickers in parallel
     valid_results = await asyncio.gather(*[validate_ticker(t) for t in tickers])
     valid_tickers = [t for t, ok in zip(tickers, valid_results) if ok]
     invalid_tickers = [t for t, ok in zip(tickers, valid_results) if not ok]
@@ -43,6 +40,21 @@ async def start_analysis(request: AnalyseRequest):
         return {"error": "No valid tickers found", "invalid": invalid_tickers}
 
     job_id = str(uuid.uuid4())
+
+    if request.mode == "batch":
+        try:
+            result = await submit_batch_job(job_id, valid_tickers)
+            return {
+                "job_id": job_id,
+                "mode": "batch",
+                "total": len(valid_tickers),
+                "invalid": invalid_tickers,
+                "failed_prefetch": result.get("failed_prefetch", []),
+            }
+        except ValueError as e:
+            return {"error": str(e)}
+
+    # Live mode (SSE)
     cancel_event = asyncio.Event()
     _cancel_events[job_id] = cancel_event
     _jobs[job_id] = {
@@ -53,10 +65,8 @@ async def start_analysis(request: AnalyseRequest):
         "results": [],
         "invalid": invalid_tickers,
     }
-
     asyncio.create_task(_run_job(job_id, valid_tickers, cancel_event))
-
-    return {"job_id": job_id, "total": len(valid_tickers), "invalid": invalid_tickers}
+    return {"job_id": job_id, "mode": "live", "total": len(valid_tickers), "invalid": invalid_tickers}
 
 
 async def _run_job(job_id: str, tickers: list[str], cancel_event: asyncio.Event):
@@ -82,16 +92,10 @@ async def stream_job(job_id: str):
             job = _jobs.get(job_id)
             if not job:
                 break
-
-            # Send any new results since last poll
             results = job["results"]
             for result in results[last_sent:]:
-                yield {
-                    "event": "ticker_done",
-                    "data": json.dumps(result),
-                }
+                yield {"event": "ticker_done", "data": json.dumps(result)}
                 last_sent += 1
-
             yield {
                 "event": "status",
                 "data": json.dumps({
@@ -102,10 +106,8 @@ async def stream_job(job_id: str):
                     "failed": job["failed"],
                 }),
             }
-
             if job["status"] in ("completed", "failed", "cancelled"):
                 break
-
             await asyncio.sleep(1)
 
     return EventSourceResponse(event_generator())
