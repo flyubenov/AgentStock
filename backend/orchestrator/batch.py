@@ -11,7 +11,7 @@ from agents.pre_screener import PreScreenerAgent
 from valuation.gemini_fv import run as gemini_fv_run
 from valuation.calculator_1 import run as calc1_run
 from valuation.calculator_2 import run as calc2_run
-from services.yahoo import fetch_ticker_info, extract_financials, validate_ticker
+from services.yahoo import fetch_ticker_info, extract_financials, format_financial_block
 from services.normalizer import apply_normalisation
 from services.sheets import upsert_result
 from orchestrator.aggregator import aggregate
@@ -31,10 +31,10 @@ _AGENTS = {
 }
 
 
-async def _run_agent(key: str, cls, ticker: str) -> tuple[str, AgentResult]:
+async def _run_agent(key: str, cls, ticker: str, financial_block: str) -> tuple[str, AgentResult]:
     async with _semaphore:
         agent = cls()
-        result = await agent.run(ticker)
+        result = await agent.run(ticker, financial_block)
         result = apply_normalisation(key, result)
         return key, result
 
@@ -44,8 +44,16 @@ async def _run_fv(key: str, fn, ticker: str) -> tuple[str, FairValueResult]:
 
 
 async def analyse_ticker(ticker: str) -> TickerResult:
-    """Run all 9 analyses concurrently for a single ticker."""
-    agent_tasks = [_run_agent(k, cls, ticker) for k, cls in _AGENTS.items()]
+    """Run all 9 analyses for a single ticker. Aborts if yfinance pre-fetch fails."""
+    financial_block = await format_financial_block(ticker)
+    if financial_block is None:
+        return TickerResult(
+            ticker=ticker,
+            status="failed",
+            errors=["yfinance data unavailable"],
+        )
+
+    agent_tasks = [_run_agent(k, cls, ticker, financial_block) for k, cls in _AGENTS.items()]
     fv_tasks = [
         _run_fv("gemini_fv", gemini_fv_run, ticker),
         _run_fv("calculator_1", calc1_run, ticker),
@@ -75,7 +83,6 @@ async def analyse_ticker(ticker: str) -> TickerResult:
             else:
                 fv_results[key] = result
 
-    # Fetch basic info for company name + price
     company_name = None
     current_price = None
     try:
@@ -101,13 +108,12 @@ async def run_batch(
 
     yield {"type": "job_start", "job_id": job_id, "total": total}
 
-    groups = [tickers[i:i + BATCH_SIZE] for i in range(0, len(tickers), BATCH_SIZE)]
+    groups = [tickers[i : i + BATCH_SIZE] for i in range(0, len(tickers), BATCH_SIZE)]
 
     for group in groups:
         if cancel_event.is_set():
             break
 
-        # Within each group, all tickers run concurrently
         group_tasks = {t: asyncio.create_task(analyse_ticker(t)) for t in group}
 
         for ticker, task in group_tasks.items():
