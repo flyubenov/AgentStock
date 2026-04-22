@@ -9,8 +9,8 @@ try:
 except ImportError:
     _YFRateLimitError = None  # older yfinance versions
 
-_RATE_LIMIT_RETRIES = 4
-_RATE_LIMIT_BACKOFF = 30.0  # seconds; multiplied by attempt number
+_RATE_LIMIT_RETRIES = 3
+_RATE_LIMIT_BACKOFF = 8.0  # seconds; multiplied by attempt number (8, 16, 24 = 48s max)
 
 
 async def fetch_ticker_info(ticker: str) -> dict:
@@ -82,16 +82,9 @@ def _net_debt(info: dict) -> float:
 _TICKER_RE = __import__('re').compile(r'^[A-Z]{1,5}(\.[A-Z]{1,2})?$')
 
 async def validate_ticker(ticker: str) -> bool:
-    """Validate ticker format first; fall back to yfinance only if format looks odd.
-    On any network/rate-limit error, assume valid to avoid blocking the user."""
-    if not _TICKER_RE.match(ticker.upper()):
-        return False
-    try:
-        info = await fetch_ticker_info(ticker)
-        return bool(info.get("symbol") or info.get("shortName"))
-    except Exception:
-        # Rate limit or network error — assume valid, let analysis fail gracefully
-        return True
+    """Validate ticker by format only — yfinance is too slow/rate-limited to use here.
+    Analysis will fail gracefully if the ticker doesn't exist."""
+    return bool(_TICKER_RE.match(ticker.upper()))
 
 
 async def format_financial_block(ticker: str) -> str | None:
