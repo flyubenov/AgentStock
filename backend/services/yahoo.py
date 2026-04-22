@@ -1,21 +1,36 @@
 import asyncio
+import time
 import yfinance as yf
 from functools import lru_cache
 from datetime import date as _date
+
+_RATE_LIMIT_RETRIES = 3
+_RATE_LIMIT_BACKOFF = 5.0  # seconds between retries
 
 
 async def fetch_ticker_info(ticker: str) -> dict:
     """Async wrapper around yfinance Ticker.info."""
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, _fetch_sync, ticker)
+    return await loop.run_in_executor(None, _fetch_sync, ticker.upper())
 
 
+@lru_cache(maxsize=256)
 def _fetch_sync(ticker: str) -> dict:
-    t = yf.Ticker(ticker)
-    info = t.info or {}
-    if not info.get("symbol") and not info.get("shortName"):
-        raise ValueError(f"Ticker '{ticker}' not found or returned no data")
-    return info
+    """Fetch yfinance info with retry on rate-limit. Cached per ticker per process."""
+    for attempt in range(_RATE_LIMIT_RETRIES):
+        try:
+            t = yf.Ticker(ticker)
+            info = t.info or {}
+            if not info.get("symbol") and not info.get("shortName"):
+                raise ValueError(f"Ticker '{ticker}' not found or returned no data")
+            return info
+        except Exception as e:
+            if "rate" in str(e).lower() or "too many" in str(e).lower():
+                if attempt < _RATE_LIMIT_RETRIES - 1:
+                    time.sleep(_RATE_LIMIT_BACKOFF * (attempt + 1))
+                    continue
+            raise
+    raise RuntimeError(f"Failed to fetch {ticker} after {_RATE_LIMIT_RETRIES} attempts")
 
 
 def extract_financials(info: dict) -> dict:
