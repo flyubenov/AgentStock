@@ -84,7 +84,7 @@ class BaseAgent:
             r"^(SCORE|RECOMMENDATION|GROWTH POTENTIAL|FINANCIAL STATE|RATIONALE):",
             re.IGNORECASE,
         )
-        lines = [l for l in text.strip().splitlines() if not skip.match(l.strip())]
+        lines = [line for line in text.strip().splitlines() if not skip.match(line.strip())]
         return "\n".join(lines).strip()
 
     def parse_score(self, response: str) -> tuple[float | None, str | None, str | None]:
