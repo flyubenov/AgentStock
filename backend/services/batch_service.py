@@ -1,5 +1,5 @@
 from __future__ import annotations
-import asyncio, json, os
+import asyncio, os
 from datetime import datetime, timezone
 from pathlib import Path
 import anthropic
@@ -19,6 +19,7 @@ from services.sheets import upsert_result
 from orchestrator.aggregator import aggregate
 
 _JOBS_DIR = Path(__file__).parent.parent / "jobs"
+_JOBS_DIR.mkdir(exist_ok=True)
 
 _AGENTS = {
     "buffett_munger": BuffettMungerAgent,
@@ -33,7 +34,6 @@ _AGENTS = {
 # ── Job file helpers ──────────────────────────────────────────────────────────
 
 def _jobs_dir() -> Path:
-    _JOBS_DIR.mkdir(exist_ok=True)
     return _JOBS_DIR
 
 
@@ -59,7 +59,9 @@ def update_job_status(job_id: str, status: str) -> None:
 # ── Batch request building ────────────────────────────────────────────────────
 
 def _parse_custom_id(custom_id: str) -> tuple[str, str, str]:
-    parts = custom_id.split("__")
+    parts = custom_id.split("__", maxsplit=2)
+    if len(parts) != 3:
+        raise ValueError(f"Malformed custom_id: {custom_id!r}")
     return parts[0], parts[1], parts[2]
 
 
@@ -167,6 +169,10 @@ async def cancel_batch_job(job_id: str) -> bool:
 
 # ── Results ───────────────────────────────────────────────────────────────────
 
+async def _run_fv(key: str, fn, ticker: str):
+    return key, await fn(ticker)
+
+
 async def fetch_and_aggregate_results(job_id: str) -> list[TickerResult]:
     """Parse Anthropic batch results, run FV scripts, aggregate per ticker, upsert to Sheets."""
     job = read_job_file(job_id)
@@ -174,6 +180,14 @@ async def fetch_and_aggregate_results(job_id: str) -> list[TickerResult]:
         raise ValueError(f"Job {job_id} not found")
 
     client = anthropic.AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+
+    batch_info = await client.messages.batches.retrieve(job.batch_id)
+    if batch_info.processing_status != "ended":
+        raise ValueError(
+            f"Batch {job.batch_id} is still processing "
+            f"(status={batch_info.processing_status!r}). "
+            "Poll /status until ended before fetching results."
+        )
 
     # Collect raw agent results per ticker
     agent_results_by_ticker: dict[str, dict[str, AgentResult]] = {
@@ -205,11 +219,16 @@ async def fetch_and_aggregate_results(job_id: str) -> list[TickerResult]:
                 ar = apply_normalisation(agent_name, ar)
                 agent_results_by_ticker[ticker][agent_name] = ar
         else:
+            error_detail = getattr(result.result, "error", None)
+            error_msg = (
+                f"{error_detail.type}: {error_detail.message}"
+                if error_detail else result.result.type
+            )
             agent_results_by_ticker[ticker][agent_name] = AgentResult(
                 agent_name=agent_name,
                 ticker=ticker,
                 status="failed",
-                error=f"batch result: {result.result.type}",
+                error=f"batch result: {error_msg}",
             )
 
     # For each ticker: run FV scripts + fetch company info concurrently, then aggregate
@@ -268,7 +287,3 @@ async def fetch_and_aggregate_results(job_id: str) -> list[TickerResult]:
 
     update_job_status(job_id, "completed")
     return ticker_results
-
-
-async def _run_fv(key: str, fn, ticker: str):
-    return key, await fn(ticker)
