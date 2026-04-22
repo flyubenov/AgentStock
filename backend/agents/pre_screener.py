@@ -1,7 +1,6 @@
 from __future__ import annotations
 import re
 from agents.base_agent import BaseAgent
-from models import AgentResult
 from services.normalizer import derive_pre_screener
 
 

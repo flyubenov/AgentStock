@@ -1,5 +1,5 @@
 from __future__ import annotations
-import asyncio, os
+import asyncio, os, re
 from datetime import datetime, timezone
 from pathlib import Path
 import anthropic
@@ -33,6 +33,12 @@ _AGENTS = {
 
 # ── Job file helpers ──────────────────────────────────────────────────────────
 
+_UUID_RE = re.compile(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+    re.IGNORECASE
+)
+
+
 def _jobs_dir() -> Path:
     return _JOBS_DIR
 
@@ -43,6 +49,8 @@ def write_job_file(job: BatchJobFile) -> None:
 
 
 def read_job_file(job_id: str) -> BatchJobFile | None:
+    if not _UUID_RE.match(job_id):
+        return None
     path = _jobs_dir() / f"{job_id}.json"
     if not path.exists():
         return None
@@ -140,6 +148,9 @@ async def get_batch_status(job_id: str) -> dict:
 
     client = anthropic.AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     batch = await client.messages.batches.retrieve(job.batch_id)
+
+    if batch.processing_status == "ended" and job.status == "processing":
+        update_job_status(job_id, "completed")
 
     counts = batch.request_counts
     total = counts.processing + counts.succeeded + counts.errored
