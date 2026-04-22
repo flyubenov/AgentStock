@@ -9,6 +9,7 @@ class AgentResult(BaseModel):
     raw_score: float | None = None
     normalised_score: float | None = None
     recommendation: str | None = None
+    rationale: str | None = None
     raw_response: str = ""
     report: str = ""
     status: Literal["completed", "failed"] = "completed"
@@ -62,3 +63,12 @@ class JobStatus(BaseModel):
     failed: int
     status: Literal["running", "completed", "failed", "cancelled"]
     results: list[TickerResult] = []
+
+
+class BatchJobFile(BaseModel):
+    job_id: str
+    batch_id: str
+    tickers: list[str]
+    failed_prefetch: list[str] = []
+    status: Literal["processing", "completed", "cancelled"] = "processing"
+    submitted_at: str

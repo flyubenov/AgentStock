@@ -56,6 +56,7 @@ _NORMALIZERS = {
     "growth_stock": normalise_growth_stock,
     "business_engine": normalise_business_engine,
     "canslim": normalise_canslim,
+    "pre_screener": lambda x: max(1.0, min(5.0, x)),
 }
 
 
