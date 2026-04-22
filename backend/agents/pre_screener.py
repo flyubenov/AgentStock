@@ -7,16 +7,20 @@ from services.normalizer import derive_pre_screener
 
 class PreScreenerAgent(BaseAgent):
     agent_name = "pre_screener"
-    max_tokens = 2000
+    model = "claude-haiku-4-5-20251001"
+    max_tokens = 300
+    tools: list = []
 
-    def parse_score(self, response: str) -> tuple[float | None, str | None]:
-        rec_match = re.search(r"RECOMMENDATION:\s*(.+)", response, re.IGNORECASE)
-        growth_match = re.search(r"GROWTH POTENTIAL:\s*(.+)", response, re.IGNORECASE)
-        fin_match = re.search(r"FINANCIAL STATE:\s*(.+)", response, re.IGNORECASE)
+    def parse_score(self, response: str) -> tuple[float | None, str | None, str | None]:
+        rec_m = re.search(r"RECOMMENDATION:\s*(.+)", response, re.IGNORECASE)
+        growth_m = re.search(r"GROWTH POTENTIAL:\s*(.+)", response, re.IGNORECASE)
+        fin_m = re.search(r"FINANCIAL STATE:\s*(.+)", response, re.IGNORECASE)
+        rat_m = re.search(r"RATIONALE:\s*(.+)", response, re.IGNORECASE)
 
-        rec = rec_match.group(1).strip() if rec_match else None
-        growth = growth_match.group(1).strip() if growth_match else None
-        fin = fin_match.group(1).strip() if fin_match else None
+        rec = rec_m.group(1).strip() if rec_m else None
+        growth = growth_m.group(1).strip() if growth_m else None
+        fin = fin_m.group(1).strip() if fin_m else None
+        rationale = rat_m.group(1).strip() if rat_m else None
 
         derived = derive_pre_screener(rec, growth, fin)
-        return derived, rec
+        return derived, rec, rationale
