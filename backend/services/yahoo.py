@@ -4,8 +4,13 @@ import yfinance as yf
 from functools import lru_cache
 from datetime import date as _date
 
-_RATE_LIMIT_RETRIES = 3
-_RATE_LIMIT_BACKOFF = 5.0  # seconds between retries
+try:
+    from yfinance.exceptions import YFRateLimitError as _YFRateLimitError
+except ImportError:
+    _YFRateLimitError = None  # older yfinance versions
+
+_RATE_LIMIT_RETRIES = 4
+_RATE_LIMIT_BACKOFF = 30.0  # seconds; multiplied by attempt number
 
 
 async def fetch_ticker_info(ticker: str) -> dict:
@@ -25,10 +30,14 @@ def _fetch_sync(ticker: str) -> dict:
                 raise ValueError(f"Ticker '{ticker}' not found or returned no data")
             return info
         except Exception as e:
-            if "rate" in str(e).lower() or "too many" in str(e).lower():
-                if attempt < _RATE_LIMIT_RETRIES - 1:
-                    time.sleep(_RATE_LIMIT_BACKOFF * (attempt + 1))
-                    continue
+            is_rate_limit = (
+                (_YFRateLimitError and isinstance(e, _YFRateLimitError))
+                or "rate" in str(e).lower()
+                or "too many" in str(e).lower()
+            )
+            if is_rate_limit and attempt < _RATE_LIMIT_RETRIES - 1:
+                time.sleep(_RATE_LIMIT_BACKOFF * (attempt + 1))
+                continue
             raise
     raise RuntimeError(f"Failed to fetch {ticker} after {_RATE_LIMIT_RETRIES} attempts")
 
