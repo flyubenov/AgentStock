@@ -4,6 +4,7 @@ export interface AgentResult {
   raw_score: number | null
   normalised_score: number | null
   recommendation: string | null
+  rationale: string | null
   raw_response: string
   report: string
   status: 'completed' | 'failed'
@@ -52,6 +53,27 @@ export interface JobStatus {
   failed: number
   status: 'running' | 'completed' | 'failed' | 'cancelled'
   results: TickerResult[]
+}
+
+export interface BatchRequestCounts {
+  processing: number
+  succeeded: number
+  errored: number
+  total: number
+}
+
+export interface BatchJobStatus {
+  job_id: string
+  status: 'in_progress' | 'ended' | 'canceling' | 'canceled'
+  submitted_at: string
+  failed_prefetch: string[]
+  request_counts: BatchRequestCounts
+}
+
+export interface BatchJobResults {
+  job_id: string
+  ticker_results: TickerResult[]
+  failed_prefetch: string[]
 }
 
 export type ScoreLabel = 'Strong Buy' | 'Buy' | 'Hold / Watch' | 'Underperform' | 'Sell / Avoid'
