@@ -1,0 +1,56 @@
+import pytest
+from unittest.mock import patch
+from services.yahoo import format_financial_block
+
+_MOCK_INFO = {
+    "symbol": "AAPL",
+    "shortName": "Apple Inc.",
+    "currentPrice": 189.45,
+    "marketCap": 2_900_000_000_000,
+    "trailingPE": 28.5,
+    "forwardPE": 24.2,
+    "pegRatio": 1.8,
+    "trailingEps": 6.64,
+    "earningsGrowth": 0.123,
+    "totalRevenue": 391_000_000_000,
+    "revenueGrowth": 0.041,
+    "grossMargins": 0.452,
+    "operatingMargins": 0.295,
+    "freeCashflow": 99_000_000_000,
+    "returnOnEquity": 1.47,
+    "debtToEquity": 187.0,
+    "fiftyTwoWeekHigh": 220.19,
+    "fiftyTwoWeekLow": 164.08,
+    "beta": 1.24,
+    "dividendYield": 0.005,
+    "heldPercentInstitutions": 0.61,
+    "recommendationKey": "buy",
+    "targetMeanPrice": 215.0,
+    "twoHundredDayAverage": 175.0,
+}
+
+
+@pytest.mark.asyncio
+async def test_format_financial_block_returns_string():
+    with patch("services.yahoo._fetch_sync", return_value=_MOCK_INFO):
+        block = await format_financial_block("AAPL")
+    assert isinstance(block, str)
+    assert "AAPL" in block
+    assert "$189.45" in block
+    assert "28.50" in block  # trailingPE
+
+
+@pytest.mark.asyncio
+async def test_format_financial_block_returns_none_on_exception():
+    with patch("services.yahoo._fetch_sync", side_effect=ValueError("not found")):
+        block = await format_financial_block("BADINPUT")
+    assert block is None
+
+
+@pytest.mark.asyncio
+async def test_format_financial_block_handles_none_fields():
+    sparse_info = {"symbol": "AAPL", "shortName": "Apple", "currentPrice": 100.0}
+    with patch("services.yahoo._fetch_sync", return_value=sparse_info):
+        block = await format_financial_block("AAPL")
+    assert block is not None
+    assert "N/A" in block
