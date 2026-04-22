@@ -32,10 +32,12 @@ export default function AgentCard({ agentName, result, isLoading }: AgentCardPro
   if (!result) return null
 
   return (
-    <div className={cn(
-      'bg-[#16161e] border rounded-lg p-4',
-      result.status === 'failed' ? 'border-red-900' : 'border-[#1e1e2a]'
-    )}>
+    <div
+      className={cn(
+        'bg-[#16161e] border rounded-lg p-4',
+        result.status === 'failed' ? 'border-red-900' : 'border-[#1e1e2a]'
+      )}
+    >
       <div className="text-xs text-slate-500 mb-1 uppercase tracking-wide">{label}</div>
       {result.status === 'failed' ? (
         <div className="text-red-400 text-sm">Failed</div>
@@ -44,6 +46,11 @@ export default function AgentCard({ agentName, result, isLoading }: AgentCardPro
           <ScoreBadge score={result.normalised_score} size="lg" />
           {result.recommendation && (
             <div className="text-xs text-slate-400 mt-1">{result.recommendation}</div>
+          )}
+          {result.rationale && (
+            <div className="text-xs text-slate-500 mt-1 italic leading-snug">
+              {result.rationale}
+            </div>
           )}
         </>
       )}

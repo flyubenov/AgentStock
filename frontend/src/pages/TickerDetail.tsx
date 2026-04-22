@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useParams, useLocation, Link } from 'react-router-dom'
 import type { TickerResult } from '../types'
 import ScoreBadge from '../components/ScoreBadge'
@@ -11,7 +10,6 @@ export default function TickerDetail() {
   const { jobId } = useParams()
   const location = useLocation()
   const result: TickerResult | undefined = location.state?.result
-  const [expandedAgent, setExpandedAgent] = useState<string | null>(null)
 
   if (!result) {
     return (
@@ -24,12 +22,12 @@ export default function TickerDetail() {
   return (
     <div className="max-w-5xl mx-auto">
       <div className="mb-4">
-        <Link
-          to={jobId && jobId !== 'db' ? `/results/${jobId}` : '/database'}
+        <button
+          onClick={() => window.history.back()}
           className="text-xs text-slate-500 hover:text-slate-300"
         >
-          ← Back to results
-        </Link>
+          ← Back
+        </button>
       </div>
 
       <div className="bg-[#16161e] border border-[#1e1e2a] rounded-lg p-6 mb-6">
@@ -57,33 +55,16 @@ export default function TickerDetail() {
         ))}
       </div>
 
-      <div className="mb-6">
-        <FairValuePanel result={result} />
-      </div>
+      <FairValuePanel result={result} />
 
-      <div className="space-y-2">
-        <h2 className="text-xs text-slate-500 uppercase tracking-wide mb-3">Agent Reports</h2>
-        {AGENTS.map(key => {
-          const ar = result.agent_results[key]
-          if (!ar?.report) return null
-          return (
-            <div key={key} className="bg-[#16161e] border border-[#1e1e2a] rounded-lg overflow-hidden">
-              <button
-                onClick={() => setExpandedAgent(expandedAgent === key ? null : key)}
-                className="w-full text-left px-4 py-3 flex justify-between items-center hover:bg-[#1a1a24]"
-              >
-                <span className="text-sm text-slate-300 capitalize">{key.replace(/_/g, ' ')}</span>
-                <span className="text-slate-600 text-lg">{expandedAgent === key ? '−' : '+'}</span>
-              </button>
-              {expandedAgent === key && (
-                <div className="px-4 pb-4 text-xs text-slate-400 whitespace-pre-wrap leading-relaxed border-t border-[#1e1e2a] pt-3">
-                  {ar.report}
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
+      {result.errors.length > 0 && (
+        <div className="mt-6 bg-red-900/10 border border-red-900/50 rounded-lg p-4">
+          <p className="text-xs text-red-400 font-semibold mb-2">Errors</p>
+          <ul className="text-xs text-red-300 space-y-1">
+            {result.errors.map((e, i) => <li key={i}>{e}</li>)}
+          </ul>
+        </div>
+      )}
     </div>
   )
 }
