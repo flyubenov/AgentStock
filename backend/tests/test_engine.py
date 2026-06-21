@@ -1,0 +1,112 @@
+import pytest
+from valuation import engine
+
+
+def _large_cap_fin(**over):
+    fin = {
+        "ticker": "AAPL", "company_name": "Apple Inc.", "current_price": 190.0,
+        "sector": "Technology", "industry": "Consumer Electronics", "long_business_summary": "",
+        "market_cap": 3_000_000_000_000, "shares_outstanding": 15_000_000_000,
+        "fcf_ttm": 99_000_000_000, "operating_cashflow": 120_000_000_000,
+        "net_debt": 0, "ebitda_ttm": 130_000_000_000, "revenue_ttm": 391_000_000_000,
+        "eps_ttm": 6.6, "book_value_per_share": 4.0,
+        "dividend_rate": 1.0, "dividend_yield": 0.005, "payout_ratio": 0.15,
+        "return_on_equity": 1.4, "trailing_pe": 28.0, "revenue_growth": 0.05,
+        "earnings_growth": 0.08, "ev_ebitda": 24.0, "ev_sales": 8.0,
+        "interest_expense": 0, "effective_tax_rate": 0.15, "cost_of_equity": 0.10,
+    }
+    fin.update(over)
+    return fin
+
+
+def test_build_scenarios_capped():
+    s = engine.build_scenarios({"earnings_growth": 0.56, "revenue_growth": 0.10})
+    assert s["realistic"] == 0.20            # capped at 0.20
+    assert s["optimistic"] == pytest.approx(0.25)
+    assert s["pessimistic"] == pytest.approx(0.16)
+
+
+def test_build_scenarios_floor():
+    s = engine.build_scenarios({"earnings_growth": -0.5, "revenue_growth": None})
+    assert s["realistic"] == 0.02
+    assert s["pessimistic"] == 0.02
+
+
+def test_pick_ev_uses_ebitda_when_margin_healthy():
+    weights = {"ev_ebitda": 0.20, "ev_sales": 0.20}
+    fin = {"ebitda_ttm": 100, "revenue_ttm": 1000}  # 10% margin > 8%
+    out = engine.pick_ev_multiple(weights, fin)
+    assert out["ev_ebitda"] == pytest.approx(0.40)
+    assert out["ev_sales"] == 0.0
+
+
+def test_pick_ev_uses_sales_when_margin_thin():
+    weights = {"ev_ebitda": 0.20, "ev_sales": 0.20}
+    fin = {"ebitda_ttm": 50, "revenue_ttm": 1000}  # 5% margin < 8%
+    out = engine.pick_ev_multiple(weights, fin)
+    assert out["ev_sales"] == pytest.approx(0.40)
+    assert out["ev_ebitda"] == 0.0
+
+
+def test_pick_ev_no_fold_when_only_one_weighted():
+    weights = {"ev_ebitda": 0.30, "ev_sales": 0.0}
+    fin = {"ebitda_ttm": 10, "revenue_ttm": 1000}  # thin margin, but ev_sales not weighted
+    out = engine.pick_ev_multiple(weights, fin)
+    assert out["ev_ebitda"] == 0.30
+    assert out["ev_sales"] == 0.0
+
+
+def test_dcf_cashflow_base_swaps_to_cfo_above_gate():
+    # capex = 120 - 50 = 70; 70/120 = 0.58 > 0.50 -> use CFO (120)
+    fin = {"operating_cashflow": 120, "fcf_ttm": 50}
+    assert engine.dcf_cashflow_base(fin) == 120
+
+
+def test_dcf_cashflow_base_keeps_fcf_below_gate():
+    # capex = 120 - 90 = 30; 30/120 = 0.25 < 0.50 -> use FCF (90)
+    fin = {"operating_cashflow": 120, "fcf_ttm": 90}
+    assert engine.dcf_cashflow_base(fin) == 90
+
+
+def test_dcf_cashflow_base_defaults_to_fcf_when_cfo_missing():
+    assert engine.dcf_cashflow_base({"operating_cashflow": None, "fcf_ttm": 90}) == 90
+
+
+def test_evaluate_large_cap_blend():
+    fin = _large_cap_fin()
+    result = engine.evaluate(fin)
+    assert result["status"] == "completed"
+    assert result["stock_type"] == "LARGE_CAP"
+    assert result["fair_value"] is not None and result["fair_value"] > 0
+    # breakdown weights renormalize to ~1.0
+    total_w = sum(b["weight"] for b in result["fair_value_breakdown"].values())
+    assert total_w == pytest.approx(1.0)
+    # composite is the weight-internal blend of the breakdown values (consistency guard)
+    blend = sum(b["weight"] * b["fair_value"] for b in result["fair_value_breakdown"].values())
+    assert result["fair_value"] == pytest.approx(blend, rel=1e-6)
+    # LARGE_CAP weights both EV multiples; only one should survive the fold
+    bd = result["fair_value_breakdown"]
+    assert not ("ev_ebitda" in bd and "ev_sales" in bd)
+
+
+def test_evaluate_price_vs_fair_value_pct():
+    fin = _large_cap_fin(current_price=100.0)
+    result = engine.evaluate(fin)
+    expected = round((result["fair_value"] - 100.0) / 100.0 * 100, 2)
+    assert result["price_vs_fair_value_pct"] == expected
+
+
+def test_evaluate_insufficient_data_is_failed():
+    fin = {"ticker": "ZZZ", "sector": "Technology", "shares_outstanding": None,
+           "current_price": 10.0, "company_name": "Zilch"}
+    result = engine.evaluate(fin)
+    assert result["status"] == "failed"
+    assert "insufficient data for any model" in result["errors"]
+
+
+def test_evaluate_sotp_flagged_approx():
+    # Conglomerate weights sotp + nav + ev_ebitda
+    fin = _large_cap_fin(industry="Conglomerates", book_value_per_share=20.0)
+    result = engine.evaluate(fin)
+    assert result["stock_type"] == "CONGLOMERATE"
+    assert result["fair_value_breakdown"]["sotp"]["is_approx"] is True
