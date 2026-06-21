@@ -17,7 +17,7 @@ function ModelRow({ id, model }: { id: string; model: ModelBreakdown }) {
         {METHOD_LABELS[id] ?? id}
         {model.is_approx && <span className="ml-1 text-[10px] text-amber-500 uppercase">approx</span>}
       </td>
-      <td className="py-2 pr-4 text-right font-mono text-xs text-slate-500">{(model.weight * 100).toFixed(0)}%</td>
+      <td className="py-2 pr-4 text-right font-mono text-xs text-slate-500">{((model.weight ?? 0) * 100).toFixed(0)}%</td>
       <td className="py-2 pr-4 text-right font-mono text-blue-400">{money(model.fair_value)}</td>
       <td className="py-2 text-right font-mono text-xs text-slate-500">
         {money(s.pessimistic)} / {money(s.realistic)} / {money(s.optimistic)}

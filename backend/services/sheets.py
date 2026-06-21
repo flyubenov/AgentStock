@@ -1,6 +1,6 @@
 from __future__ import annotations
 import asyncio, json, os
-from datetime import datetime
+from datetime import datetime, timezone
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from models import TickerResult
@@ -65,7 +65,7 @@ def _result_to_row(r: TickerResult) -> list:
     return [
         r.ticker,
         r.company_name or "",
-        r.last_evaluated or datetime.utcnow().isoformat(),
+        r.last_evaluated or datetime.now(timezone.utc).isoformat(),
         r.stock_type or "",
         r.fair_value if r.fair_value is not None else "",
         r.current_price if r.current_price is not None else "",

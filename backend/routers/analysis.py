@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 import asyncio, json, uuid
 from fastapi import APIRouter
 from sse_starlette.sse import EventSourceResponse
@@ -57,8 +57,11 @@ async def _run_job(job_id: str, tickers: list[str], cancel_event: asyncio.Event)
     job = _jobs[job_id]
     async for event in run_batch(tickers, job_id, cancel_event):
         if event["type"] == "ticker_done":
-            job["completed"] += 1
             job["results"].append(event["result"])
+            if event["result"]["status"] == "failed":
+                job["failed"] += 1
+            else:
+                job["completed"] += 1
         elif event["type"] == "ticker_error":
             job["failed"] += 1
         elif event["type"] == "job_done":

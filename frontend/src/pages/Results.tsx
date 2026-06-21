@@ -30,7 +30,11 @@ export default function Results() {
       r.fair_value, r.current_price, r.price_vs_fair_value_pct,
       fvGapLabel(r.price_vs_fair_value_pct),
     ])
-    const csv = [headers, ...rows].map(r => r.join(',')).join('\n')
+    const esc = (v: unknown) => {
+      const s = v == null ? '' : String(v)
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+    }
+    const csv = [headers, ...rows].map(r => r.map(esc).join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a'); a.href = url; a.download = 'fair_values.csv'; a.click()
