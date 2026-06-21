@@ -5,7 +5,7 @@ echo ""
 # Backend
 echo "[1/2] Starting FastAPI backend..."
 cd backend
-uvicorn main:app --reload --port 8000 &
+"C:/Users/f_lub/AppData/Local/Python/bin/python3.exe" -m uvicorn main:app --reload --port 8000 &
 BACKEND_PID=$!
 cd ..
 

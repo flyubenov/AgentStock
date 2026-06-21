@@ -44,10 +44,15 @@ def _fetch_sync(ticker: str) -> dict:
 
 def extract_financials(info: dict) -> dict:
     """Normalise yfinance info dict to the fields our valuation scripts need."""
+    price = info.get("currentPrice") or info.get("regularMarketPrice")
+    div_rate = info.get("dividendRate")
+    # yfinance 1.3.0 changed dividendYield to percentage form (0.86 = 0.86%);
+    # compute from dividendRate/price so callers always receive a ratio.
+    div_yield = (div_rate / price) if (div_rate and price) else 0
     return {
         "ticker": info.get("symbol", ""),
         "company_name": info.get("shortName") or info.get("longName"),
-        "current_price": info.get("currentPrice") or info.get("regularMarketPrice"),
+        "current_price": price,
         "market_cap": info.get("marketCap"),
         "shares_outstanding": info.get("sharesOutstanding"),
         "fcf_ttm": info.get("freeCashflow"),
@@ -56,8 +61,8 @@ def extract_financials(info: dict) -> dict:
         "eps_ttm": info.get("trailingEps"),
         "revenue_ttm": info.get("totalRevenue"),
         "book_value_per_share": info.get("bookValue"),
-        "dividend_rate": info.get("dividendRate"),
-        "dividend_yield": info.get("dividendYield") or 0,
+        "dividend_rate": div_rate,
+        "dividend_yield": div_yield,
         "payout_ratio": info.get("payoutRatio") or 0,
         "return_on_equity": info.get("returnOnEquity"),
         "trailing_pe": info.get("trailingPE"),
@@ -125,6 +130,7 @@ async def format_financial_block(ticker: str) -> str | None:
     mkt_cap = info.get("marketCap")
     ma200 = info.get("twoHundredDayAverage")
     fcf = info.get("freeCashflow")
+    div_rate = info.get("dividendRate")
 
     price_vs_ma = None
     if price and ma200 and ma200 > 0:
@@ -133,6 +139,9 @@ async def format_financial_block(ticker: str) -> str | None:
     fcf_yield = None
     if fcf is not None and mkt_cap and mkt_cap > 0:
         fcf_yield = fcf / mkt_cap * 100
+
+    # Compute yield from dividendRate/price — yfinance 1.x changed dividendYield scale
+    div_yield_ratio = (div_rate / price) if (div_rate and price) else None
 
     rec = (info.get("recommendationKey") or "N/A").upper()
 
@@ -147,6 +156,6 @@ async def format_financial_block(ticker: str) -> str | None:
         f"- ROE: {_pct(info.get('returnOnEquity'))} | Debt/Equity: {_n(info.get('debtToEquity'))}\n"
         f"- 52w High: {_p(info.get('fiftyTwoWeekHigh'))} | 52w Low: {_p(info.get('fiftyTwoWeekLow'))} | Beta: {_n(info.get('beta'))}\n"
         f"- Price vs 200-day MA: {'N/A' if price_vs_ma is None else f'{price_vs_ma:+.1f}%'}\n"
-        f"- Dividend Yield: {_pct(info.get('dividendYield'))} | Institutional Ownership: {_pct(info.get('heldPercentInstitutions'))}\n"
+        f"- Dividend Yield: {_pct(div_yield_ratio)} | Institutional Ownership: {_pct(info.get('heldPercentInstitutions'))}\n"
         f"- Analyst Consensus: {rec} | Avg Target: {_p(info.get('targetMeanPrice'))}"
     )
