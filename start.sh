@@ -1,5 +1,5 @@
 #!/bin/bash
-echo "Starting Stock Evaluator..."
+echo "Starting Fair Value Calculator..."
 echo ""
 
 # Backend
