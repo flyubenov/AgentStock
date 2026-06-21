@@ -1,22 +1,14 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 const API = 'http://localhost:8000'
-const MODE_KEY = 'analysis_mode'
 
 export default function Home() {
   const [tickers, setTickers] = useState('')
   const [useSheets, setUseSheets] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [mode, setMode] = useState<'batch' | 'live'>(() => {
-    return (localStorage.getItem(MODE_KEY) as 'batch' | 'live') ?? 'batch'
-  })
   const navigate = useNavigate()
-
-  useEffect(() => {
-    localStorage.setItem(MODE_KEY, mode)
-  }, [mode])
 
   const handleAnalyse = async () => {
     setLoading(true)
@@ -27,7 +19,7 @@ export default function Home() {
         .map(t => t.trim().toUpperCase())
         .filter(Boolean)
 
-      const body: Record<string, unknown> = { mode }
+      const body: Record<string, unknown> = {}
       if (tickerList.length > 0) body.tickers = tickerList
       if (useSheets) body.sheets_url = 'from_sheets'
 
@@ -40,10 +32,6 @@ export default function Home() {
 
       if (data.error) {
         setError(data.error)
-      } else if (data.mode === 'batch') {
-        navigate(`/jobs/${data.job_id}`, {
-          state: { total: data.total, invalid: data.invalid, failedPrefetch: data.failed_prefetch },
-        })
       } else {
         navigate(`/progress/${data.job_id}`, { state: { total: data.total, invalid: data.invalid } })
       }
@@ -56,9 +44,9 @@ export default function Home() {
 
   return (
     <div className="max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold text-slate-100 mb-2">Stock Analysis</h1>
+      <h1 className="text-2xl font-bold text-slate-100 mb-2">Fair Value Calculator</h1>
       <p className="text-slate-500 text-sm mb-8">
-        Enter up to 150 tickers for AI-powered analysis across 9 evaluation models.
+        Enter tickers (or load from Google Sheets) to compute an adaptive, sector-aware fair value for each. Free — no API costs.
       </p>
 
       <div className="bg-[#16161e] border border-[#1e1e2a] rounded-lg p-6 space-y-4">
@@ -90,40 +78,6 @@ export default function Home() {
           <span className="text-sm text-slate-300">Load tickers from Google Sheets</span>
         </label>
 
-        {/* Mode toggle */}
-        <div>
-          <label className="block text-xs text-slate-500 uppercase tracking-wide mb-2">
-            Analysis Mode
-          </label>
-          <div className="flex rounded overflow-hidden border border-[#1e1e2a]">
-            <button
-              onClick={() => setMode('live')}
-              className={`flex-1 py-2 text-sm font-medium transition-colors ${
-                mode === 'live'
-                  ? 'bg-blue-700 text-white'
-                  : 'bg-[#0a0a0f] text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              ⚡ Run now
-            </button>
-            <button
-              onClick={() => setMode('batch')}
-              className={`flex-1 py-2 text-sm font-medium transition-colors ${
-                mode === 'batch'
-                  ? 'bg-green-800 text-white'
-                  : 'bg-[#0a0a0f] text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              💰 Batch — cheaper
-            </button>
-          </div>
-          <p className="text-xs text-slate-600 mt-1">
-            {mode === 'batch'
-              ? 'Results ready in 15–60 min. ~$0.21/ticker.'
-              : 'Live streaming results. ~$0.34/ticker.'}
-          </p>
-        </div>
-
         {error && (
           <div className="text-red-400 text-sm bg-red-900/20 border border-red-900 rounded px-3 py-2">
             {error}
@@ -135,7 +89,7 @@ export default function Home() {
           disabled={loading || (!tickers.trim() && !useSheets)}
           className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-600 text-white font-semibold py-3 rounded transition-colors text-sm uppercase tracking-wide"
         >
-          {loading ? 'Submitting...' : mode === 'batch' ? 'Submit Batch' : 'Analyse Now'}
+          {loading ? 'Submitting...' : 'Calculate Fair Values'}
         </button>
       </div>
     </div>

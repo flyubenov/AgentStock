@@ -1,10 +1,7 @@
 import { useLocation, Link } from 'react-router-dom'
 import type { TickerResult } from '../types'
-import ScoreBadge from '../components/ScoreBadge'
-import AgentCard from '../components/AgentCard'
+import { fvBadgeClass, fvGapLabel } from '../types'
 import FairValuePanel from '../components/FairValuePanel'
-
-const AGENTS = ['buffett_munger', 'lynch_garp', 'growth_stock', 'business_engine', 'canslim', 'pre_screener']
 
 export default function TickerDetail() {
   const location = useLocation()
@@ -17,6 +14,8 @@ export default function TickerDetail() {
       </div>
     )
   }
+
+  const verdict = fvGapLabel(result.price_vs_fair_value_pct)
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -34,24 +33,24 @@ export default function TickerDetail() {
           <div>
             <h1 className="text-2xl font-bold font-mono text-slate-100">{result.ticker}</h1>
             <p className="text-slate-400 mt-0.5">{result.company_name || '—'}</p>
-            <p className="text-xs text-slate-600 mt-1">{result.last_evaluated}</p>
+            <p className="text-xs text-slate-600 mt-1">
+              {result.stock_type || '—'}{result.last_evaluated ? ` · ${result.last_evaluated}` : ''}
+            </p>
           </div>
           <div className="text-right">
-            <ScoreBadge score={result.overall_final_score} size="lg" showLabel />
-            {result.overall_label && (
-              <div className="text-xs text-slate-500 mt-1">{result.overall_label}</div>
+            {verdict && (
+              <span className={`rounded font-mono font-semibold inline-flex items-center px-3 py-1.5 text-sm ${fvBadgeClass(result.price_vs_fair_value_pct)}`}>
+                {verdict}
+              </span>
             )}
+            <div className="text-slate-300 font-mono mt-2">
+              FV {result.fair_value != null ? `$${result.fair_value.toFixed(2)}` : '—'}
+            </div>
             {result.current_price != null && (
-              <div className="text-slate-300 font-mono mt-2">${result.current_price.toFixed(2)}</div>
+              <div className="text-slate-500 font-mono text-sm">Price ${result.current_price.toFixed(2)}</div>
             )}
           </div>
         </div>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
-        {AGENTS.map(key => (
-          <AgentCard key={key} agentName={key} result={result.agent_results[key] ?? null} />
-        ))}
       </div>
 
       <FairValuePanel result={result} />

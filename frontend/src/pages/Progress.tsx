@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useAnalysisStream } from '../hooks/useAnalysisStream'
 import ProgressBar from '../components/ProgressBar'
-import ScoreBadge from '../components/ScoreBadge'
+import { fvGapColor } from '../types'
 import { cn } from '../lib/utils'
 
 export default function Progress() {
@@ -23,7 +23,7 @@ export default function Progress() {
   return (
     <div className="max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-bold text-slate-100">Analysis in Progress</h1>
+        <h1 className="text-xl font-bold text-slate-100">Calculating Fair Values</h1>
         <button
           onClick={cancel}
           className="text-sm text-red-400 hover:text-red-300 border border-red-900 px-3 py-1.5 rounded"
@@ -36,7 +36,7 @@ export default function Progress() {
         <ProgressBar
           current={completed + failed}
           total={displayTotal}
-          label={`Analysed ${completed + failed} / ${displayTotal} tickers`}
+          label={`Evaluated ${completed + failed} / ${displayTotal} tickers`}
         />
         <div className="flex gap-4 mt-2 text-xs text-slate-500">
           <span className="text-green-400">{completed} completed</span>
@@ -74,7 +74,8 @@ export default function Progress() {
               <tr className="border-b border-[#1e1e2a] text-xs text-slate-600">
                 <th className="text-left py-2 px-4">Ticker</th>
                 <th className="text-left py-2">Company</th>
-                <th className="text-right py-2 pr-4">Score</th>
+                <th className="text-right py-2 px-2">Fair Value</th>
+                <th className="text-right py-2 pr-4">vs Price</th>
               </tr>
             </thead>
             <tbody>
@@ -82,8 +83,13 @@ export default function Progress() {
                 <tr key={r.ticker} className="border-b border-[#1e1e2a] hover:bg-[#1a1a24]">
                   <td className="py-2 px-4 font-mono font-semibold text-blue-400">{r.ticker}</td>
                   <td className="py-2 text-slate-400 text-xs">{r.company_name || '—'}</td>
-                  <td className="py-2 pr-4 text-right">
-                    <ScoreBadge score={r.overall_final_score} />
+                  <td className="py-2 px-2 text-right font-mono text-slate-300">
+                    {r.fair_value != null ? `$${r.fair_value.toFixed(2)}` : '—'}
+                  </td>
+                  <td className={`py-2 pr-4 text-right font-mono text-xs ${fvGapColor(r.price_vs_fair_value_pct)}`}>
+                    {r.price_vs_fair_value_pct != null
+                      ? `${r.price_vs_fair_value_pct > 0 ? '+' : ''}${r.price_vs_fair_value_pct.toFixed(1)}%`
+                      : '—'}
                   </td>
                 </tr>
               ))}
