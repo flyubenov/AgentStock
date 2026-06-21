@@ -5,7 +5,6 @@ from sse_starlette.sse import EventSourceResponse
 from models import AnalyseRequest
 from services.yahoo import validate_ticker
 from services.sheets import read_tickers
-from services.batch_service import submit_batch_job
 from orchestrator.batch import run_batch
 
 router = APIRouter()
@@ -40,21 +39,6 @@ async def start_analysis(request: AnalyseRequest):
         return {"error": "No valid tickers found", "invalid": invalid_tickers}
 
     job_id = str(uuid.uuid4())
-
-    if request.mode == "batch":
-        try:
-            result = await submit_batch_job(job_id, valid_tickers)
-            return {
-                "job_id": job_id,
-                "mode": "batch",
-                "total": len(valid_tickers),
-                "invalid": invalid_tickers,
-                "failed_prefetch": result.get("failed_prefetch", []),
-            }
-        except ValueError as e:
-            return {"error": str(e)}
-
-    # Live mode (SSE)
     cancel_event = asyncio.Event()
     _cancel_events[job_id] = cancel_event
     _jobs[job_id] = {
@@ -66,7 +50,7 @@ async def start_analysis(request: AnalyseRequest):
         "invalid": invalid_tickers,
     }
     asyncio.create_task(_run_job(job_id, valid_tickers, cancel_event))
-    return {"job_id": job_id, "mode": "live", "total": len(valid_tickers), "invalid": invalid_tickers}
+    return {"job_id": job_id, "total": len(valid_tickers), "invalid": invalid_tickers}
 
 
 async def _run_job(job_id: str, tickers: list[str], cancel_event: asyncio.Event):
