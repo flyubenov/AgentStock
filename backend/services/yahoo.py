@@ -74,7 +74,10 @@ def extract_financials(info: dict) -> dict:
         "long_business_summary": info.get("longBusinessSummary", ""),
         "interest_expense": info.get("interestExpense"),
         "effective_tax_rate": info.get("effectiveTaxRate"),
-        "cost_of_equity": None,
+        "operating_cashflow": info.get("operatingCashflow"),
+        "ev_ebitda": info.get("enterpriseToEbitda"),
+        "ev_sales": info.get("enterpriseToRevenue"),
+        "cost_of_equity": 0.10,
     }
 
 

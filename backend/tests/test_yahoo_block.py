@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch
-from services.yahoo import format_financial_block
+from services.yahoo import format_financial_block, extract_financials
 
 _MOCK_INFO = {
     "symbol": "AAPL",
@@ -54,3 +54,22 @@ async def test_format_financial_block_handles_none_fields():
         block = await format_financial_block("AAPL")
     assert block is not None
     assert "N/A" in block
+
+
+def test_extract_financials_adds_valuation_fields():
+    info = {
+        "symbol": "AAPL",
+        "shortName": "Apple Inc.",
+        "currentPrice": 189.45,
+        "operatingCashflow": 120_000_000_000,
+        "freeCashflow": 99_000_000_000,
+        "enterpriseToEbitda": 24.3,
+        "enterpriseToRevenue": 8.1,
+        "ebitda": 130_000_000_000,
+        "totalRevenue": 391_000_000_000,
+    }
+    fin = extract_financials(info)
+    assert fin["operating_cashflow"] == 120_000_000_000
+    assert fin["ev_ebitda"] == 24.3
+    assert fin["ev_sales"] == 8.1
+    assert fin["cost_of_equity"] == 0.10
