@@ -1,6 +1,9 @@
 from __future__ import annotations
+from datetime import datetime, timezone
 from valuation.classifier import classify
 from valuation import models as m
+from services.yahoo import fetch_ticker_info, extract_financials
+from models import TickerResult
 
 EBITDA_MARGIN_FLOOR = 0.08
 CAPEX_CFO_GATE = 0.50
@@ -127,3 +130,17 @@ def evaluate(fin: dict) -> dict:
         "price_vs_fair_value_pct": pct, "fair_value_breakdown": breakdown,
         "status": "completed", "errors": [],
     }
+
+
+async def run(ticker: str) -> TickerResult:
+    """Async IO wrapper: fetch + extract + evaluate -> TickerResult."""
+    try:
+        info = await fetch_ticker_info(ticker)
+    except Exception:
+        return TickerResult(ticker=ticker.upper(), status="failed",
+                            errors=["yfinance data unavailable"])
+    fin = extract_financials(info)
+    fin["ticker"] = fin.get("ticker") or ticker.upper()
+    data = evaluate(fin)
+    data["last_evaluated"] = datetime.now(timezone.utc).isoformat()
+    return TickerResult(**data)

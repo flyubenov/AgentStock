@@ -44,35 +44,34 @@ async def upsert_result(result: TickerResult) -> None:
     await loop.run_in_executor(None, _upsert_sync, result)
 
 
+_MODEL_COLS = ["dcf", "ev_ebitda", "ev_sales", "pe", "ddm", "rim", "pb", "sotp", "nav"]
+
+_DB_HEADERS = [
+    "Ticker", "Company Name", "Last Evaluated", "Stock Type", "Fair Value",
+    "Current Price", "Price vs Fair Value %",
+    "DCF", "EV/EBITDA", "EV/Sales", "P/E", "DDM", "RIM", "P/B", "SOTP", "NAV",
+]
+
+
 def _result_to_row(r: TickerResult) -> list:
+    bd = r.fair_value_breakdown or {}
+
+    def model_value(mid: str):
+        cell = bd.get(mid)
+        if cell and cell.get("fair_value") is not None:
+            return cell["fair_value"]
+        return ""
+
     return [
         r.ticker,
         r.company_name or "",
         r.last_evaluated or datetime.utcnow().isoformat(),
-        r.buffett_munger_score if r.buffett_munger_score is not None else "",
-        r.lynch_garp_score if r.lynch_garp_score is not None else "",
-        r.growth_analyzer_score if r.growth_analyzer_score is not None else "",
-        r.business_engine_score if r.business_engine_score is not None else "",
-        r.canslim_score if r.canslim_score is not None else "",
-        r.pre_screener_score if r.pre_screener_score is not None else "",
-        r.overall_final_score if r.overall_final_score is not None else "",
-        r.fair_value_gemini if r.fair_value_gemini is not None else "",
-        r.fair_value_calculator_1 if r.fair_value_calculator_1 is not None else "",
-        r.fair_value_calculator_2 if r.fair_value_calculator_2 is not None else "",
-        r.blended_fair_value if r.blended_fair_value is not None else "",
+        r.stock_type or "",
+        r.fair_value if r.fair_value is not None else "",
         r.current_price if r.current_price is not None else "",
         r.price_vs_fair_value_pct if r.price_vs_fair_value_pct is not None else "",
+        *[model_value(mid) for mid in _MODEL_COLS],
     ]
-
-
-_DB_HEADERS = [
-    "Ticker", "Company Name", "Last Evaluated",
-    "Buffett-Munger Score", "Lynch GARP Score", "Growth Analyzer Score",
-    "Business Engine Score", "CANSLIM Score", "Pre-Screener Score",
-    "Overall Final Score",
-    "Fair Value — Gemini", "Fair Value — Calculator 1", "Fair Value — Calculator 2",
-    "Blended Fair Value", "Current Price at Eval", "Price vs Fair Value %",
-]
 
 
 def _upsert_sync(result: TickerResult) -> None:
@@ -149,7 +148,6 @@ def _read_database_sync() -> list[TickerResult]:
         ).execute()
     except Exception as e:
         if "Unable to parse range" in str(e) or "400" in str(e):
-            # Sheet tab doesn't exist yet — create it and return empty
             _ensure_database_sheet(svc, sheet_id)
             return []
         raise
@@ -167,22 +165,19 @@ def _read_database_sync() -> list[TickerResult]:
     for row in rows[1:]:  # skip header
         while len(row) < 16:
             row.append("")
+        breakdown = {}
+        for i, mid in enumerate(_MODEL_COLS):
+            fv = safe_float(row[7 + i])
+            if fv is not None:
+                breakdown[mid] = {"fair_value": fv}
         results.append(TickerResult(
             ticker=row[0],
             company_name=row[1] or None,
             last_evaluated=row[2] or None,
-            buffett_munger_score=safe_float(row[3]),
-            lynch_garp_score=safe_float(row[4]),
-            growth_analyzer_score=safe_float(row[5]),
-            business_engine_score=safe_float(row[6]),
-            canslim_score=safe_float(row[7]),
-            pre_screener_score=safe_float(row[8]),
-            overall_final_score=safe_float(row[9]),
-            fair_value_gemini=safe_float(row[10]),
-            fair_value_calculator_1=safe_float(row[11]),
-            fair_value_calculator_2=safe_float(row[12]),
-            blended_fair_value=safe_float(row[13]),
-            current_price=safe_float(row[14]),
-            price_vs_fair_value_pct=safe_float(row[15]),
+            stock_type=row[3] or None,
+            fair_value=safe_float(row[4]),
+            current_price=safe_float(row[5]),
+            price_vs_fair_value_pct=safe_float(row[6]),
+            fair_value_breakdown=breakdown,
         ))
     return results
