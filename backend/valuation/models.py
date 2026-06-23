@@ -6,6 +6,10 @@ HORIZON = 10
 MOS = 0.90
 EV_EBITDA_CAP = 20.0
 EV_SALES_CAP = 8.0
+MATURE_MULTIPLE_FACTOR = (1 + TERMINAL_GROWTH) / (DISCOUNT_RATE - TERMINAL_GROWTH)  # = 14.714...
+EBITDA_CONV_FLOOR = 0.40
+EBITDA_CONV_CAP = 0.65
+MATURE_EV_SALES = 2.0
 
 ALL_METHODS = ["dcf", "fcfe", "ev_ebitda", "pe", "ev_sales", "ddm", "pb", "rim", "sotp", "nav"]
 SCENARIO_MODELS = {"dcf", "fcfe", "ev_ebitda", "ev_sales", "pe", "ddm", "rim"}
@@ -34,6 +38,14 @@ def _null_result(has_scenarios: bool) -> dict:
         "weight": 0.0,
         "has_scenarios": has_scenarios,
     }
+
+
+def _compressed_exit_multiple(current_mult: float, conversion: float, conv_lo: float, conv_hi: float) -> float:
+    """Compress the exit multiple toward a fundamentally-justified mature level:
+    justified = clamp(conversion, lo, hi) * MATURE_MULTIPLE_FACTOR. Never inflates —
+    returns min(current_mult, justified)."""
+    conv = max(conv_lo, min(conversion, conv_hi))
+    return min(current_mult, conv * MATURE_MULTIPLE_FACTOR)
 
 
 def _scenario_dcf_equity(cf: float, growth: float, net_debt: float, shares: float) -> float:
@@ -86,6 +98,10 @@ def calc_ev_ebitda(fin: dict, growth: dict) -> dict:
     if ebitda is None or multiple is None or not shares:
         return _null_result(True)
     multiple = min(multiple, EV_EBITDA_CAP)
+    fcf = fin.get("fcf_ttm")
+    if fcf is not None and ebitda > 0:
+        conversion = fcf / ebitda
+        multiple = _compressed_exit_multiple(multiple, conversion, EBITDA_CONV_FLOOR, EBITDA_CONV_CAP)
     net_debt = fin.get("net_debt") or 0
     scenarios = {k: _scenario_ev_multiple(ebitda, growth[k], multiple, net_debt, shares) for k in SCENARIO_KEYS}
     return {"scenarios": scenarios, "fair_value": _avg(scenarios), "weight": 0.0, "has_scenarios": True}
@@ -98,7 +114,7 @@ def calc_ev_sales(fin: dict, growth: dict) -> dict:
     shares = fin.get("shares_outstanding")
     if revenue is None or multiple is None or not shares:
         return _null_result(True)
-    multiple = min(multiple, EV_SALES_CAP)
+    multiple = min(multiple, EV_SALES_CAP, MATURE_EV_SALES)
     net_debt = fin.get("net_debt") or 0
     scenarios = {k: _scenario_ev_multiple(revenue, growth[k], multiple, net_debt, shares) for k in SCENARIO_KEYS}
     return {"scenarios": scenarios, "fair_value": _avg(scenarios), "weight": 0.0, "has_scenarios": True}

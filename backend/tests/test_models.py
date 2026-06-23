@@ -70,3 +70,31 @@ def test_composite_weighted_average():
 
 def test_composite_empty_is_none():
     assert m.composite({"a": {"fair_value": None, "weight": 0.5}}) is None
+
+
+def test_ev_ebitda_exit_compressed_by_conversion():
+    base = {"ebitda_ttm": 1_000_000, "ev_ebitda": 15.0, "net_debt": 0, "shares_outstanding": 100_000}
+    uncompressed = m.calc_ev_ebitda(base, GROWTH)["fair_value"]                      # no fcf -> cap path, 15x
+    compressed = m.calc_ev_ebitda({**base, "fcf_ttm": 400_000}, GROWTH)["fair_value"]  # conv 0.40 -> ~5.89x
+    assert compressed < uncompressed
+
+
+def test_ev_ebitda_compression_floors_conversion():
+    base = {"ebitda_ttm": 1_000_000, "ev_ebitda": 15.0, "net_debt": 0, "shares_outstanding": 100_000}
+    very_low = m.calc_ev_ebitda({**base, "fcf_ttm": 10_000}, GROWTH)["fair_value"]   # conv 0.01 -> floor 0.40
+    at_floor = m.calc_ev_ebitda({**base, "fcf_ttm": 400_000}, GROWTH)["fair_value"]  # conv 0.40
+    assert very_low == pytest.approx(at_floor)
+
+
+def test_ev_ebitda_compression_never_inflates_cheap():
+    base = {"ebitda_ttm": 1_000_000, "ev_ebitda": 5.0, "net_debt": 0, "shares_outstanding": 100_000}
+    cheap = m.calc_ev_ebitda({**base, "fcf_ttm": 650_000}, GROWTH)["fair_value"]  # conv 0.65 -> 9.56x, min keeps 5x
+    no_fcf = m.calc_ev_ebitda(base, GROWTH)["fair_value"]                          # cap path -> 5x
+    assert cheap == pytest.approx(no_fcf)
+
+
+def test_ev_sales_exit_compressed_to_mature():
+    base = {"revenue_ttm": 1_000_000, "net_debt": 0, "shares_outstanding": 100_000}
+    high = m.calc_ev_sales({**base, "ev_sales": 6.0}, GROWTH)["fair_value"]       # -> mature 2x
+    at_mature = m.calc_ev_sales({**base, "ev_sales": 2.0}, GROWTH)["fair_value"]
+    assert high == pytest.approx(at_mature)
