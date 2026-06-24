@@ -21,8 +21,8 @@ def _large_cap_fin(**over):
 
 def test_build_scenarios_capped():
     s = engine.build_scenarios({"earnings_growth": 0.56, "revenue_growth": 0.10})
-    assert s["realistic"] == 0.20            # capped at 0.20
-    assert s["optimistic"] == pytest.approx(0.25)
+    assert s["realistic"] == 0.20             # base capped at 0.20
+    assert s["optimistic"] == pytest.approx(0.20)   # optimistic ceiling now 20%
     assert s["pessimistic"] == pytest.approx(0.16)
 
 
@@ -54,22 +54,6 @@ def test_pick_ev_no_fold_when_only_one_weighted():
     out = engine.pick_ev_multiple(weights, fin)
     assert out["ev_ebitda"] == 0.30
     assert out["ev_sales"] == 0.0
-
-
-def test_dcf_cashflow_base_swaps_to_cfo_above_gate():
-    # capex = 120 - 50 = 70; 70/120 = 0.58 > 0.50 -> use CFO (120)
-    fin = {"operating_cashflow": 120, "fcf_ttm": 50}
-    assert engine.dcf_cashflow_base(fin) == 120
-
-
-def test_dcf_cashflow_base_keeps_fcf_below_gate():
-    # capex = 120 - 90 = 30; 30/120 = 0.25 < 0.50 -> use FCF (90)
-    fin = {"operating_cashflow": 120, "fcf_ttm": 90}
-    assert engine.dcf_cashflow_base(fin) == 90
-
-
-def test_dcf_cashflow_base_defaults_to_fcf_when_cfo_missing():
-    assert engine.dcf_cashflow_base({"operating_cashflow": None, "fcf_ttm": 90}) == 90
 
 
 def test_evaluate_large_cap_blend():

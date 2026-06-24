@@ -6,7 +6,6 @@ from services.yahoo import fetch_ticker_info, extract_financials
 from models import TickerResult
 
 EBITDA_MARGIN_FLOOR = 0.08
-CAPEX_CFO_GATE = 0.50
 
 _SINGLE_VALUE_FN = {"pb": m.calc_pb, "sotp": m.calc_sotp, "nav": m.calc_nav}
 _SCENARIO_FN = {
@@ -24,7 +23,7 @@ def build_scenarios(fin: dict) -> dict:
     raw = fin.get("earnings_growth") or fin.get("revenue_growth") or 0.07
     base = max(0.02, min(float(raw), 0.20))
     return {
-        "optimistic": min(base + 0.05, 0.25),
+        "optimistic": min(base + 0.05, 0.20),
         "realistic": base,
         "pessimistic": max(base - 0.04, 0.02),
     }
@@ -52,17 +51,6 @@ def pick_ev_multiple(weights: dict, fin: dict) -> dict:
     return w
 
 
-def dcf_cashflow_base(fin: dict) -> float | None:
-    """Decision #6: use CFO instead of FCF for the DCF base when capex is huge."""
-    fcf = fin.get("fcf_ttm")
-    cfo = fin.get("operating_cashflow")
-    if cfo is not None and fcf is not None and cfo > 0:
-        capex = cfo - fcf
-        if capex / cfo > CAPEX_CFO_GATE:
-            return cfo
-    return fcf
-
-
 def evaluate(fin: dict) -> dict:
     """Pure valuation pipeline. Returns a result dict (no IO, no timestamps)."""
     classification = classify(fin)
@@ -70,7 +58,6 @@ def evaluate(fin: dict) -> dict:
     weights = {mid: classification["method_weights"][mid]["weight"] for mid in m.ALL_METHODS}
     weights = pick_ev_multiple(weights, fin)
     growth = build_scenarios(fin)
-    cf_base = dcf_cashflow_base(fin)
 
     results: dict[str, dict] = {}
     for mid in m.ALL_METHODS:
@@ -78,7 +65,7 @@ def evaluate(fin: dict) -> dict:
         if weight <= 0:
             continue
         if mid == "dcf":
-            r = m.calc_dcf(fin, growth, cashflow_base=cf_base)
+            r = m.calc_dcf(fin, growth)
         elif mid in _SCENARIO_FN:
             r = _SCENARIO_FN[mid](fin, growth)
         else:

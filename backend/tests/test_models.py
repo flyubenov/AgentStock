@@ -52,11 +52,6 @@ def test_dcf_scenarios_ordered_for_positive_inputs():
     assert s["optimistic"] > s["realistic"] > s["pessimistic"] > 0
 
 
-def test_dcf_uses_cashflow_base_override():
-    fin = {"fcf_ttm": 1_000_000, "net_debt": 0, "shares_outstanding": 100_000}
-    fcf_val = m.calc_dcf(fin, GROWTH)["fair_value"]
-    cfo_val = m.calc_dcf(fin, GROWTH, cashflow_base=2_000_000)["fair_value"]
-    assert cfo_val == pytest.approx(fcf_val * 2)
 
 
 def test_composite_weighted_average():

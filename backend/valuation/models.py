@@ -66,8 +66,8 @@ def _scenario_ev_multiple(base: float, growth: float, multiple: float, net_debt:
 
 
 # -- DCF (FCFF) ----------------------------------------------------------------
-def calc_dcf(fin: dict, growth: dict, cashflow_base: float | None = None) -> dict:
-    base = cashflow_base if cashflow_base is not None else fin.get("fcf_ttm")
+def calc_dcf(fin: dict, growth: dict) -> dict:
+    base = fin.get("fcf_ttm")
     shares = fin.get("shares_outstanding")
     if base is None or not shares:
         return _null_result(True)
