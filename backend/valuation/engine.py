@@ -2,7 +2,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from valuation.classifier import classify
 from valuation import models as m
-from services.yahoo import fetch_ticker_info, extract_financials
+from services.yahoo import fetch_ticker_info, extract_financials, fetch_ticker_cashflow, real_fcf
 from models import TickerResult
 
 EBITDA_MARGIN_FLOOR = 0.08
@@ -120,7 +120,7 @@ def evaluate(fin: dict) -> dict:
 
 
 async def run(ticker: str) -> TickerResult:
-    """Async IO wrapper: fetch + extract + evaluate -> TickerResult."""
+    """Async IO wrapper: fetch info + cashflow, source real FCF, evaluate -> TickerResult."""
     try:
         info = await fetch_ticker_info(ticker)
     except Exception:
@@ -128,6 +128,10 @@ async def run(ticker: str) -> TickerResult:
                             errors=["yfinance data unavailable"])
     fin = extract_financials(info)
     fin["ticker"] = fin.get("ticker") or ticker.upper()
+    cashflow = await fetch_ticker_cashflow(ticker)
+    rf = real_fcf(cashflow, fin.get("fcf_ttm"))
+    if rf is not None:
+        fin["fcf_ttm"] = rf
     data = evaluate(fin)
     data["last_evaluated"] = datetime.now(timezone.utc).isoformat()
     return TickerResult(**data)

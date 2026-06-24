@@ -18,7 +18,8 @@ _INFO = {
 
 @pytest.mark.asyncio
 async def test_run_returns_completed_ticker_result():
-    with patch("valuation.engine.fetch_ticker_info", return_value=_INFO):
+    with patch("valuation.engine.fetch_ticker_info", return_value=_INFO), \
+         patch("valuation.engine.fetch_ticker_cashflow", return_value=None):
         result = await engine.run("AAPL")
     assert isinstance(result, TickerResult)
     assert result.status == "completed"
@@ -33,3 +34,16 @@ async def test_run_yfinance_failure_is_failed():
         result = await engine.run("BADX")
     assert result.status == "failed"
     assert result.errors == ["yfinance data unavailable"]
+
+
+@pytest.mark.asyncio
+async def test_run_uses_real_fcf_from_cashflow():
+    cf_low = {"free_cash_flow": 20_000_000_000, "operating_cash_flow": None, "capital_expenditure": None}
+    with patch("valuation.engine.fetch_ticker_info", return_value=_INFO), \
+         patch("valuation.engine.fetch_ticker_cashflow", return_value=None):
+        baseline = (await engine.run("AAPL")).fair_value
+    with patch("valuation.engine.fetch_ticker_info", return_value=_INFO), \
+         patch("valuation.engine.fetch_ticker_cashflow", return_value=cf_low):
+        lowered = (await engine.run("AAPL")).fair_value
+    # real FCF (20B) is below the info-dict FCF (99B), so DCF + EV/EBITDA conversion drop
+    assert lowered < baseline

@@ -73,3 +73,22 @@ def test_extract_financials_adds_valuation_fields():
     assert fin["ev_ebitda"] == 24.3
     assert fin["ev_sales"] == 8.1
     assert fin["cost_of_equity"] == 0.10
+
+
+from services.yahoo import real_fcf
+
+
+def test_real_fcf_prefers_statement_fcf():
+    cf = {"free_cash_flow": 71.0, "operating_cash_flow": 136.0, "capital_expenditure": -65.0}
+    assert real_fcf(cf, 37.0) == 71.0
+
+
+def test_real_fcf_falls_back_to_ocf_plus_capex():
+    cf = {"free_cash_flow": None, "operating_cash_flow": 136.0, "capital_expenditure": -65.0}
+    assert real_fcf(cf, 37.0) == pytest.approx(71.0)  # 136 + (-65)
+
+
+def test_real_fcf_falls_back_to_info_when_no_cashflow():
+    assert real_fcf(None, 37.0) == 37.0
+    empty = {"free_cash_flow": None, "operating_cash_flow": None, "capital_expenditure": None}
+    assert real_fcf(empty, 37.0) == 37.0

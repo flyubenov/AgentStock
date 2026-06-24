@@ -42,6 +42,61 @@ def _fetch_sync(ticker: str) -> dict:
     raise RuntimeError(f"Failed to fetch {ticker} after {_RATE_LIMIT_RETRIES} attempts")
 
 
+@lru_cache(maxsize=256)
+def _fetch_cashflow_sync(ticker: str) -> dict | None:
+    """Fetch the cashflow statement and extract the rows we need. Cached per ticker.
+    Returns None (never raises) when the statement is unavailable."""
+    for attempt in range(_RATE_LIMIT_RETRIES):
+        try:
+            cf = yf.Ticker(ticker).cashflow
+            if cf is None or cf.empty:
+                return None
+
+            def _row(label: str) -> float | None:
+                try:
+                    val = cf.loc[label].iloc[0]
+                except (KeyError, IndexError):
+                    return None
+                return float(val) if val == val else None  # NaN -> None
+
+            return {
+                "free_cash_flow": _row("Free Cash Flow"),
+                "operating_cash_flow": _row("Operating Cash Flow"),
+                "capital_expenditure": _row("Capital Expenditure"),
+            }
+        except Exception as e:
+            is_rate_limit = (
+                (_YFRateLimitError and isinstance(e, _YFRateLimitError))
+                or "rate" in str(e).lower()
+                or "too many" in str(e).lower()
+            )
+            if is_rate_limit and attempt < _RATE_LIMIT_RETRIES - 1:
+                time.sleep(_RATE_LIMIT_BACKOFF * (attempt + 1))
+                continue
+            return None
+    return None
+
+
+async def fetch_ticker_cashflow(ticker: str) -> dict | None:
+    """Async wrapper around _fetch_cashflow_sync."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _fetch_cashflow_sync, ticker.upper())
+
+
+def real_fcf(cashflow: dict | None, info_fcf: float | None) -> float | None:
+    """Real FCF priority: statement 'Free Cash Flow', else OCF + (negative) capex,
+    else the info-dict free cash flow fallback."""
+    if cashflow:
+        fcf = cashflow.get("free_cash_flow")
+        if fcf is not None:
+            return fcf
+        ocf = cashflow.get("operating_cash_flow")
+        capex = cashflow.get("capital_expenditure")
+        if ocf is not None and capex is not None:
+            return ocf + capex  # capex is negative in the statement
+    return info_fcf
+
+
 def extract_financials(info: dict) -> dict:
     """Normalise yfinance info dict to the fields our valuation scripts need."""
     price = info.get("currentPrice") or info.get("regularMarketPrice")
