@@ -26,6 +26,24 @@ def test_conglomerate_keyword_in_summary():
     assert classify(fin)["stock_type"] == "CONGLOMERATE"
 
 
+def test_subsidiaries_boilerplate_is_not_conglomerate():
+    # "together with its subsidiaries" is generic SEC boilerplate, not a
+    # conglomerate signal. Regression: KLAC was misclassified as CONGLOMERATE.
+    fin = {
+        "sector": "Technology",
+        "industry": "Semiconductor Equipment & Materials",
+        "long_business_summary": (
+            "KLA Corporation, together with its subsidiaries, designs, "
+            "manufactures, and markets process control and yield management "
+            "solutions for the semiconductor and related industries."
+        ),
+        "revenue_growth": 0.115,
+        "eps_ttm": 3.52,
+        "dividend_yield": 0.008,
+    }
+    assert classify(fin)["stock_type"] == "GROWTH"
+
+
 def test_early_growth():
     fin = {"sector": "Technology", "revenue_growth": 0.35, "eps_ttm": -1.2, "ebitda_ttm": 10}
     assert classify(fin)["stock_type"] == "EARLY_GROWTH"

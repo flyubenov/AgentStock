@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+# Keep only phrases that are specifically indicative of a multi-business
+# conglomerate or breakup thesis. Generic SEC boilerplate ("together with its
+# subsidiaries", "product portfolio", "capital allocation") was pruned because
+# it false-positived single-business companies (e.g. KLAC) into CONGLOMERATE.
 CONGLOMERATE_KEYWORDS = [
-    "portfolio", "capital allocation", "subsidiaries", "spin-off", "spinoff",
-    "breakup", "divestiture", "holding company", "conglomerate",
+    "spin-off", "spinoff", "breakup", "divestiture",
+    "holding company", "conglomerate",
 ]
 
 CYCLICAL_SECTORS = {"Energy", "Basic Materials"}
