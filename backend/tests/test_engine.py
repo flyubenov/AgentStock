@@ -90,9 +90,23 @@ def test_evaluate_large_cap_blend():
     # composite is the weight-internal blend of the breakdown values (consistency guard)
     blend = sum(b["weight"] * b["fair_value"] for b in result["fair_value_breakdown"].values())
     assert result["fair_value"] == pytest.approx(blend, rel=1e-6)
-    # LARGE_CAP weights both EV multiples; only one should survive the fold
+    # LARGE_CAP weights only EV/EBITDA among the EV multiples (no EV/Sales)
     bd = result["fair_value_breakdown"]
-    assert not ("ev_ebitda" in bd and "ev_sales" in bd)
+    assert "ev_sales" not in bd
+    assert "ev_ebitda" in bd
+
+
+def test_evaluate_mid_cap_blend():
+    # Same profile as the large-cap fixture but a $20B cap -> MID_CAP default.
+    # Lower EBITDA margin to force pick_ev_multiple to select ev_sales (distinct from LARGE_CAP).
+    fin = _large_cap_fin(market_cap=20_000_000_000, ebitda_ttm=20_000_000_000)
+    result = engine.evaluate(fin)
+    assert result["stock_type"] == "MID_CAP"
+    assert result["status"] == "completed"
+    total_w = sum(b["weight"] for b in result["fair_value_breakdown"].values())
+    assert total_w == pytest.approx(1.0)
+    # MID_CAP keeps a small EV/Sales weight (distinct from LARGE_CAP)
+    assert "ev_sales" in result["fair_value_breakdown"]
 
 
 def test_evaluate_price_vs_fair_value_pct():

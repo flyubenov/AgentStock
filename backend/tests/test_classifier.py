@@ -65,8 +65,28 @@ def test_cyclical_sector():
 
 
 def test_large_cap_default():
-    fin = {"sector": "Technology", "revenue_growth": 0.05, "eps_ttm": 5.0, "dividend_yield": 0.005}
+    fin = {"sector": "Technology", "revenue_growth": 0.05, "eps_ttm": 5.0,
+           "dividend_yield": 0.005, "market_cap": 500_000_000_000}
     assert classify(fin)["stock_type"] == "LARGE_CAP"
+
+
+def test_mid_cap_below_threshold():
+    fin = {"sector": "Technology", "revenue_growth": 0.05, "eps_ttm": 5.0,
+           "dividend_yield": 0.005, "market_cap": 20_000_000_000}
+    assert classify(fin)["stock_type"] == "MID_CAP"
+
+
+def test_missing_market_cap_defaults_mid_cap():
+    fin = {"sector": "Technology", "revenue_growth": 0.05, "eps_ttm": 5.0,
+           "dividend_yield": 0.005}
+    assert classify(fin)["stock_type"] == "MID_CAP"
+
+
+def test_mid_cap_weights_shape():
+    res = classify({"sector": "Technology", "eps_ttm": 5.0, "market_cap": 20_000_000_000})
+    assert res["method_weights"]["dcf"]["weight"] == 0.45
+    assert res["method_weights"]["ev_sales"]["weight"] == 0.15
+    assert res["method_weights"]["sotp"]["weight"] == 0.0
 
 
 def test_method_weights_shape():

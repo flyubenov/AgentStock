@@ -22,7 +22,8 @@ NON_FINANCIAL_KEYWORDS = [
 # Default method weights per stock type. Keys match the MethodId set:
 # dcf, fcfe, ev_ebitda, pe, ev_sales, ddm, pb, rim, sotp, nav.
 _TYPE_WEIGHTS: dict[str, dict[str, float]] = {
-    "LARGE_CAP":    {"dcf": 0.45, "fcfe": 0.00, "ev_ebitda": 0.25, "pe": 0.15, "ev_sales": 0.10, "ddm": 0.00, "pb": 0.00, "rim": 0.00, "sotp": 0.05, "nav": 0.00},
+    "LARGE_CAP":    {"dcf": 0.50, "fcfe": 0.00, "ev_ebitda": 0.35, "pe": 0.15, "ev_sales": 0.00, "ddm": 0.00, "pb": 0.00, "rim": 0.00, "sotp": 0.00, "nav": 0.00},
+    "MID_CAP":      {"dcf": 0.45, "fcfe": 0.00, "ev_ebitda": 0.25, "pe": 0.15, "ev_sales": 0.15, "ddm": 0.00, "pb": 0.00, "rim": 0.00, "sotp": 0.00, "nav": 0.00},
     "DIVIDEND":     {"dcf": 0.25, "fcfe": 0.00, "ev_ebitda": 0.00, "pe": 0.25, "ev_sales": 0.00, "ddm": 0.40, "pb": 0.10, "rim": 0.00, "sotp": 0.00, "nav": 0.00},
     "GROWTH":       {"dcf": 0.40, "fcfe": 0.00, "ev_ebitda": 0.20, "pe": 0.20, "ev_sales": 0.20, "ddm": 0.00, "pb": 0.00, "rim": 0.00, "sotp": 0.00, "nav": 0.00},
     "EARLY_GROWTH": {"dcf": 0.35, "fcfe": 0.00, "ev_ebitda": 0.00, "pe": 0.00, "ev_sales": 0.40, "ddm": 0.00, "pb": 0.00, "rim": 0.00, "sotp": 0.25, "nav": 0.00},
@@ -86,5 +87,7 @@ def _detect_type(fin: dict) -> str:
     if sector in CYCLICAL_SECTORS or (0 < trailing_pe < 12 and revenue_growth < 0.05):
         return "CYCLICAL"
 
-    # 8. Large cap (default)
-    return "LARGE_CAP"
+    # 8. Size-based default
+    if market_cap > 100_000_000_000:
+        return "LARGE_CAP"
+    return "MID_CAP"
