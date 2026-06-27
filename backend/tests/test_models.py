@@ -28,7 +28,7 @@ def test_pb_floor_justified_pb_at_0_1():
 def test_missing_inputs_return_null():
     assert m.calc_dcf({"fcf_ttm": None, "shares_outstanding": 1000}, GROWTH)["fair_value"] is None
     assert m.calc_ev_ebitda({"ebitda_ttm": None, "ev_ebitda": 10, "shares_outstanding": 1}, GROWTH)["fair_value"] is None
-    assert m.calc_pe({"eps_ttm": 0, "payout_ratio": 0.5}, GROWTH)["fair_value"] is None
+    assert m.calc_pe({"eps_ttm": 0, "trailing_pe": 20})["fair_value"] is None
     assert m.calc_ddm({"dividend_rate": 0}, GROWTH)["fair_value"] is None
 
 
@@ -93,3 +93,31 @@ def test_ev_sales_exit_compressed_to_mature():
     high = m.calc_ev_sales({**base, "ev_sales": 6.0}, GROWTH)["fair_value"]       # -> mature 2x
     at_mature = m.calc_ev_sales({**base, "ev_sales": 2.0}, GROWTH)["fair_value"]
     assert high == pytest.approx(at_mature)
+
+
+def test_pe_caps_at_mature_multiple():
+    # trailing P/E above the cap -> reverts to MATURE_PE_CAP
+    fv = m.calc_pe({"eps_ttm": 10.0, "trailing_pe": 35.0})["fair_value"]
+    assert fv == pytest.approx(10.0 * m.MATURE_PE_CAP * m.MOS)
+
+
+def test_pe_keeps_trailing_below_cap():
+    # trailing P/E below the cap -> never inflates, keep trailing
+    fv = m.calc_pe({"eps_ttm": 10.0, "trailing_pe": 12.0})["fair_value"]
+    assert fv == pytest.approx(10.0 * 12.0 * m.MOS)
+
+
+def test_pe_null_on_nonpositive_eps():
+    assert m.calc_pe({"eps_ttm": 0, "trailing_pe": 20.0})["fair_value"] is None
+    assert m.calc_pe({"eps_ttm": -2.0, "trailing_pe": 20.0})["fair_value"] is None
+
+
+def test_pe_null_on_missing_trailing_pe():
+    assert m.calc_pe({"eps_ttm": 5.0, "trailing_pe": None})["fair_value"] is None
+    assert m.calc_pe({"eps_ttm": 5.0, "trailing_pe": 0})["fair_value"] is None
+
+
+def test_pe_is_single_value():
+    r = m.calc_pe({"eps_ttm": 10.0, "trailing_pe": 18.0})
+    assert r["has_scenarios"] is False
+    assert r["scenarios"]["optimistic"] == r["scenarios"]["pessimistic"] == r["fair_value"]

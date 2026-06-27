@@ -10,9 +10,10 @@ MATURE_MULTIPLE_FACTOR = (1 + TERMINAL_GROWTH) / (DISCOUNT_RATE - TERMINAL_GROWT
 EBITDA_CONV_FLOOR = 0.40
 EBITDA_CONV_CAP = 0.65
 MATURE_EV_SALES = 2.0
+MATURE_PE_CAP = 21.0
 
 ALL_METHODS = ["dcf", "fcfe", "ev_ebitda", "pe", "ev_sales", "ddm", "pb", "rim", "sotp", "nav"]
-SCENARIO_MODELS = {"dcf", "fcfe", "ev_ebitda", "ev_sales", "pe", "ddm", "rim"}
+SCENARIO_MODELS = {"dcf", "fcfe", "ev_ebitda", "ev_sales", "ddm", "rim"}
 APPROX_METHODS = {"sotp", "nav"}
 SCENARIO_KEYS = ("optimistic", "realistic", "pessimistic")
 
@@ -120,20 +121,16 @@ def calc_ev_sales(fin: dict, growth: dict) -> dict:
     return {"scenarios": scenarios, "fair_value": _avg(scenarios), "weight": 0.0, "has_scenarios": True}
 
 
-# -- P/E (justified) -----------------------------------------------------------
-def calc_pe(fin: dict, growth: dict) -> dict:
+# -- P/E (capped market multiple) ----------------------------------------------
+def calc_pe(fin: dict) -> dict:
     eps = fin.get("eps_ttm")
-    payout = fin.get("payout_ratio")
-    if eps is None or eps <= 0 or payout is None:
-        return _null_result(True)
-
-    def scenario_pe(g: float) -> float:
-        capped_g = min(g, DISCOUNT_RATE - 0.01)
-        pe = payout / (DISCOUNT_RATE - capped_g) if capped_g > 0 else payout / DISCOUNT_RATE
-        return _apply_mos(eps * max(pe, 1))
-
-    scenarios = {k: scenario_pe(growth[k]) for k in SCENARIO_KEYS}
-    return {"scenarios": scenarios, "fair_value": _avg(scenarios), "weight": 0.0, "has_scenarios": True}
+    trailing_pe = fin.get("trailing_pe")
+    if eps is None or eps <= 0 or trailing_pe is None or trailing_pe <= 0:
+        return _null_result(False)
+    target_pe = min(trailing_pe, MATURE_PE_CAP)
+    fv = _apply_mos(eps * target_pe)
+    return {"scenarios": {k: fv for k in SCENARIO_KEYS}, "fair_value": fv,
+            "weight": 0.0, "has_scenarios": False}
 
 
 # -- DDM (Gordon growth) -------------------------------------------------------

@@ -8,12 +8,11 @@ from models import TickerResult
 EBITDA_MARGIN_FLOOR = 0.08
 SUSTAINABLE_CEIL = 0.039
 
-_SINGLE_VALUE_FN = {"pb": m.calc_pb, "sotp": m.calc_sotp, "nav": m.calc_nav}
+_SINGLE_VALUE_FN = {"pe": m.calc_pe, "pb": m.calc_pb, "sotp": m.calc_sotp, "nav": m.calc_nav}
 _SCENARIO_FN = {
     "fcfe": m.calc_fcfe,
     "ev_ebitda": m.calc_ev_ebitda,
     "ev_sales": m.calc_ev_sales,
-    "pe": m.calc_pe,
     "ddm": m.calc_ddm,
     "rim": m.calc_rim,
 }
