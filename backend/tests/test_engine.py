@@ -32,6 +32,28 @@ def test_build_scenarios_floor():
     assert s["pessimistic"] == 0.02
 
 
+def test_build_scenarios_distorted_earnings_uses_capped_revenue():
+    # Revenue growing while GAAP earnings negative (e.g. ABBV) -> distortion:
+    # source growth from revenue, capped at SUSTAINABLE_CEIL.
+    s = engine.build_scenarios({"earnings_growth": -0.46, "revenue_growth": 0.124})
+    assert s["realistic"] == pytest.approx(engine.SUSTAINABLE_CEIL)
+    assert s["optimistic"] == pytest.approx(engine.SUSTAINABLE_CEIL + 0.05)
+    assert s["pessimistic"] == 0.02
+
+
+def test_build_scenarios_genuine_decline_not_normalized():
+    # Revenue AND earnings both falling -> a real decline, NOT an accounting
+    # distortion: must stay on the floored path, not the revenue cap.
+    s = engine.build_scenarios({"earnings_growth": -0.20, "revenue_growth": -0.05})
+    assert s["realistic"] == 0.02
+
+
+def test_build_scenarios_positive_earnings_unchanged():
+    # Positive earnings growth must be untouched (guards MSFT/AMAT/KLAC path).
+    s = engine.build_scenarios({"earnings_growth": 0.08, "revenue_growth": 0.05})
+    assert s["realistic"] == pytest.approx(0.08)
+
+
 def test_pick_ev_uses_ebitda_when_margin_healthy():
     weights = {"ev_ebitda": 0.20, "ev_sales": 0.20}
     fin = {"ebitda_ttm": 100, "revenue_ttm": 1000}  # 10% margin > 8%

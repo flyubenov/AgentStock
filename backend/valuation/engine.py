@@ -6,6 +6,7 @@ from services.yahoo import fetch_ticker_info, extract_financials, fetch_ticker_c
 from models import TickerResult
 
 EBITDA_MARGIN_FLOOR = 0.08
+SUSTAINABLE_CEIL = 0.039
 
 _SINGLE_VALUE_FN = {"pb": m.calc_pb, "sotp": m.calc_sotp, "nav": m.calc_nav}
 _SCENARIO_FN = {
@@ -19,8 +20,20 @@ _SCENARIO_FN = {
 
 
 def build_scenarios(fin: dict) -> dict:
-    """Per-stock capped growth scenarios (spec decision #1)."""
-    raw = fin.get("earnings_growth") or fin.get("revenue_growth") or 0.07
+    """Per-stock capped growth scenarios (spec decision #1).
+
+    When GAAP earnings growth is negative while revenue is still growing, the
+    earnings figure is treated as distorted (acquisition amortization / one-off
+    charges, e.g. ABBV) rather than a real decline. Growth is then sourced from
+    revenue growth, capped at SUSTAINABLE_CEIL to avoid the r-g overshoot in the
+    perpetuity-based models (DDM, P/E). A genuine decline (revenue also falling)
+    stays on the normal floored path."""
+    eg = fin.get("earnings_growth")
+    rg = fin.get("revenue_growth") or 0
+    if eg is not None and eg < 0 and rg > 0:
+        raw = min(rg, SUSTAINABLE_CEIL)
+    else:
+        raw = fin.get("earnings_growth") or fin.get("revenue_growth") or 0.07
     base = max(0.02, min(float(raw), 0.20))
     return {
         "optimistic": min(base + 0.05, 0.20),
