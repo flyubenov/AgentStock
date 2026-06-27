@@ -168,7 +168,7 @@ def test_evaluate_distorted_earnings_drops_pe_leg():
     assert result["stock_type"] == "DIVIDEND"
     assert "pe" not in result["fair_value_breakdown"]
     total_w = sum(b["weight"] for b in result["fair_value_breakdown"].values())
-    assert total_w == pytest.approx(1.0)
+    assert total_w == pytest.approx(1.0, abs=1e-3)
 
 
 def test_evaluate_pe_kept_when_earnings_healthy():

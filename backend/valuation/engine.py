@@ -132,17 +132,9 @@ def evaluate(fin: dict) -> dict:
         }
 
     total_weight = sum(r["weight"] for r in results.values())
-    breakdown = {}
-    methods_list = list(results.items())
-    for idx, (mid, r) in enumerate(methods_list):
-        rounded_weight = round(r["weight"] / total_weight, 4)
-        # For the last method, adjust weight to ensure sum == 1.0
-        if idx == len(methods_list) - 1:
-            rounded_weight = round(1.0 - sum(
-                breakdown[m]["weight"] for m in breakdown.keys()
-            ), 4)
-        breakdown[mid] = {
-            "weight": rounded_weight,
+    breakdown = {
+        mid: {
+            "weight": round(r["weight"] / total_weight, 4),
             "fair_value": round(r["fair_value"], 2),
             "scenarios": {
                 k: (round(v, 2) if v is not None else None)
@@ -150,6 +142,8 @@ def evaluate(fin: dict) -> dict:
             },
             "is_approx": mid in m.APPROX_METHODS,
         }
+        for mid, r in results.items()
+    }
 
     # Derive fair_value from the breakdown so that consistency holds exactly:
     # result["fair_value"] == sum(b["weight"] * b["fair_value"]) (what the test checks).
