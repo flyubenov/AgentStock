@@ -11,6 +11,14 @@ CONGLOMERATE_KEYWORDS = [
 
 CYCLICAL_SECTORS = {"Energy", "Basic Materials"}
 
+# Phrases that mark a yfinance "Financial Services" tag as a mis-classification:
+# crypto miners and data-center operators are tagged Financial Services but are
+# not balance-sheet / book-value businesses.
+NON_FINANCIAL_KEYWORDS = [
+    "bitcoin", "cryptocurrency", "crypto", "digital asset",
+    "data center", "data centre", "mining", "miner",
+]
+
 # Default method weights per stock type. Keys match the MethodId set:
 # dcf, fcfe, ev_ebitda, pe, ev_sales, ddm, pb, rim, sotp, nav.
 _TYPE_WEIGHTS: dict[str, dict[str, float]] = {
@@ -49,7 +57,7 @@ def _detect_type(fin: dict) -> str:
     trailing_pe = fin.get("trailing_pe") or 0
 
     # 1. Financial
-    if sector == "Financial Services":
+    if sector == "Financial Services" and not any(kw in summary for kw in NON_FINANCIAL_KEYWORDS):
         return "FINANCIAL"
 
     # 2. Asset-heavy / Real Estate

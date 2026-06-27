@@ -73,3 +73,25 @@ def test_method_weights_shape():
     res = classify({"sector": "Financial Services"})
     assert res["method_weights"]["rim"] == {"enabled": True, "weight": 0.45}
     assert res["method_weights"]["dcf"] == {"enabled": False, "weight": 0.0}
+
+
+def test_crypto_miner_not_financial():
+    # yfinance tags bitcoin miners / data-center operators "Financial Services";
+    # the de-financialize override must skip FINANCIAL for them.
+    fin = {
+        "sector": "Financial Services",
+        "long_business_summary": (
+            "The company operates data centers and bitcoin mining facilities, "
+            "converting capacity to AI compute."
+        ),
+        "market_cap": 16_000_000_000,
+    }
+    assert classify(fin)["stock_type"] != "FINANCIAL"
+
+
+def test_real_bank_still_financial():
+    fin = {
+        "sector": "Financial Services",
+        "long_business_summary": "A regional bank providing deposit and loan services.",
+    }
+    assert classify(fin)["stock_type"] == "FINANCIAL"
