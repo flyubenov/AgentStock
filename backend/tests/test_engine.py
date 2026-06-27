@@ -130,3 +130,30 @@ def test_evaluate_sotp_flagged_approx():
     result = engine.evaluate(fin)
     assert result["stock_type"] == "CONGLOMERATE"
     assert result["fair_value_breakdown"]["sotp"]["is_approx"] is True
+
+
+def test_evaluate_pre_profit_guard_fires():
+    # Deeply FCF-negative, DCF-anchored (MID_CAP) -> declined as PRE_PROFIT.
+    fin = _large_cap_fin(market_cap=16_000_000_000,
+                         fcf_ttm=-1_130_000_000, revenue_ttm=757_000_000)
+    result = engine.evaluate(fin)
+    assert result["status"] == "failed"
+    assert result["stock_type"] == "PRE_PROFIT"
+    assert result["fair_value"] is None
+    assert result["price_vs_fair_value_pct"] is None
+    assert "Negative free cash flow" in result["errors"][0]
+
+
+def test_evaluate_pre_profit_guard_not_fired_when_fcf_positive():
+    fin = _large_cap_fin(market_cap=16_000_000_000)  # positive fcf_ttm
+    result = engine.evaluate(fin)
+    assert result["status"] == "completed"
+    assert result["stock_type"] == "MID_CAP"
+
+
+def test_evaluate_pre_profit_guard_skips_financial():
+    # FINANCIAL has dcf weight 0, so the guard must not fire even when FCF<0.
+    fin = _large_cap_fin(sector="Financial Services",
+                         fcf_ttm=-1_000_000_000, revenue_ttm=500_000_000)
+    result = engine.evaluate(fin)
+    assert result["stock_type"] == "FINANCIAL"

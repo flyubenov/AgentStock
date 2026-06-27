@@ -7,6 +7,7 @@ from models import TickerResult
 
 EBITDA_MARGIN_FLOOR = 0.08
 SUSTAINABLE_CEIL = 0.039
+FCF_MARGIN_FLOOR = -0.25
 
 _SINGLE_VALUE_FN = {"pe": m.calc_pe, "pb": m.calc_pb, "sotp": m.calc_sotp, "nav": m.calc_nav}
 _SCENARIO_FN = {
@@ -69,6 +70,26 @@ def evaluate(fin: dict) -> dict:
     stock_type = classification["stock_type"]
     weights = {mid: classification["method_weights"][mid]["weight"] for mid in m.ALL_METHODS}
     weights = pick_ev_multiple(weights, fin)
+
+    # Pre-profit guard: a DCF-anchored company burning cash on a trailing basis
+    # cannot be valued reliably from trailing financials. Decline rather than
+    # emit a misleading number.
+    fcf_ttm = fin.get("fcf_ttm")
+    revenue_ttm = fin.get("revenue_ttm")
+    if (weights.get("dcf", 0) > 0 and fcf_ttm is not None and revenue_ttm
+            and fcf_ttm / revenue_ttm < FCF_MARGIN_FLOOR):
+        return {
+            "ticker": fin.get("ticker") or "",
+            "company_name": fin.get("company_name"),
+            "current_price": fin.get("current_price"),
+            "last_evaluated": None, "stock_type": "PRE_PROFIT",
+            "fair_value": None, "price_vs_fair_value_pct": None,
+            "fair_value_breakdown": {},
+            "status": "failed",
+            "errors": ["Negative free cash flow (pre-profit / heavy investment "
+                       "phase) — trailing financials don't support a reliable valuation"],
+        }
+
     growth = build_scenarios(fin)
 
     results: dict[str, dict] = {}
