@@ -34,8 +34,8 @@ def build_scenarios(fin: dict) -> dict:
     earnings figure is treated as distorted (acquisition amortization / one-off
     charges, e.g. ABBV) rather than a real decline. Growth is then sourced from
     revenue growth, capped at SUSTAINABLE_CEIL to avoid the r-g overshoot in the
-    perpetuity-based models (DDM, P/E). A genuine decline (revenue also falling)
-    stays on the normal floored path."""
+    perpetuity-based DDM. A genuine decline (revenue also falling) stays on the
+    normal floored path."""
     if _earnings_distorted(fin):
         raw = min(fin.get("revenue_growth") or 0, SUSTAINABLE_CEIL)
     else:
