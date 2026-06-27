@@ -19,6 +19,14 @@ _SCENARIO_FN = {
 }
 
 
+def _earnings_distorted(fin: dict) -> bool:
+    """GAAP earnings treated as distorted: negative earnings growth while
+    revenue is still growing (acquisition amortization / one-offs, e.g. ABBV)."""
+    eg = fin.get("earnings_growth")
+    rg = fin.get("revenue_growth") or 0
+    return eg is not None and eg < 0 and rg > 0
+
+
 def build_scenarios(fin: dict) -> dict:
     """Per-stock capped growth scenarios (spec decision #1).
 
@@ -28,10 +36,8 @@ def build_scenarios(fin: dict) -> dict:
     revenue growth, capped at SUSTAINABLE_CEIL to avoid the r-g overshoot in the
     perpetuity-based models (DDM, P/E). A genuine decline (revenue also falling)
     stays on the normal floored path."""
-    eg = fin.get("earnings_growth")
-    rg = fin.get("revenue_growth") or 0
-    if eg is not None and eg < 0 and rg > 0:
-        raw = min(rg, SUSTAINABLE_CEIL)
+    if _earnings_distorted(fin):
+        raw = min(fin.get("revenue_growth") or 0, SUSTAINABLE_CEIL)
     else:
         raw = fin.get("earnings_growth") or fin.get("revenue_growth") or 0.07
     base = max(0.02, min(float(raw), 0.20))
@@ -90,6 +96,12 @@ def evaluate(fin: dict) -> dict:
                        "phase) — trailing financials don't support a reliable valuation"],
         }
 
+    # Distorted GAAP earnings make any trailing-earnings multiple unreliable;
+    # drop the P/E leg and let the remaining models renormalize (e.g. ABBV).
+    if _earnings_distorted(fin) and weights.get("pe", 0) > 0:
+        weights = dict(weights)
+        weights["pe"] = 0.0
+
     growth = build_scenarios(fin)
 
     results: dict[str, dict] = {}
@@ -120,9 +132,17 @@ def evaluate(fin: dict) -> dict:
         }
 
     total_weight = sum(r["weight"] for r in results.values())
-    breakdown = {
-        mid: {
-            "weight": round(r["weight"] / total_weight, 4),
+    breakdown = {}
+    methods_list = list(results.items())
+    for idx, (mid, r) in enumerate(methods_list):
+        rounded_weight = round(r["weight"] / total_weight, 4)
+        # For the last method, adjust weight to ensure sum == 1.0
+        if idx == len(methods_list) - 1:
+            rounded_weight = round(1.0 - sum(
+                breakdown[m]["weight"] for m in breakdown.keys()
+            ), 4)
+        breakdown[mid] = {
+            "weight": rounded_weight,
             "fair_value": round(r["fair_value"], 2),
             "scenarios": {
                 k: (round(v, 2) if v is not None else None)
@@ -130,8 +150,6 @@ def evaluate(fin: dict) -> dict:
             },
             "is_approx": mid in m.APPROX_METHODS,
         }
-        for mid, r in results.items()
-    }
 
     # Derive fair_value from the breakdown so that consistency holds exactly:
     # result["fair_value"] == sum(b["weight"] * b["fair_value"]) (what the test checks).

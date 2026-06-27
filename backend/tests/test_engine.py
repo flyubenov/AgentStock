@@ -157,3 +157,24 @@ def test_evaluate_pre_profit_guard_skips_financial():
                          fcf_ttm=-1_000_000_000, revenue_ttm=500_000_000)
     result = engine.evaluate(fin)
     assert result["stock_type"] == "FINANCIAL"
+
+
+def test_evaluate_distorted_earnings_drops_pe_leg():
+    # DIVIDEND with distorted GAAP earnings (earnings_growth<0, revenue_growth>0):
+    # the P/E leg must be excluded and the remaining models renormalize.
+    fin = _large_cap_fin(sector="Healthcare", dividend_yield=0.04, payout_ratio=0.6,
+                         earnings_growth=-0.30, revenue_growth=0.05)
+    result = engine.evaluate(fin)
+    assert result["stock_type"] == "DIVIDEND"
+    assert "pe" not in result["fair_value_breakdown"]
+    total_w = sum(b["weight"] for b in result["fair_value_breakdown"].values())
+    assert total_w == pytest.approx(1.0)
+
+
+def test_evaluate_pe_kept_when_earnings_healthy():
+    # Positive earnings growth -> P/E leg retained in the blend.
+    fin = _large_cap_fin(sector="Healthcare", dividend_yield=0.04, payout_ratio=0.6,
+                         earnings_growth=0.08, revenue_growth=0.05)
+    result = engine.evaluate(fin)
+    assert result["stock_type"] == "DIVIDEND"
+    assert "pe" in result["fair_value_breakdown"]
