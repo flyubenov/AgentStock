@@ -1,62 +1,22 @@
 import pytest
-from services.yahoo import (
-    quarterly_eps_sum, eps_unreliable, ev_ebitda_history_median, shares_corrupted,
-)
+from datetime import date
+from services.yahoo import ev_ebitda_history_median, statements_predate_split
 
 
-# -- shares_corrupted ----------------------------------------------------------
-def test_shares_corrupted_flags_tenfold_inflation():
-    # KLAC: info sharesOutstanding 1.306e9 vs statement diluted 1.362e8 -> ~9.6x
-    assert shares_corrupted(1.306e9, 1.362e8) is True
+# -- statements_predate_split (split-aware skip) -------------------------------
+def test_statements_predate_split_true_when_split_is_newer():
+    # KLAC: latest statement ~2025-06-30, 10:1 split on 2026-06-12 -> stale per-share
+    assert statements_predate_split(date(2025, 6, 30), [date(2026, 6, 12)]) is True
 
 
-def test_shares_corrupted_passes_when_consistent():
-    # AMAT: 7.94e8 vs 8.08e8 -> 0.98x; and a buyback-driven small gap stays OK
-    assert shares_corrupted(7.94e8, 8.08e8) is False
+def test_statements_predate_split_false_for_old_splits():
+    # AMAT: last split 2002 is far before the latest statement -> reconstruction ok
+    assert statements_predate_split(date(2025, 10, 31), [date(2000, 1, 19), date(2002, 4, 17)]) is False
 
 
-def test_shares_corrupted_allows_dual_class_gap():
-    # dual-class (sharesOutstanding = one class) can be ~2x off -> must NOT trigger
-    assert shares_corrupted(6.0e9, 3.0e9) is False
-
-
-def test_shares_corrupted_false_when_missing():
-    assert shares_corrupted(None, 1.0e8) is False
-    assert shares_corrupted(1.0e9, None) is False
-    assert shares_corrupted(0, 1.0e8) is False
-
-
-# -- quarterly_eps_sum ---------------------------------------------------------
-def test_quarterly_eps_sum_sums_last_four():
-    # newest-first list of quarterly diluted EPS
-    assert quarterly_eps_sum([9.12, 8.68, 8.47, 9.06, 8.16]) == pytest.approx(35.33)
-
-
-def test_quarterly_eps_sum_skips_none_leading():
-    # a NaN-derived None at the head is skipped; next four valid quarters sum
-    assert quarterly_eps_sum([None, 9.12, 8.68, 8.47, 9.06]) == pytest.approx(35.33)
-
-
-def test_quarterly_eps_sum_none_when_under_four_valid():
-    assert quarterly_eps_sum([9.12, 8.68, None]) is None
-    assert quarterly_eps_sum([]) is None
-
-
-# -- eps_unreliable ------------------------------------------------------------
-def test_eps_unreliable_flags_tenfold_gap():
-    # KLAC: trailing 3.53 vs quarterly sum 35.33 -> ~90% divergence
-    assert eps_unreliable(3.53, 35.33) is True
-
-
-def test_eps_unreliable_passes_when_consistent():
-    # AMAT: trailing 10.66 vs quarterly sum 10.65 -> consistent
-    assert eps_unreliable(10.66, 10.65) is False
-
-
-def test_eps_unreliable_false_when_unjudgeable():
-    assert eps_unreliable(None, 35.0) is False
-    assert eps_unreliable(10.0, None) is False
-    assert eps_unreliable(10.0, 0) is False
+def test_statements_predate_split_false_when_unjudgeable():
+    assert statements_predate_split(date(2025, 6, 30), []) is False
+    assert statements_predate_split(None, [date(2026, 1, 1)]) is False
 
 
 # -- ev_ebitda_history_median --------------------------------------------------

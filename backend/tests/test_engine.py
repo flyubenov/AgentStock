@@ -249,14 +249,3 @@ def test_evaluate_non_forward_tier_ignores_historical_ev_ebitda():
     growth = engine.build_scenarios(fin)
     expected = m.calc_ev_ebitda(fin, growth)["fair_value"]  # current multiple, compressed
     assert result["fair_value_breakdown"]["ev_ebitda"]["fair_value"] == pytest.approx(round(expected, 2))
-
-
-def test_evaluate_drops_pe_and_rim_when_eps_unreliable():
-    # The EPS-sanity guard could not substitute a valid EPS -> earnings-multiple
-    # legs (P/E, RIM) are dropped and the rest renormalize.
-    fin = _large_cap_fin(eps_unreliable=True)
-    result = engine.evaluate(fin)
-    assert "pe" not in result["fair_value_breakdown"]
-    assert "rim" not in result["fair_value_breakdown"]
-    total_w = sum(b["weight"] for b in result["fair_value_breakdown"].values())
-    assert total_w == pytest.approx(1.0)

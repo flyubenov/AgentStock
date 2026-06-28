@@ -5,9 +5,7 @@ import yfinance as yf
 from functools import lru_cache
 from datetime import date as _date
 
-EPS_DIVERGENCE_THRESHOLD = 0.50  # |trailing - quarterly_sum| / |quarterly_sum|
 EV_EBITDA_HISTORY_MIN_YEARS = 3
-SHARES_DIVERGENCE_FACTOR = 3.0   # info sharesOutstanding vs statement diluted shares
 
 try:
     from yfinance.exceptions import YFRateLimitError as _YFRateLimitError
@@ -102,60 +100,17 @@ def real_fcf(cashflow: dict | None, info_fcf: float | None) -> float | None:
     return info_fcf
 
 
-# -- EPS-sanity guard ----------------------------------------------------------
-def quarterly_eps_sum(eps_list: list[float | None]) -> float | None:
-    """Sum the four most recent valid quarterly diluted EPS (newest-first list).
-    Returns None if fewer than four non-null quarters are available."""
-    valid = [e for e in eps_list if e is not None]
-    return sum(valid[:4]) if len(valid) >= 4 else None
-
-
-def eps_unreliable(trailing_eps: float | None, q_sum: float | None,
-                   threshold: float = EPS_DIVERGENCE_THRESHOLD) -> bool:
-    """True when the info-dict trailing EPS diverges materially from the sum of the
-    last four reported quarters (e.g. KLAC's 10x yfinance error). Unjudgeable when
-    either input is missing or the quarterly sum is zero."""
-    if trailing_eps is None or q_sum is None or q_sum == 0:
-        return False
-    return abs(trailing_eps - q_sum) / abs(q_sum) > threshold
-
-
-# -- share-count guard ---------------------------------------------------------
-def shares_corrupted(shares_outstanding: float | None, statement_shares: float | None,
-                     factor: float = SHARES_DIVERGENCE_FACTOR) -> bool:
-    """True when the info-dict sharesOutstanding diverges from the income-statement
-    diluted average shares by more than `factor` in either direction — a yfinance
-    share-count error (e.g. KLAC's ~10x) that deflates every per-share leg.
-    Unjudgeable (False) when either input is missing/non-positive. The wide factor
-    avoids false-positives on dual-class names (sharesOutstanding = one class)."""
-    if not shares_outstanding or shares_outstanding <= 0 or not statement_shares or statement_shares <= 0:
-        return False
-    ratio = shares_outstanding / statement_shares
-    return ratio > factor or ratio < 1 / factor
-
-
-@lru_cache(maxsize=256)
-def _fetch_diluted_shares_sync(ticker: str) -> float | None:
-    """Most recent non-null 'Diluted Average Shares' from the income statement —
-    the authoritative share count. Returns None (never raises) on failure."""
-    try:
-        ist = yf.Ticker(ticker).income_stmt
-        if ist is None or ist.empty or "Diluted Average Shares" not in ist.index:
-            return None
-        for v in ist.loc["Diluted Average Shares"].values:
-            if v == v:  # not NaN
-                return float(v)
-        return None
-    except Exception:
-        return None
-
-
-async def fetch_diluted_shares(ticker: str) -> float | None:
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, _fetch_diluted_shares_sync, ticker.upper())
-
-
 # -- historical EV/EBITDA ------------------------------------------------------
+def statements_predate_split(latest_statement_date, split_dates) -> bool:
+    """True when a stock split occurred AFTER the latest financial-statement date.
+    yfinance split-adjusts prices immediately but lags the per-share statement
+    figures (shares, EPS), so across a recent split the two are on different bases
+    and any reconstruction mixing them (price x statement-shares) is garbage."""
+    if latest_statement_date is None or not split_dates:
+        return False
+    return any(d > latest_statement_date for d in split_dates)
+
+
 def ev_ebitda_history_median(rows: list[dict],
                              min_years: int = EV_EBITDA_HISTORY_MIN_YEARS) -> float | None:
     """Median historical EV/EBITDA from per-year rows of
@@ -176,27 +131,21 @@ def ev_ebitda_history_median(rows: list[dict],
 
 
 @lru_cache(maxsize=256)
-def _fetch_quarterly_eps_sync(ticker: str) -> tuple | None:
-    """Last several quarters of diluted EPS (newest-first). Returns None on failure."""
-    try:
-        q = yf.Ticker(ticker).quarterly_income_stmt
-        if q is None or q.empty or "Diluted EPS" not in q.index:
-            return None
-        row = q.loc["Diluted EPS"]
-        return tuple(float(v) if v == v else None for v in row.values)  # NaN -> None
-    except Exception:
-        return None
-
-
-@lru_cache(maxsize=256)
 def _fetch_ev_ebitda_history_sync(ticker: str) -> float | None:
     """Reconstruct annual EV/EBITDA = (avg price * shares + net debt) / EBITDA from
     income statement + balance sheet + monthly price history, and return the median.
-    Returns None (never raises) when the statements are unavailable/insufficient."""
+    Returns None (never raises) when the statements are unavailable/insufficient, or
+    when a stock split postdates the statements (price/share bases would mismatch)."""
     try:
         tk = yf.Ticker(ticker)
         ist, bs = tk.income_stmt, tk.balance_sheet
         if ist is None or ist.empty or bs is None or bs.empty:
+            return None
+        # Skip across a recent split: prices are split-adjusted but statement
+        # shares are not, so the reconstruction would mix incompatible bases.
+        latest_stmt = max((c.date() for c in ist.columns), default=None)
+        split_dates = [d.date() for d in tk.splits.index] if tk.splits is not None else []
+        if statements_predate_split(latest_stmt, split_dates):
             return None
         hist = tk.history(period="6y", interval="1mo")
         if hist is None or hist.empty:
@@ -225,11 +174,6 @@ def _fetch_ev_ebitda_history_sync(ticker: str) -> float | None:
         return ev_ebitda_history_median(rows)
     except Exception:
         return None
-
-
-async def fetch_quarterly_eps(ticker: str) -> tuple | None:
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, _fetch_quarterly_eps_sync, ticker.upper())
 
 
 async def fetch_ev_ebitda_history(ticker: str) -> float | None:

@@ -4,8 +4,7 @@ from valuation.classifier import classify
 from valuation import models as m
 from services.yahoo import (
     fetch_ticker_info, extract_financials, fetch_ticker_cashflow, real_fcf,
-    fetch_quarterly_eps, fetch_ev_ebitda_history, fetch_diluted_shares,
-    quarterly_eps_sum, eps_unreliable, shares_corrupted,
+    fetch_ev_ebitda_history,
 )
 from models import TickerResult
 
@@ -111,13 +110,6 @@ def evaluate(fin: dict) -> dict:
         weights = dict(weights)
         weights["pe"] = 0.0
 
-    # EPS-sanity guard could not substitute a trustworthy EPS (see run()): drop
-    # every earnings-anchored multiple (P/E, RIM) rather than value off bad EPS.
-    if fin.get("eps_unreliable"):
-        weights = dict(weights)
-        weights["pe"] = 0.0
-        weights["rim"] = 0.0
-
     growth = build_scenarios(fin)
     is_growth = stock_type == "GROWTH"
     is_forward_tier = stock_type in FORWARD_TIERS
@@ -205,28 +197,8 @@ async def run(ticker: str) -> TickerResult:
     if rf is not None:
         fin["fcf_ttm"] = rf
 
-    # Share-count guard: yfinance sometimes reports a grossly wrong sharesOutstanding
-    # (e.g. KLAC's ~10x), which deflates every per-share leg. Substitute the income
-    # statement's diluted average shares when the two diverge by more than ~3x.
-    stmt_shares = await fetch_diluted_shares(ticker)
-    if shares_corrupted(fin.get("shares_outstanding"), stmt_shares):
-        fin["shares_outstanding"] = stmt_shares
-
-    # EPS-sanity guard: when the info-dict trailing EPS diverges materially from the
-    # sum of the last four reported quarters (yfinance data error, e.g. KLAC's 10x),
-    # substitute the quarterly sum and recompute trailing P/E. If the corrected EPS
-    # is non-positive (can't trust either), flag it so evaluate() drops P/E + RIM.
-    q_sum = quarterly_eps_sum(list(await fetch_quarterly_eps(ticker) or ()))
-    if eps_unreliable(fin.get("eps_ttm"), q_sum):
-        if q_sum and q_sum > 0:
-            fin["eps_ttm"] = q_sum
-            price = fin.get("current_price")
-            if price and price > 0:
-                fin["trailing_pe"] = price / q_sum
-        else:
-            fin["eps_unreliable"] = True
-
-    # Forward tiers anchor EV/EBITDA to its historical median when reconstructable.
+    # Forward tiers anchor EV/EBITDA to its historical median when reconstructable
+    # (the reconstruction skips itself across a recent split — see services.yahoo).
     hist = await fetch_ev_ebitda_history(ticker)
     if hist is not None:
         fin["ev_ebitda_hist"] = hist
