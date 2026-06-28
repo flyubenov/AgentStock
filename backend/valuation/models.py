@@ -13,6 +13,16 @@ MATURE_EV_SALES = 2.0
 MATURE_PE_CAP = 21.0
 PEG_CEILING = 2.0  # GROWTH tier: forward P/E may run up to growth% * this before capping
 
+# Size-coupled growth fade: larger companies face base-rate drag (a $2T company
+# cannot compound a high rate for a decade the way a small one can), so their
+# near-term growth fades to TERMINAL_GROWTH sooner. `hold` = years growth is held
+# flat before a linear decay to TERMINAL_GROWTH by HORIZON.
+MEGA_CAP_FLOOR = 1_000_000_000_000       # >= $1T  -> fade from year 1
+LARGE_CAP_FADE_FLOOR = 150_000_000_000   # >= $150B -> hold 3 years, then fade
+FADE_HOLD_MEGA = 0
+FADE_HOLD_LARGE = 3
+FADE_HOLD_MID = 5
+
 ALL_METHODS = ["dcf", "fcfe", "ev_ebitda", "pe", "ev_sales", "ddm", "pb", "rim", "sotp", "nav"]
 SCENARIO_MODELS = {"dcf", "fcfe", "ev_ebitda", "ev_sales", "ddm", "rim"}
 APPROX_METHODS = {"sotp", "nav"}
@@ -50,19 +60,42 @@ def _compressed_exit_multiple(current_mult: float, conversion: float, conv_lo: f
     return min(current_mult, conv * MATURE_MULTIPLE_FACTOR)
 
 
-def _scenario_dcf_equity(cf: float, growth: float, net_debt: float, shares: float) -> float:
+def _fade_hold_years(market_cap: float | None) -> int:
+    """Years near-term growth is held before fading to TERMINAL_GROWTH, keyed to
+    size: mega-caps (>= $1T) fade immediately, mid/small names hold growth longer."""
+    mc = market_cap or 0
+    if mc >= MEGA_CAP_FLOOR:
+        return FADE_HOLD_MEGA
+    if mc >= LARGE_CAP_FADE_FLOOR:
+        return FADE_HOLD_LARGE
+    return FADE_HOLD_MID
+
+
+def _faded_rate(g_start: float, hold: int, year: int) -> float:
+    """Growth in `year` (1-indexed): g_start through `hold` years, then a linear
+    decay to TERMINAL_GROWTH by HORIZON. hold >= HORIZON means no fade (flat)."""
+    if year <= hold or hold >= HORIZON:
+        return g_start
+    return g_start + (TERMINAL_GROWTH - g_start) * (year - hold) / (HORIZON - hold)
+
+
+def _scenario_dcf_equity(cf: float, growth: float, net_debt: float, shares: float,
+                         hold: int = HORIZON) -> float:
     total = 0.0
     cf_t = cf
     for t in range(1, HORIZON + 1):
-        cf_t *= (1 + growth)
+        cf_t *= (1 + _faded_rate(growth, hold, t))
         total += _pv(cf_t, DISCOUNT_RATE, t)
     tv = cf_t * (1 + TERMINAL_GROWTH) / (DISCOUNT_RATE - TERMINAL_GROWTH)
     total += _pv(tv, DISCOUNT_RATE, HORIZON)
     return _apply_mos((total - net_debt) / shares)
 
 
-def _scenario_ev_multiple(base: float, growth: float, multiple: float, net_debt: float, shares: float) -> float:
-    projected = base * (1 + growth) ** HORIZON
+def _scenario_ev_multiple(base: float, growth: float, multiple: float, net_debt: float,
+                          shares: float, hold: int = HORIZON) -> float:
+    projected = base
+    for t in range(1, HORIZON + 1):
+        projected *= (1 + _faded_rate(growth, hold, t))
     future_ev = projected * multiple
     return _apply_mos((future_ev - net_debt) / shares / (1 + DISCOUNT_RATE) ** HORIZON)
 
@@ -74,7 +107,8 @@ def calc_dcf(fin: dict, growth: dict) -> dict:
     if base is None or not shares:
         return _null_result(True)
     net_debt = fin.get("net_debt") or 0
-    scenarios = {k: _scenario_dcf_equity(base, growth[k], net_debt, shares) for k in SCENARIO_KEYS}
+    hold = _fade_hold_years(fin.get("market_cap"))
+    scenarios = {k: _scenario_dcf_equity(base, growth[k], net_debt, shares, hold) for k in SCENARIO_KEYS}
     return {"scenarios": scenarios, "fair_value": _avg(scenarios), "weight": 0.0, "has_scenarios": True}
 
 
@@ -114,7 +148,8 @@ def calc_ev_ebitda(fin: dict, growth: dict, hist_multiple: float | None = None,
         conversion = fcf / ebitda
         multiple = _compressed_exit_multiple(multiple, conversion, EBITDA_CONV_FLOOR, EBITDA_CONV_CAP)
     net_debt = fin.get("net_debt") or 0
-    scenarios = {k: _scenario_ev_multiple(ebitda, growth[k], multiple, net_debt, shares) for k in SCENARIO_KEYS}
+    hold = _fade_hold_years(fin.get("market_cap"))
+    scenarios = {k: _scenario_ev_multiple(ebitda, growth[k], multiple, net_debt, shares, hold) for k in SCENARIO_KEYS}
     return {"scenarios": scenarios, "fair_value": _avg(scenarios), "weight": 0.0, "has_scenarios": True}
 
 

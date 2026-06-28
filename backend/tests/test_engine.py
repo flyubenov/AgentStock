@@ -184,6 +184,7 @@ def _growth_fin(**over):
     # revenue_growth>0.10, eps>0, no dividend -> GROWTH; rich forward P/E and EV/EBITDA.
     fin = _large_cap_fin(
         sector="Technology", industry="Semiconductors",
+        market_cap=300_000_000_000,  # sub-$1T so the mega-cap ceiling keeps it GROWTH
         revenue_growth=0.12, earnings_growth=0.30,
         dividend_rate=0, dividend_yield=0, payout_ratio=0,
         trailing_pe=55.0, forward_pe=35.0, ev_ebitda=45.0,

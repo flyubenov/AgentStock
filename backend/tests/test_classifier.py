@@ -54,6 +54,22 @@ def test_growth():
     assert classify(fin)["stock_type"] == "GROWTH"
 
 
+def test_trillion_dollar_grower_is_large_cap():
+    # A $1T+ fast grower is a LARGE_CAP, not GROWTH (regression: META/MSFT/GOOGL
+    # were mislabeled GROWTH; the GROWTH rule now has a mega-cap ceiling).
+    fin = {"sector": "Technology", "revenue_growth": 0.15, "eps_ttm": 20.0,
+           "ebitda_ttm": 100_000_000_000, "dividend_yield": 0.0,
+           "market_cap": 1_400_000_000_000}
+    assert classify(fin)["stock_type"] == "LARGE_CAP"
+
+
+def test_sub_trillion_grower_stays_growth():
+    fin = {"sector": "Technology", "revenue_growth": 0.15, "eps_ttm": 5.0,
+           "ebitda_ttm": 20_000_000_000, "dividend_yield": 0.0,
+           "market_cap": 300_000_000_000}
+    assert classify(fin)["stock_type"] == "GROWTH"
+
+
 def test_dividend():
     fin = {"sector": "Consumer Defensive", "dividend_yield": 0.04, "payout_ratio": 0.6}
     assert classify(fin)["stock_type"] == "DIVIDEND"

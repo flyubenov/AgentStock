@@ -52,6 +52,39 @@ def test_dcf_scenarios_ordered_for_positive_inputs():
     assert s["optimistic"] > s["realistic"] > s["pessimistic"] > 0
 
 
+# -- size-coupled growth fade --------------------------------------------------
+def test_fade_hold_years_bands():
+    assert m._fade_hold_years(2_000_000_000_000) == m.FADE_HOLD_MEGA   # >= $1T
+    assert m._fade_hold_years(300_000_000_000) == m.FADE_HOLD_LARGE    # >= $150B
+    assert m._fade_hold_years(40_000_000_000) == m.FADE_HOLD_MID       # < $150B
+    assert m._fade_hold_years(None) == m.FADE_HOLD_MID                 # missing -> smallest band
+
+
+def test_faded_rate_holds_then_decays_to_terminal():
+    # hold 3: years 1-3 keep g_start, year HORIZON lands on TERMINAL_GROWTH
+    assert m._faded_rate(0.20, 3, 1) == pytest.approx(0.20)
+    assert m._faded_rate(0.20, 3, 3) == pytest.approx(0.20)
+    assert m._faded_rate(0.20, 3, m.HORIZON) == pytest.approx(m.TERMINAL_GROWTH)
+    assert 0.20 > m._faded_rate(0.20, 3, 6) > m.TERMINAL_GROWTH  # mid-fade is between
+    # hold >= HORIZON disables the fade (flat growth)
+    assert m._faded_rate(0.20, m.HORIZON, m.HORIZON) == pytest.approx(0.20)
+
+
+def test_dcf_fade_is_more_aggressive_for_mega_caps():
+    # identical company, different size -> mega ($2T) fades growth sooner -> lower FV
+    base = {"fcf_ttm": 1_000_000, "net_debt": 0, "shares_outstanding": 100_000}
+    mega = m.calc_dcf({**base, "market_cap": 2_000_000_000_000}, GROWTH)["fair_value"]
+    small = m.calc_dcf({**base, "market_cap": 40_000_000_000}, GROWTH)["fair_value"]
+    assert mega < small
+
+
+def test_ev_ebitda_fade_is_more_aggressive_for_mega_caps():
+    base = {"ebitda_ttm": 1_000_000, "ev_ebitda": 12.0, "net_debt": 0, "shares_outstanding": 100_000}
+    mega = m.calc_ev_ebitda({**base, "market_cap": 2_000_000_000_000}, GROWTH, compress=False)["fair_value"]
+    small = m.calc_ev_ebitda({**base, "market_cap": 40_000_000_000}, GROWTH, compress=False)["fair_value"]
+    assert mega < small
+
+
 
 
 def test_composite_weighted_average():

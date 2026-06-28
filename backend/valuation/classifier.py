@@ -75,8 +75,10 @@ def _detect_type(fin: dict) -> str:
     if revenue_growth > 0.20 and (eps <= 0 or ebitda <= 0):
         return "EARLY_GROWTH"
 
-    # 5. Growth
-    if revenue_growth > 0.10 and eps > 0 and dividend_yield < 0.01:
+    # 5. Growth — fast-growing, but only below the mega-cap line. A $1T+ company
+    # is a LARGE_CAP regardless of growth (no size ceiling here would mislabel
+    # META/MSFT/GOOGL as GROWTH); base-rate drag is handled by the size-coupled fade.
+    if revenue_growth > 0.10 and eps > 0 and dividend_yield < 0.01 and market_cap < 1_000_000_000_000:
         return "GROWTH"
 
     # 6. Dividend
