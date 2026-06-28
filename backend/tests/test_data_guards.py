@@ -1,5 +1,29 @@
 import pytest
-from services.yahoo import quarterly_eps_sum, eps_unreliable, ev_ebitda_history_median
+from services.yahoo import (
+    quarterly_eps_sum, eps_unreliable, ev_ebitda_history_median, shares_corrupted,
+)
+
+
+# -- shares_corrupted ----------------------------------------------------------
+def test_shares_corrupted_flags_tenfold_inflation():
+    # KLAC: info sharesOutstanding 1.306e9 vs statement diluted 1.362e8 -> ~9.6x
+    assert shares_corrupted(1.306e9, 1.362e8) is True
+
+
+def test_shares_corrupted_passes_when_consistent():
+    # AMAT: 7.94e8 vs 8.08e8 -> 0.98x; and a buyback-driven small gap stays OK
+    assert shares_corrupted(7.94e8, 8.08e8) is False
+
+
+def test_shares_corrupted_allows_dual_class_gap():
+    # dual-class (sharesOutstanding = one class) can be ~2x off -> must NOT trigger
+    assert shares_corrupted(6.0e9, 3.0e9) is False
+
+
+def test_shares_corrupted_false_when_missing():
+    assert shares_corrupted(None, 1.0e8) is False
+    assert shares_corrupted(1.0e9, None) is False
+    assert shares_corrupted(0, 1.0e8) is False
 
 
 # -- quarterly_eps_sum ---------------------------------------------------------

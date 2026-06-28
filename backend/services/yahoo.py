@@ -7,6 +7,7 @@ from datetime import date as _date
 
 EPS_DIVERGENCE_THRESHOLD = 0.50  # |trailing - quarterly_sum| / |quarterly_sum|
 EV_EBITDA_HISTORY_MIN_YEARS = 3
+SHARES_DIVERGENCE_FACTOR = 3.0   # info sharesOutstanding vs statement diluted shares
 
 try:
     from yfinance.exceptions import YFRateLimitError as _YFRateLimitError
@@ -117,6 +118,41 @@ def eps_unreliable(trailing_eps: float | None, q_sum: float | None,
     if trailing_eps is None or q_sum is None or q_sum == 0:
         return False
     return abs(trailing_eps - q_sum) / abs(q_sum) > threshold
+
+
+# -- share-count guard ---------------------------------------------------------
+def shares_corrupted(shares_outstanding: float | None, statement_shares: float | None,
+                     factor: float = SHARES_DIVERGENCE_FACTOR) -> bool:
+    """True when the info-dict sharesOutstanding diverges from the income-statement
+    diluted average shares by more than `factor` in either direction — a yfinance
+    share-count error (e.g. KLAC's ~10x) that deflates every per-share leg.
+    Unjudgeable (False) when either input is missing/non-positive. The wide factor
+    avoids false-positives on dual-class names (sharesOutstanding = one class)."""
+    if not shares_outstanding or shares_outstanding <= 0 or not statement_shares or statement_shares <= 0:
+        return False
+    ratio = shares_outstanding / statement_shares
+    return ratio > factor or ratio < 1 / factor
+
+
+@lru_cache(maxsize=256)
+def _fetch_diluted_shares_sync(ticker: str) -> float | None:
+    """Most recent non-null 'Diluted Average Shares' from the income statement —
+    the authoritative share count. Returns None (never raises) on failure."""
+    try:
+        ist = yf.Ticker(ticker).income_stmt
+        if ist is None or ist.empty or "Diluted Average Shares" not in ist.index:
+            return None
+        for v in ist.loc["Diluted Average Shares"].values:
+            if v == v:  # not NaN
+                return float(v)
+        return None
+    except Exception:
+        return None
+
+
+async def fetch_diluted_shares(ticker: str) -> float | None:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _fetch_diluted_shares_sync, ticker.upper())
 
 
 # -- historical EV/EBITDA ------------------------------------------------------

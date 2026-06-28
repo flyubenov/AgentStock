@@ -4,7 +4,8 @@ from valuation.classifier import classify
 from valuation import models as m
 from services.yahoo import (
     fetch_ticker_info, extract_financials, fetch_ticker_cashflow, real_fcf,
-    fetch_quarterly_eps, fetch_ev_ebitda_history, quarterly_eps_sum, eps_unreliable,
+    fetch_quarterly_eps, fetch_ev_ebitda_history, fetch_diluted_shares,
+    quarterly_eps_sum, eps_unreliable, shares_corrupted,
 )
 from models import TickerResult
 
@@ -203,6 +204,13 @@ async def run(ticker: str) -> TickerResult:
     rf = real_fcf(cashflow, fin.get("fcf_ttm"))
     if rf is not None:
         fin["fcf_ttm"] = rf
+
+    # Share-count guard: yfinance sometimes reports a grossly wrong sharesOutstanding
+    # (e.g. KLAC's ~10x), which deflates every per-share leg. Substitute the income
+    # statement's diluted average shares when the two diverge by more than ~3x.
+    stmt_shares = await fetch_diluted_shares(ticker)
+    if shares_corrupted(fin.get("shares_outstanding"), stmt_shares):
+        fin["shares_outstanding"] = stmt_shares
 
     # EPS-sanity guard: when the info-dict trailing EPS diverges materially from the
     # sum of the last four reported quarters (yfinance data error, e.g. KLAC's 10x),
