@@ -1,8 +1,12 @@
 import asyncio
+import statistics
 import time
 import yfinance as yf
 from functools import lru_cache
 from datetime import date as _date
+
+EPS_DIVERGENCE_THRESHOLD = 0.50  # |trailing - quarterly_sum| / |quarterly_sum|
+EV_EBITDA_HISTORY_MIN_YEARS = 3
 
 try:
     from yfinance.exceptions import YFRateLimitError as _YFRateLimitError
@@ -95,6 +99,106 @@ def real_fcf(cashflow: dict | None, info_fcf: float | None) -> float | None:
         if ocf is not None and capex is not None:
             return ocf + capex  # capex is negative in the statement
     return info_fcf
+
+
+# -- EPS-sanity guard ----------------------------------------------------------
+def quarterly_eps_sum(eps_list: list[float | None]) -> float | None:
+    """Sum the four most recent valid quarterly diluted EPS (newest-first list).
+    Returns None if fewer than four non-null quarters are available."""
+    valid = [e for e in eps_list if e is not None]
+    return sum(valid[:4]) if len(valid) >= 4 else None
+
+
+def eps_unreliable(trailing_eps: float | None, q_sum: float | None,
+                   threshold: float = EPS_DIVERGENCE_THRESHOLD) -> bool:
+    """True when the info-dict trailing EPS diverges materially from the sum of the
+    last four reported quarters (e.g. KLAC's 10x yfinance error). Unjudgeable when
+    either input is missing or the quarterly sum is zero."""
+    if trailing_eps is None or q_sum is None or q_sum == 0:
+        return False
+    return abs(trailing_eps - q_sum) / abs(q_sum) > threshold
+
+
+# -- historical EV/EBITDA ------------------------------------------------------
+def ev_ebitda_history_median(rows: list[dict],
+                             min_years: int = EV_EBITDA_HISTORY_MIN_YEARS) -> float | None:
+    """Median historical EV/EBITDA from per-year rows of
+    {avg_price, shares, ebitda, net_debt}. Years with non-positive EBITDA or
+    missing price/shares are skipped; None if fewer than min_years remain."""
+    mults = []
+    for r in rows:
+        ebitda = r.get("ebitda")
+        shares = r.get("shares")
+        px = r.get("avg_price")
+        if not ebitda or ebitda <= 0 or not shares or not px:
+            continue
+        ev = px * shares + (r.get("net_debt") or 0)
+        mults.append(ev / ebitda)
+    if len(mults) < min_years:
+        return None
+    return statistics.median(mults)
+
+
+@lru_cache(maxsize=256)
+def _fetch_quarterly_eps_sync(ticker: str) -> tuple | None:
+    """Last several quarters of diluted EPS (newest-first). Returns None on failure."""
+    try:
+        q = yf.Ticker(ticker).quarterly_income_stmt
+        if q is None or q.empty or "Diluted EPS" not in q.index:
+            return None
+        row = q.loc["Diluted EPS"]
+        return tuple(float(v) if v == v else None for v in row.values)  # NaN -> None
+    except Exception:
+        return None
+
+
+@lru_cache(maxsize=256)
+def _fetch_ev_ebitda_history_sync(ticker: str) -> float | None:
+    """Reconstruct annual EV/EBITDA = (avg price * shares + net debt) / EBITDA from
+    income statement + balance sheet + monthly price history, and return the median.
+    Returns None (never raises) when the statements are unavailable/insufficient."""
+    try:
+        tk = yf.Ticker(ticker)
+        ist, bs = tk.income_stmt, tk.balance_sheet
+        if ist is None or ist.empty or bs is None or bs.empty:
+            return None
+        hist = tk.history(period="6y", interval="1mo")
+        if hist is None or hist.empty:
+            return None
+        avg_close = hist["Close"].groupby(hist.index.year).mean()
+
+        def _cell(df, label, col):
+            try:
+                v = df.loc[label, col]
+            except (KeyError, IndexError):
+                return None
+            return float(v) if v == v else None
+
+        rows = []
+        for col in ist.columns:
+            year = col.year
+            if year not in avg_close.index:
+                continue
+            ebitda = _cell(ist, "EBITDA", col)
+            shares = _cell(ist, "Diluted Average Shares", col)
+            debt = _cell(bs, "Total Debt", col) if col in bs.columns else None
+            cash = _cell(bs, "Cash Cash Equivalents And Short Term Investments", col) if col in bs.columns else None
+            net_debt = (debt or 0) - (cash or 0) if (debt is not None or cash is not None) else 0
+            rows.append({"avg_price": float(avg_close[year]), "shares": shares,
+                         "ebitda": ebitda, "net_debt": net_debt})
+        return ev_ebitda_history_median(rows)
+    except Exception:
+        return None
+
+
+async def fetch_quarterly_eps(ticker: str) -> tuple | None:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _fetch_quarterly_eps_sync, ticker.upper())
+
+
+async def fetch_ev_ebitda_history(ticker: str) -> float | None:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _fetch_ev_ebitda_history_sync, ticker.upper())
 
 
 def extract_financials(info: dict) -> dict:

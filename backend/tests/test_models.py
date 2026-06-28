@@ -121,3 +121,88 @@ def test_pe_is_single_value():
     r = m.calc_pe({"eps_ttm": 10.0, "trailing_pe": 18.0})
     assert r["has_scenarios"] is False
     assert r["scenarios"]["optimistic"] == r["scenarios"]["pessimistic"] == r["fair_value"]
+
+
+# -- forward P/E (PEG-capped) --------------------------------------------------
+def test_pe_forward_targets_forward_pe():
+    # forward P/E below the PEG ceiling -> forward P/E binds (not trailing/mature)
+    fin = {"eps_ttm": 10.0, "trailing_pe": 50.0, "forward_pe": 30.0, "earnings_growth": 0.20}
+    fv = m.calc_pe(fin, forward=True)["fair_value"]
+    assert fv == pytest.approx(10.0 * 30.0 * m.MOS)
+
+
+def test_pe_forward_peg_ceiling_binds():
+    # forward P/E above the PEG ceiling -> ceiling (growth% * PEG_CEILING) binds
+    fin = {"eps_ttm": 10.0, "trailing_pe": 70.0, "forward_pe": 50.0, "earnings_growth": 0.10}
+    peg_cap = 0.10 * 100 * m.PEG_CEILING   # = 20x
+    fv = m.calc_pe(fin, forward=True)["fair_value"]
+    assert fv == pytest.approx(10.0 * peg_cap * m.MOS)
+
+
+def test_pe_forward_uses_revenue_growth_when_earnings_missing():
+    fin = {"eps_ttm": 10.0, "forward_pe": 50.0, "earnings_growth": None, "revenue_growth": 0.10}
+    peg_cap = 0.10 * 100 * m.PEG_CEILING   # = 20x
+    fv = m.calc_pe(fin, forward=True)["fair_value"]
+    assert fv == pytest.approx(10.0 * peg_cap * m.MOS)
+
+
+def test_pe_forward_falls_back_to_mature_without_forward_pe():
+    # no forward P/E -> revert to the mature trailing path
+    fin = {"eps_ttm": 10.0, "trailing_pe": 35.0, "forward_pe": None, "earnings_growth": 0.30}
+    fv = m.calc_pe(fin, forward=True)["fair_value"]
+    assert fv == pytest.approx(10.0 * m.MATURE_PE_CAP * m.MOS)
+
+
+def test_pe_forward_falls_back_to_mature_without_growth_signal():
+    # forward P/E present but no positive growth signal -> mature cap bounds it
+    fin = {"eps_ttm": 10.0, "trailing_pe": 35.0, "forward_pe": 40.0,
+           "earnings_growth": None, "revenue_growth": 0}
+    fv = m.calc_pe(fin, forward=True)["fair_value"]
+    assert fv == pytest.approx(10.0 * m.MATURE_PE_CAP * m.MOS)
+
+
+def test_pe_forward_never_inflates_above_forward():
+    # PEG ceiling generous, forward low -> forward still bounds (never inflate)
+    fin = {"eps_ttm": 10.0, "trailing_pe": 60.0, "forward_pe": 18.0, "earnings_growth": 0.40}
+    fv = m.calc_pe(fin, forward=True)["fair_value"]
+    assert fv == pytest.approx(10.0 * 18.0 * m.MOS)
+
+
+def test_pe_non_forward_unchanged_with_forward_present():
+    # default path ignores forward P/E entirely -> mature trailing cap
+    fin = {"eps_ttm": 10.0, "trailing_pe": 35.0, "forward_pe": 50.0, "earnings_growth": 0.30}
+    fv = m.calc_pe(fin)["fair_value"]
+    assert fv == pytest.approx(10.0 * m.MATURE_PE_CAP * m.MOS)
+
+
+# -- EV/EBITDA: compression toggle + historical-median multiple ----------------
+def test_ev_ebitda_compress_false_skips_compression():
+    base = {"ebitda_ttm": 1_000_000, "ev_ebitda": 15.0, "net_debt": 0,
+            "shares_outstanding": 100_000, "fcf_ttm": 400_000}  # conv 0.40 -> compresses normally
+    compressed = m.calc_ev_ebitda(base, GROWTH)["fair_value"]
+    uncompressed = m.calc_ev_ebitda(base, GROWTH, compress=False)["fair_value"]
+    uncompressed_15x = m.calc_ev_ebitda({k: v for k, v in base.items() if k != "fcf_ttm"}, GROWTH)["fair_value"]
+    assert uncompressed > compressed
+    assert uncompressed == pytest.approx(uncompressed_15x)
+
+
+def test_ev_ebitda_still_caps_at_20():
+    base = {"ebitda_ttm": 1_000_000, "net_debt": 0, "shares_outstanding": 100_000, "fcf_ttm": 600_000}
+    capped = m.calc_ev_ebitda({**base, "ev_ebitda": 50.0}, GROWTH, compress=False)["fair_value"]
+    at_cap = m.calc_ev_ebitda({**base, "ev_ebitda": 20.0}, GROWTH, compress=False)["fair_value"]
+    assert capped == pytest.approx(at_cap)
+
+
+def test_ev_ebitda_hist_multiple_overrides_current():
+    # hist_multiple replaces the current trailing multiple entirely
+    base = {"ebitda_ttm": 1_000_000, "ev_ebitda": 50.0, "net_debt": 0, "shares_outstanding": 100_000}
+    at_hist = m.calc_ev_ebitda(base, GROWTH, hist_multiple=12.0, compress=False)["fair_value"]
+    at_12_direct = m.calc_ev_ebitda({**base, "ev_ebitda": 12.0}, GROWTH, compress=False)["fair_value"]
+    assert at_hist == pytest.approx(at_12_direct)
+
+
+def test_ev_ebitda_hist_multiple_still_capped_at_20():
+    base = {"ebitda_ttm": 1_000_000, "net_debt": 0, "shares_outstanding": 100_000}
+    over_cap = m.calc_ev_ebitda(base, GROWTH, hist_multiple=30.0, compress=False)["fair_value"]
+    at_cap = m.calc_ev_ebitda(base, GROWTH, hist_multiple=20.0, compress=False)["fair_value"]
+    assert over_cap == pytest.approx(at_cap)

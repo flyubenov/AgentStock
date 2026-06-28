@@ -178,3 +178,85 @@ def test_evaluate_pe_kept_when_earnings_healthy():
     result = engine.evaluate(fin)
     assert result["stock_type"] == "DIVIDEND"
     assert "pe" in result["fair_value_breakdown"]
+
+
+def _growth_fin(**over):
+    # revenue_growth>0.10, eps>0, no dividend -> GROWTH; rich forward P/E and EV/EBITDA.
+    fin = _large_cap_fin(
+        sector="Technology", industry="Semiconductors",
+        revenue_growth=0.12, earnings_growth=0.30,
+        dividend_rate=0, dividend_yield=0, payout_ratio=0,
+        trailing_pe=55.0, forward_pe=35.0, ev_ebitda=45.0,
+        fcf_ttm=5_000_000_000, ebitda_ttm=9_000_000_000, revenue_ttm=29_000_000_000,
+    )
+    fin.update(over)
+    return fin
+
+
+def test_evaluate_growth_uses_forward_pe_leg():
+    from valuation import models as m
+    fin = _growth_fin()
+    result = engine.evaluate(fin)
+    assert result["stock_type"] == "GROWTH"
+    pe_leg = m.calc_pe(fin, forward=True)["fair_value"]
+    assert result["fair_value_breakdown"]["pe"]["fair_value"] == pytest.approx(round(pe_leg, 2))
+    # forward-based leg is strictly richer than the mature-capped production leg
+    assert pe_leg > m.calc_pe(fin)["fair_value"]
+
+
+def test_evaluate_growth_uses_uncompressed_ev_ebitda():
+    from valuation import models as m
+    fin = _growth_fin()
+    result = engine.evaluate(fin)
+    growth = engine.build_scenarios(fin)
+    expected = m.calc_ev_ebitda(fin, growth, compress=False)["fair_value"]
+    assert result["fair_value_breakdown"]["ev_ebitda"]["fair_value"] == pytest.approx(round(expected, 2))
+    # uncompressed leg exceeds the compressed production leg for this high-FCF name
+    assert expected > m.calc_ev_ebitda(fin, growth)["fair_value"]
+
+
+def test_evaluate_large_cap_uses_forward_pe():
+    # LARGE_CAP is now a forward tier: the P/E leg uses forward P/E (PEG-capped),
+    # not the mature trailing cap, when a forward P/E is present.
+    from valuation import models as m
+    fin = _large_cap_fin(forward_pe=40.0, trailing_pe=35.0)  # eg 0.08 -> PEG cap 16x
+    result = engine.evaluate(fin)
+    assert result["stock_type"] == "LARGE_CAP"
+    expected = m.calc_pe(fin, forward=True)["fair_value"]
+    assert result["fair_value_breakdown"]["pe"]["fair_value"] == pytest.approx(round(expected, 2))
+    assert expected != pytest.approx(m.calc_pe(fin)["fair_value"])  # genuinely differs from mature
+
+
+def test_evaluate_forward_tier_uses_historical_ev_ebitda():
+    # When a historical median multiple is supplied, a forward tier values
+    # EV/EBITDA off it (uncompressed) rather than the current trailing multiple.
+    from valuation import models as m
+    fin = _large_cap_fin(ev_ebitda=40.0, ev_ebitda_hist=12.0)
+    result = engine.evaluate(fin)
+    assert result["stock_type"] == "LARGE_CAP"
+    growth = engine.build_scenarios(fin)
+    expected = m.calc_ev_ebitda(fin, growth, hist_multiple=12.0, compress=False)["fair_value"]
+    assert result["fair_value_breakdown"]["ev_ebitda"]["fair_value"] == pytest.approx(round(expected, 2))
+
+
+def test_evaluate_non_forward_tier_ignores_historical_ev_ebitda():
+    # CYCLICAL is not a forward tier: a stray historical multiple is ignored and
+    # the current trailing multiple (compressed) is used.
+    from valuation import models as m
+    fin = _large_cap_fin(sector="Energy", ev_ebitda=10.0, ev_ebitda_hist=3.0)
+    result = engine.evaluate(fin)
+    assert result["stock_type"] == "CYCLICAL"
+    growth = engine.build_scenarios(fin)
+    expected = m.calc_ev_ebitda(fin, growth)["fair_value"]  # current multiple, compressed
+    assert result["fair_value_breakdown"]["ev_ebitda"]["fair_value"] == pytest.approx(round(expected, 2))
+
+
+def test_evaluate_drops_pe_and_rim_when_eps_unreliable():
+    # The EPS-sanity guard could not substitute a valid EPS -> earnings-multiple
+    # legs (P/E, RIM) are dropped and the rest renormalize.
+    fin = _large_cap_fin(eps_unreliable=True)
+    result = engine.evaluate(fin)
+    assert "pe" not in result["fair_value_breakdown"]
+    assert "rim" not in result["fair_value_breakdown"]
+    total_w = sum(b["weight"] for b in result["fair_value_breakdown"].values())
+    assert total_w == pytest.approx(1.0)

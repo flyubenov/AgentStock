@@ -2,17 +2,25 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from valuation.classifier import classify
 from valuation import models as m
-from services.yahoo import fetch_ticker_info, extract_financials, fetch_ticker_cashflow, real_fcf
+from services.yahoo import (
+    fetch_ticker_info, extract_financials, fetch_ticker_cashflow, real_fcf,
+    fetch_quarterly_eps, fetch_ev_ebitda_history, quarterly_eps_sum, eps_unreliable,
+)
 from models import TickerResult
 
 EBITDA_MARGIN_FLOOR = 0.08
 SUSTAINABLE_CEIL = 0.039
 FCF_MARGIN_FLOOR = -0.25
 
-_SINGLE_VALUE_FN = {"pe": m.calc_pe, "pb": m.calc_pb, "sotp": m.calc_sotp, "nav": m.calc_nav}
+# Operating-compounder tiers: real earnings AND real EBITDA, so they take the
+# "balance past and future" basis — historical-median EV/EBITDA + forward P/E.
+FORWARD_TIERS = {"LARGE_CAP", "MID_CAP", "GROWTH"}
+
+# pe and ev_ebitda are dispatched explicitly (they take method-basis flags); the
+# maps cover the remaining methods with uniform signatures.
+_SINGLE_VALUE_FN = {"pb": m.calc_pb, "sotp": m.calc_sotp, "nav": m.calc_nav}
 _SCENARIO_FN = {
     "fcfe": m.calc_fcfe,
-    "ev_ebitda": m.calc_ev_ebitda,
     "ev_sales": m.calc_ev_sales,
     "ddm": m.calc_ddm,
     "rim": m.calc_rim,
@@ -102,7 +110,16 @@ def evaluate(fin: dict) -> dict:
         weights = dict(weights)
         weights["pe"] = 0.0
 
+    # EPS-sanity guard could not substitute a trustworthy EPS (see run()): drop
+    # every earnings-anchored multiple (P/E, RIM) rather than value off bad EPS.
+    if fin.get("eps_unreliable"):
+        weights = dict(weights)
+        weights["pe"] = 0.0
+        weights["rim"] = 0.0
+
     growth = build_scenarios(fin)
+    is_growth = stock_type == "GROWTH"
+    is_forward_tier = stock_type in FORWARD_TIERS
 
     results: dict[str, dict] = {}
     for mid in m.ALL_METHODS:
@@ -111,6 +128,15 @@ def evaluate(fin: dict) -> dict:
             continue
         if mid == "dcf":
             r = m.calc_dcf(fin, growth)
+        elif mid == "ev_ebitda":
+            # Forward tiers anchor to the historical-median multiple when available
+            # (no compression). Without it, GROWTH keeps its full multiple
+            # uncompressed; other tiers compress the current trailing multiple.
+            hist = fin.get("ev_ebitda_hist") if is_forward_tier else None
+            r = m.calc_ev_ebitda(fin, growth, hist_multiple=hist,
+                                 compress=(hist is None and not is_growth))
+        elif mid == "pe":
+            r = m.calc_pe(fin, forward=is_forward_tier)
         elif mid in _SCENARIO_FN:
             r = _SCENARIO_FN[mid](fin, growth)
         else:
@@ -177,6 +203,26 @@ async def run(ticker: str) -> TickerResult:
     rf = real_fcf(cashflow, fin.get("fcf_ttm"))
     if rf is not None:
         fin["fcf_ttm"] = rf
+
+    # EPS-sanity guard: when the info-dict trailing EPS diverges materially from the
+    # sum of the last four reported quarters (yfinance data error, e.g. KLAC's 10x),
+    # substitute the quarterly sum and recompute trailing P/E. If the corrected EPS
+    # is non-positive (can't trust either), flag it so evaluate() drops P/E + RIM.
+    q_sum = quarterly_eps_sum(list(await fetch_quarterly_eps(ticker) or ()))
+    if eps_unreliable(fin.get("eps_ttm"), q_sum):
+        if q_sum and q_sum > 0:
+            fin["eps_ttm"] = q_sum
+            price = fin.get("current_price")
+            if price and price > 0:
+                fin["trailing_pe"] = price / q_sum
+        else:
+            fin["eps_unreliable"] = True
+
+    # Forward tiers anchor EV/EBITDA to its historical median when reconstructable.
+    hist = await fetch_ev_ebitda_history(ticker)
+    if hist is not None:
+        fin["ev_ebitda_hist"] = hist
+
     data = evaluate(fin)
     data["last_evaluated"] = datetime.now(timezone.utc).isoformat()
     return TickerResult(**data)

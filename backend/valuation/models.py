@@ -11,6 +11,7 @@ EBITDA_CONV_FLOOR = 0.40
 EBITDA_CONV_CAP = 0.65
 MATURE_EV_SALES = 2.0
 MATURE_PE_CAP = 21.0
+PEG_CEILING = 2.0  # GROWTH tier: forward P/E may run up to growth% * this before capping
 
 ALL_METHODS = ["dcf", "fcfe", "ev_ebitda", "pe", "ev_sales", "ddm", "pb", "rim", "sotp", "nav"]
 SCENARIO_MODELS = {"dcf", "fcfe", "ev_ebitda", "ev_sales", "ddm", "rim"}
@@ -92,15 +93,24 @@ def calc_fcfe(fin: dict, growth: dict) -> dict:
 
 
 # -- EV/EBITDA -----------------------------------------------------------------
-def calc_ev_ebitda(fin: dict, growth: dict) -> dict:
+def calc_ev_ebitda(fin: dict, growth: dict, hist_multiple: float | None = None,
+                   compress: bool = True) -> dict:
+    """EV/EBITDA exit-multiple valuation.
+
+    hist_multiple: when provided, a historical-median EV/EBITDA replaces the
+        current trailing multiple (the forward-tier "anchor to history" basis).
+    compress: when True (default), the exit multiple is compressed toward a mature
+        FCF-conversion-justified level. Forward tiers pass compress=False — a
+        historical median (or the GROWTH full multiple) is already a mature level.
+    """
     ebitda = fin.get("ebitda_ttm")
-    multiple = fin.get("ev_ebitda")
     shares = fin.get("shares_outstanding")
+    multiple = hist_multiple if hist_multiple is not None else fin.get("ev_ebitda")
     if ebitda is None or multiple is None or not shares:
         return _null_result(True)
     multiple = min(multiple, EV_EBITDA_CAP)
     fcf = fin.get("fcf_ttm")
-    if fcf is not None and ebitda > 0:
+    if compress and fcf is not None and ebitda > 0:
         conversion = fcf / ebitda
         multiple = _compressed_exit_multiple(multiple, conversion, EBITDA_CONV_FLOOR, EBITDA_CONV_CAP)
     net_debt = fin.get("net_debt") or 0
@@ -122,12 +132,31 @@ def calc_ev_sales(fin: dict, growth: dict) -> dict:
 
 
 # -- P/E (capped market multiple) ----------------------------------------------
-def calc_pe(fin: dict) -> dict:
+def _forward_target_pe(fin: dict) -> float | None:
+    """Forward-tier target: forward P/E capped by a PEG ceiling (growth% * PEG_CEILING).
+    Returns None when forward P/E or a positive growth signal is unavailable, so the
+    caller can fall back to the mature trailing-P/E path."""
+    fpe = fin.get("forward_pe")
+    if not fpe or fpe <= 0:
+        return None
+    g = fin.get("earnings_growth")
+    if g is None or g <= 0:
+        g = fin.get("revenue_growth") or 0
+    if g <= 0:
+        return None
+    return min(fpe, g * 100 * PEG_CEILING)
+
+
+def calc_pe(fin: dict, forward: bool = False) -> dict:
     eps = fin.get("eps_ttm")
-    trailing_pe = fin.get("trailing_pe")
-    if eps is None or eps <= 0 or trailing_pe is None or trailing_pe <= 0:
+    if eps is None or eps <= 0:
         return _null_result(False)
-    target_pe = min(trailing_pe, MATURE_PE_CAP)
+    target_pe = _forward_target_pe(fin) if forward else None
+    if target_pe is None:
+        trailing_pe = fin.get("trailing_pe")
+        if trailing_pe is None or trailing_pe <= 0:
+            return _null_result(False)
+        target_pe = min(trailing_pe, MATURE_PE_CAP)
     fv = _apply_mos(eps * target_pe)
     return {"scenarios": {k: fv for k in SCENARIO_KEYS}, "fair_value": fv,
             "weight": 0.0, "has_scenarios": False}
