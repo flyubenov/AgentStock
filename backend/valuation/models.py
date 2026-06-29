@@ -22,6 +22,14 @@ LARGE_CAP_FADE_FLOOR = 150_000_000_000   # >= $150B -> hold 3 years, then fade
 FADE_HOLD_MEGA = 0
 FADE_HOLD_LARGE = 3
 FADE_HOLD_MID = 5
+# A mega-cap still compounding above this revenue-growth rate keeps the small-cap
+# hold: the size penalty is a base-rate-drag proxy that doesn't apply while the
+# growth is demonstrably there (e.g. AVGO/NVDA on the AI ramp).
+MEGA_CAP_GROWTH_RELIEF = 0.40
+# Trailing P/E this many times the forward P/E flags trailing EPS as depressed
+# (e.g. acquisition amortization at AVGO post-VMware) -> value the forward P/E
+# leg off forward EPS instead of the depressed trailing figure.
+DEPRESSED_PE_RATIO = 1.5
 
 ALL_METHODS = ["dcf", "fcfe", "ev_ebitda", "pe", "ev_sales", "ddm", "pb", "rim", "sotp", "nav"]
 SCENARIO_MODELS = {"dcf", "fcfe", "ev_ebitda", "ev_sales", "ddm", "rim"}
@@ -60,11 +68,15 @@ def _compressed_exit_multiple(current_mult: float, conversion: float, conv_lo: f
     return min(current_mult, conv * MATURE_MULTIPLE_FACTOR)
 
 
-def _fade_hold_years(market_cap: float | None) -> int:
+def _fade_hold_years(market_cap: float | None, revenue_growth: float | None = None) -> int:
     """Years near-term growth is held before fading to TERMINAL_GROWTH, keyed to
-    size: mega-caps (>= $1T) fade immediately, mid/small names hold growth longer."""
+    size: mega-caps (>= $1T) fade immediately, mid/small names hold growth longer.
+    A mega-cap still growing above MEGA_CAP_GROWTH_RELIEF keeps the small-cap hold
+    (its size penalty is waived while the hyper-growth is demonstrably present)."""
     mc = market_cap or 0
     if mc >= MEGA_CAP_FLOOR:
+        if (revenue_growth or 0) >= MEGA_CAP_GROWTH_RELIEF:
+            return FADE_HOLD_MID
         return FADE_HOLD_MEGA
     if mc >= LARGE_CAP_FADE_FLOOR:
         return FADE_HOLD_LARGE
@@ -107,7 +119,7 @@ def calc_dcf(fin: dict, growth: dict) -> dict:
     if base is None or not shares:
         return _null_result(True)
     net_debt = fin.get("net_debt") or 0
-    hold = _fade_hold_years(fin.get("market_cap"))
+    hold = _fade_hold_years(fin.get("market_cap"), fin.get("revenue_growth"))
     scenarios = {k: _scenario_dcf_equity(base, growth[k], net_debt, shares, hold) for k in SCENARIO_KEYS}
     return {"scenarios": scenarios, "fair_value": _avg(scenarios), "weight": 0.0, "has_scenarios": True}
 
@@ -148,7 +160,7 @@ def calc_ev_ebitda(fin: dict, growth: dict, hist_multiple: float | None = None,
         conversion = fcf / ebitda
         multiple = _compressed_exit_multiple(multiple, conversion, EBITDA_CONV_FLOOR, EBITDA_CONV_CAP)
     net_debt = fin.get("net_debt") or 0
-    hold = _fade_hold_years(fin.get("market_cap"))
+    hold = _fade_hold_years(fin.get("market_cap"), fin.get("revenue_growth"))
     scenarios = {k: _scenario_ev_multiple(ebitda, growth[k], multiple, net_debt, shares, hold) for k in SCENARIO_KEYS}
     return {"scenarios": scenarios, "fair_value": _avg(scenarios), "weight": 0.0, "has_scenarios": True}
 
@@ -182,10 +194,24 @@ def _forward_target_pe(fin: dict) -> float | None:
     return min(fpe, g * 100 * PEG_CEILING)
 
 
+def _normalized_forward_eps(fin: dict, trailing_eps: float) -> float:
+    """Value the forward P/E leg off forward EPS when trailing earnings are
+    depressed (trailing P/E far above forward P/E, e.g. acquisition amortization
+    at AVGO post-VMware). Otherwise keep trailing EPS. Never lowers the EPS."""
+    feps = fin.get("forward_eps")
+    tpe, fpe = fin.get("trailing_pe"), fin.get("forward_pe")
+    if (feps and feps > trailing_eps and tpe and fpe and fpe > 0
+            and tpe / fpe > DEPRESSED_PE_RATIO):
+        return feps
+    return trailing_eps
+
+
 def calc_pe(fin: dict, forward: bool = False) -> dict:
     eps = fin.get("eps_ttm")
     if eps is None or eps <= 0:
         return _null_result(False)
+    if forward:
+        eps = _normalized_forward_eps(fin, eps)
     target_pe = _forward_target_pe(fin) if forward else None
     if target_pe is None:
         trailing_pe = fin.get("trailing_pe")

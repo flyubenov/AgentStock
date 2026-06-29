@@ -198,6 +198,7 @@ def extract_financials(info: dict) -> dict:
         "net_debt": _net_debt(info),
         "ebitda_ttm": info.get("ebitda"),
         "eps_ttm": info.get("trailingEps"),
+        "forward_eps": info.get("forwardEps"),
         "revenue_ttm": info.get("totalRevenue"),
         "book_value_per_share": info.get("bookValue"),
         "dividend_rate": div_rate,

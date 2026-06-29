@@ -78,6 +78,25 @@ def test_dcf_fade_is_more_aggressive_for_mega_caps():
     assert mega < small
 
 
+def test_fade_relief_for_high_growth_mega_cap():
+    # A mega-cap (>= $1T) still growing very fast keeps the small-cap hold (the
+    # size penalty is a base-rate-drag proxy that doesn't apply while the growth
+    # is demonstrably there, e.g. AVGO/NVDA on the AI ramp).
+    mc = 2_000_000_000_000
+    assert m._fade_hold_years(mc, m.MEGA_CAP_GROWTH_RELIEF) == m.FADE_HOLD_MID
+    assert m._fade_hold_years(mc, m.MEGA_CAP_GROWTH_RELIEF - 0.01) == m.FADE_HOLD_MEGA
+    assert m._fade_hold_years(mc, None) == m.FADE_HOLD_MEGA   # no growth signal -> full fade
+
+
+def test_dcf_fade_relieved_for_high_growth_mega_cap():
+    # Same $2T company: a 45% grower fades gentler (higher FV) than a flat one.
+    base = {"fcf_ttm": 1_000_000, "net_debt": 0, "shares_outstanding": 100_000,
+            "market_cap": 2_000_000_000_000}
+    fast = m.calc_dcf({**base, "revenue_growth": 0.45}, GROWTH)["fair_value"]
+    flat = m.calc_dcf({**base, "revenue_growth": 0.05}, GROWTH)["fair_value"]
+    assert fast > flat
+
+
 def test_ev_ebitda_fade_is_more_aggressive_for_mega_caps():
     base = {"ebitda_ttm": 1_000_000, "ev_ebitda": 12.0, "net_debt": 0, "shares_outstanding": 100_000}
     mega = m.calc_ev_ebitda({**base, "market_cap": 2_000_000_000_000}, GROWTH, compress=False)["fair_value"]
@@ -206,6 +225,27 @@ def test_pe_non_forward_unchanged_with_forward_present():
     fin = {"eps_ttm": 10.0, "trailing_pe": 35.0, "forward_pe": 50.0, "earnings_growth": 0.30}
     fv = m.calc_pe(fin)["fair_value"]
     assert fv == pytest.approx(10.0 * m.MATURE_PE_CAP * m.MOS)
+
+
+def test_pe_forward_normalizes_depressed_trailing_eps():
+    # Trailing EPS depressed by amortization (trailing P/E >> forward P/E, e.g.
+    # AVGO post-VMware): the forward leg values off forward EPS, not the
+    # depressed trailing figure. trailing_pe/forward_pe = 3.2 > DEPRESSED_PE_RATIO.
+    fin = {"eps_ttm": 6.0, "forward_eps": 19.0, "trailing_pe": 62.0,
+           "forward_pe": 19.2, "earnings_growth": 0.85}
+    fv = m.calc_pe(fin, forward=True)["fair_value"]
+    assert fv == pytest.approx(19.0 * 19.2 * m.MOS)   # forward EPS, not 6.0
+
+
+def test_pe_forward_keeps_trailing_eps_when_not_depressed():
+    # Healthy name (trailing P/E close to forward P/E): forward EPS is NOT
+    # substituted even when present, so the leg stays on trailing EPS.
+    fin = {"eps_ttm": 27.0, "forward_eps": 36.0, "trailing_pe": 20.5,
+           "forward_pe": 15.5, "earnings_growth": 0.62}   # ratio 1.32 < 1.5
+    peg_cap = 0.62 * 100 * m.PEG_CEILING
+    target = min(15.5, peg_cap)
+    fv = m.calc_pe(fin, forward=True)["fair_value"]
+    assert fv == pytest.approx(27.0 * target * m.MOS)   # trailing EPS retained
 
 
 # -- EV/EBITDA: compression toggle + historical-median multiple ----------------
