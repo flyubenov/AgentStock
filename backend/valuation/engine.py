@@ -19,10 +19,11 @@ FORWARD_TIERS = {"LARGE_CAP", "MID_CAP", "GROWTH"}
 # pe and ev_ebitda are dispatched explicitly (they take method-basis flags); the
 # maps cover the remaining methods with uniform signatures.
 _SINGLE_VALUE_FN = {"pb": m.calc_pb, "sotp": m.calc_sotp, "nav": m.calc_nav}
+# ddm is dispatched explicitly: its perpetuity is fed the SUSTAINABLE_CEIL-capped
+# growth (see evaluate), so it can't overshoot Gordon growth on a distorted name.
 _SCENARIO_FN = {
     "fcfe": m.calc_fcfe,
     "ev_sales": m.calc_ev_sales,
-    "ddm": m.calc_ddm,
     "rim": m.calc_rim,
 }
 
@@ -35,17 +36,21 @@ def _earnings_distorted(fin: dict) -> bool:
     return eg is not None and eg < 0 and rg > 0
 
 
-def build_scenarios(fin: dict) -> dict:
+def build_scenarios(fin: dict, distorted_cap: float = 0.20) -> dict:
     """Per-stock capped growth scenarios (spec decision #1).
 
     When GAAP earnings growth is negative while revenue is still growing, the
     earnings figure is treated as distorted (acquisition amortization / one-off
-    charges, e.g. ABBV) rather than a real decline. Growth is then sourced from
-    revenue growth, capped at SUSTAINABLE_CEIL to avoid the r-g overshoot in the
-    perpetuity-based DDM. A genuine decline (revenue also falling) stays on the
-    normal floored path."""
+    charges, e.g. ABBV/ETN) rather than a real decline. Growth is then sourced
+    from revenue growth. A genuine decline (revenue also falling) stays on the
+    normal floored path.
+
+    distorted_cap bounds the revenue-sourced rate. The default (0.20, the normal
+    ceiling) is for the bounded-horizon legs (DCF/EV/EBITDA/PE), which can carry
+    the real rate. The perpetuity-based DDM passes distorted_cap=SUSTAINABLE_CEIL
+    so Gordon growth can't overshoot the discount rate."""
     if _earnings_distorted(fin):
-        raw = min(fin.get("revenue_growth") or 0, SUSTAINABLE_CEIL)
+        raw = min(fin.get("revenue_growth") or 0, distorted_cap)
     else:
         raw = fin.get("earnings_growth") or fin.get("revenue_growth") or 0.07
     base = max(0.02, min(float(raw), 0.20))
@@ -104,15 +109,20 @@ def evaluate(fin: dict) -> dict:
                        "phase) — trailing financials don't support a reliable valuation"],
         }
 
-    # Distorted GAAP earnings make any trailing-earnings multiple unreliable;
-    # drop the P/E leg and let the remaining models renormalize (e.g. ABBV).
-    if _earnings_distorted(fin) and weights.get("pe", 0) > 0:
+    is_growth = stock_type == "GROWTH"
+    is_forward_tier = stock_type in FORWARD_TIERS
+
+    # Distorted GAAP earnings make a *trailing* P/E unreliable; drop the P/E leg
+    # and let the remaining models renormalize (e.g. ABBV). Forward tiers value
+    # P/E off the *forward* multiple, which is robust to a one-off trailing
+    # charge, so they keep the leg (regression: ETN's recovery leg was discarded).
+    if _earnings_distorted(fin) and not is_forward_tier and weights.get("pe", 0) > 0:
         weights = dict(weights)
         weights["pe"] = 0.0
 
     growth = build_scenarios(fin)
-    is_growth = stock_type == "GROWTH"
-    is_forward_tier = stock_type in FORWARD_TIERS
+    # The DDM perpetuity keeps distorted names on the sustainable ceiling.
+    ddm_growth = build_scenarios(fin, distorted_cap=SUSTAINABLE_CEIL)
 
     results: dict[str, dict] = {}
     for mid in m.ALL_METHODS:
@@ -130,6 +140,8 @@ def evaluate(fin: dict) -> dict:
                                  compress=(hist is None and not is_growth))
         elif mid == "pe":
             r = m.calc_pe(fin, forward=is_forward_tier)
+        elif mid == "ddm":
+            r = m.calc_ddm(fin, ddm_growth)
         elif mid in _SCENARIO_FN:
             r = _SCENARIO_FN[mid](fin, growth)
         else:

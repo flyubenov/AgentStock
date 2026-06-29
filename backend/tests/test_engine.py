@@ -32,10 +32,21 @@ def test_build_scenarios_floor():
     assert s["pessimistic"] == 0.02
 
 
-def test_build_scenarios_distorted_earnings_uses_capped_revenue():
-    # Revenue growing while GAAP earnings negative (e.g. ABBV) -> distortion:
-    # source growth from revenue, capped at SUSTAINABLE_CEIL.
-    s = engine.build_scenarios({"earnings_growth": -0.46, "revenue_growth": 0.124})
+def test_build_scenarios_distorted_earnings_uses_full_revenue_growth():
+    # Revenue growing while GAAP earnings negative (one-off charge, e.g. ETN):
+    # the bounded-horizon DCF/EV growth now reads the real revenue line under the
+    # normal 20% cap, not the 3.9% DDM ceiling.
+    s = engine.build_scenarios({"earnings_growth": -0.094, "revenue_growth": 0.168})
+    assert s["realistic"] == pytest.approx(0.168)
+    assert s["optimistic"] == pytest.approx(0.20)        # 0.168 + 0.05, capped at 0.20
+    assert s["pessimistic"] == pytest.approx(0.128)
+
+
+def test_build_scenarios_distorted_earnings_ddm_cap_keeps_sustainable_ceiling():
+    # The DDM/perpetuity copy of the scenarios (distorted_cap=SUSTAINABLE_CEIL)
+    # stays capped so Gordon growth can't overshoot the discount rate (ABBV).
+    s = engine.build_scenarios({"earnings_growth": -0.46, "revenue_growth": 0.124},
+                               distorted_cap=engine.SUSTAINABLE_CEIL)
     assert s["realistic"] == pytest.approx(engine.SUSTAINABLE_CEIL)
     assert s["optimistic"] == pytest.approx(engine.SUSTAINABLE_CEIL + 0.05)
     assert s["pessimistic"] == 0.02
@@ -178,6 +189,31 @@ def test_evaluate_pe_kept_when_earnings_healthy():
     result = engine.evaluate(fin)
     assert result["stock_type"] == "DIVIDEND"
     assert "pe" in result["fair_value_breakdown"]
+
+
+def test_evaluate_forward_tier_keeps_pe_when_distorted():
+    # A forward tier (LARGE_CAP) with distorted GAAP earnings keeps its forward-P/E
+    # leg: forward P/E is robust to a one-off trailing charge. Regression: ETN,
+    # whose forward-P/E recovery leg was being thrown away.
+    fin = _large_cap_fin(earnings_growth=-0.094, revenue_growth=0.168,
+                         forward_pe=26.0, trailing_pe=40.0)
+    result = engine.evaluate(fin)
+    assert result["stock_type"] == "LARGE_CAP"
+    assert "pe" in result["fair_value_breakdown"]
+
+
+def test_evaluate_distorted_ddm_leg_stays_on_sustainable_ceiling():
+    # The raised revenue growth must NOT leak into the DDM perpetuity: the DDM leg
+    # values off the SUSTAINABLE_CEIL-capped scenarios so Gordon growth stays
+    # bounded (ABBV regression — naive removal of the cap doubled the DDM leg).
+    from valuation import models as m
+    fin = _large_cap_fin(sector="Healthcare", dividend_yield=0.04, payout_ratio=0.6,
+                         dividend_rate=6.0, earnings_growth=-0.46, revenue_growth=0.124)
+    result = engine.evaluate(fin)
+    assert result["stock_type"] == "DIVIDEND"
+    ddm_growth = engine.build_scenarios(fin, distorted_cap=engine.SUSTAINABLE_CEIL)
+    expected = m.calc_ddm(fin, ddm_growth)["fair_value"]
+    assert result["fair_value_breakdown"]["ddm"]["fair_value"] == pytest.approx(round(expected, 2))
 
 
 def _growth_fin(**over):
