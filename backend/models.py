@@ -21,6 +21,10 @@ class AnalyseRequest(BaseModel):
     sheets_url: str | None = None
 
 
+class DatabaseRow(TickerResult):
+    quality_score: float | None = None
+
+
 class JobStatus(BaseModel):
     job_id: str
     total: int

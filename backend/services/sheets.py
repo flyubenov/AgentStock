@@ -3,7 +3,7 @@ import asyncio, json, os
 from datetime import datetime, timezone
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-from models import TickerResult
+from models import TickerResult, DatabaseRow
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 _service = None
@@ -114,8 +114,8 @@ def _upsert_sync(result: TickerResult) -> None:
         ).execute()
 
 
-async def read_database() -> list[TickerResult]:
-    """Read all rows from the 'Database' sheet and return as TickerResult list."""
+async def read_database() -> list[DatabaseRow]:
+    """Read all rows from the 'Database' sheet and return as DatabaseRow list."""
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, _read_database_sync)
 
@@ -138,13 +138,35 @@ def _ensure_database_sheet(svc, sheet_id: str) -> None:
         ).execute()
 
 
-def _read_database_sync() -> list[TickerResult]:
+def _row_to_database_row(row: list) -> DatabaseRow:
+    row = list(row) + [""] * (17 - len(row))  # pad to include col Q (index 16)
+
+    def safe_float(val):
+        try:
+            return float(val) if val else None
+        except (ValueError, TypeError):
+            return None
+
+    breakdown = {}
+    for i, mid in enumerate(_MODEL_COLS):
+        fv = safe_float(row[7 + i])
+        if fv is not None:
+            breakdown[mid] = {"fair_value": fv}
+    return DatabaseRow(
+        ticker=row[0], company_name=row[1] or None, last_evaluated=row[2] or None,
+        stock_type=row[3] or None, fair_value=safe_float(row[4]),
+        current_price=safe_float(row[5]), price_vs_fair_value_pct=safe_float(row[6]),
+        fair_value_breakdown=breakdown, quality_score=safe_float(row[16]),
+    )
+
+
+def _read_database_sync() -> list[DatabaseRow]:
     svc = _get_service()
     sheet_id = _sheet_id()
     try:
         result = svc.spreadsheets().values().get(
             spreadsheetId=sheet_id,
-            range="Database!A:P",
+            range="Database!A:Q",      # was A:P — now includes the Quality Score mirror
         ).execute()
     except Exception as e:
         if "Unable to parse range" in str(e) or "400" in str(e):
@@ -154,30 +176,4 @@ def _read_database_sync() -> list[TickerResult]:
     rows = result.get("values", [])
     if len(rows) < 2:
         return []
-
-    def safe_float(val: str) -> float | None:
-        try:
-            return float(val) if val else None
-        except (ValueError, TypeError):
-            return None
-
-    results = []
-    for row in rows[1:]:  # skip header
-        while len(row) < 16:
-            row.append("")
-        breakdown = {}
-        for i, mid in enumerate(_MODEL_COLS):
-            fv = safe_float(row[7 + i])
-            if fv is not None:
-                breakdown[mid] = {"fair_value": fv}
-        results.append(TickerResult(
-            ticker=row[0],
-            company_name=row[1] or None,
-            last_evaluated=row[2] or None,
-            stock_type=row[3] or None,
-            fair_value=safe_float(row[4]),
-            current_price=safe_float(row[5]),
-            price_vs_fair_value_pct=safe_float(row[6]),
-            fair_value_breakdown=breakdown,
-        ))
-    return results
+    return [_row_to_database_row(row) for row in rows[1:]]

@@ -1,5 +1,5 @@
-from models import TickerResult
-from services.sheets import _result_to_row, _DB_HEADERS, _MODEL_COLS
+from models import TickerResult, DatabaseRow
+from services.sheets import _result_to_row, _DB_HEADERS, _MODEL_COLS, _row_to_database_row
 
 
 def test_db_headers_length_matches_row():
@@ -21,3 +21,21 @@ def test_db_headers_length_matches_row():
     assert row[7 + _MODEL_COLS.index("ev_ebitda")] == 186.0
     # a model not in the breakdown is blank
     assert row[7 + _MODEL_COLS.index("nav")] == ""
+
+
+def test_database_row_parses_quality_score_col_q():
+    # 16 FV cols (A:P) + quality score in col Q (index 16)
+    row = ["AAPL", "Apple", "2026-07-08", "LARGE_CAP", "180.5", "190.0", "-5.0",
+           "175.0", "", "", "", "", "", "", "", "", "8.4"]
+    dr = _row_to_database_row(row)
+    assert isinstance(dr, DatabaseRow)
+    assert dr.ticker == "AAPL"
+    assert dr.fair_value == 180.5
+    assert dr.quality_score == 8.4
+
+
+def test_database_row_blank_quality_score_is_none():
+    row = ["MSFT", "Microsoft", "2026-07-08", "LARGE_CAP", "400", "410", "-2.4",
+           "395"]  # short row, no Q
+    dr = _row_to_database_row(row)
+    assert dr.quality_score is None
