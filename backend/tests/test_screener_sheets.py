@@ -1,3 +1,7 @@
+from unittest.mock import MagicMock, patch
+
+import pytest
+
 from screener.models import ScreenerResult
 from services.screener_sheets import (
     _result_to_row, _row_to_result, _SCREENER_HEADERS, _METRIC_COLS,
@@ -40,3 +44,33 @@ def test_headers_have_quality_score_first_metric_block():
     from services.screener_sheets import _SCREENER_HEADERS
     assert _SCREENER_HEADERS[3] == "Quality Score"
     assert "Section I" in _SCREENER_HEADERS and "Section Iv".title() not in _SCREENER_HEADERS
+
+
+def _fake_service(get_error):
+    """Fake Sheets service: the Screener tab exists (so _ensure no-ops) but
+    values().get(...).execute() raises `get_error`."""
+    svc = MagicMock()
+    # spreadsheets().get(...).execute() -> metadata with Screener tab present
+    svc.spreadsheets.return_value.get.return_value.execute.return_value = {
+        "sheets": [{"properties": {"title": "Screener"}}]
+    }
+    # spreadsheets().values().get(...).execute() -> raises
+    svc.spreadsheets.return_value.values.return_value.get.return_value.execute.side_effect = get_error
+    return svc
+
+
+def test_read_sync_only_swallows_missing_tab():
+    from services.screener_sheets import _read_sync
+
+    # Case 1: genuine missing-tab error -> swallowed, returns []
+    missing = _fake_service(Exception("Unable to parse range: Screener!A:AN"))
+    with patch("services.screener_sheets._get_service", return_value=missing), \
+         patch("services.screener_sheets._sheet_id", return_value="sid"):
+        assert _read_sync() == []
+
+    # Case 2: generic error (no "Unable to parse range") -> re-raised
+    denied = _fake_service(Exception("HttpError 403 permission denied"))
+    with patch("services.screener_sheets._get_service", return_value=denied), \
+         patch("services.screener_sheets._sheet_id", return_value="sid"):
+        with pytest.raises(Exception, match="permission denied"):
+            _read_sync()

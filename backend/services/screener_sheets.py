@@ -64,7 +64,6 @@ def _row_to_result(row: list) -> ScreenerResult:
 
 _SCREENER_TAB = "Screener"
 DATABASE_QSCORE_COL = "Q"
-_LAST_COL = chr(ord("A") + len(_SCREENER_HEADERS) - 1) if len(_SCREENER_HEADERS) <= 26 else None
 
 
 def _col_range() -> str:
@@ -149,7 +148,7 @@ def _read_sync() -> list[ScreenerResult]:
         result = svc.spreadsheets().values().get(
             spreadsheetId=sheet_id, range=_col_range()).execute()
     except Exception as e:
-        if "Unable to parse range" in str(e) or "400" in str(e):
+        if "Unable to parse range" in str(e):
             _ensure_screener_sheet(svc, sheet_id)
             return []
         raise
