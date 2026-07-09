@@ -1,4 +1,3 @@
-import asyncio
 import time
 import yfinance as yf
 from functools import lru_cache
