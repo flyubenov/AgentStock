@@ -133,7 +133,7 @@ def compute_metrics(inp: ScreenerInputs) -> ScreenerMetrics:
         m.eps_cagr_3y = pct(series_cagr(inc.series("Diluted EPS"), 3))
     if cf is not None:
         m.fcf_cagr_3y = pct(series_cagr(cf.series("Free Cash Flow"), 3))
-    revenue = info.get("totalRevenue") or (inc.latest("Total Revenue") if inc else None)
+    revenue = (inc.latest("Total Revenue") if inc else None) or info.get("totalRevenue")
     if fcf is not None and revenue:
         m.fcf_margin = fcf / revenue * 100.0
     m.op_margin = pct(info.get("operatingMargins"))

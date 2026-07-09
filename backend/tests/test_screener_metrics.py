@@ -138,3 +138,12 @@ def test_compute_section_i_iv_v():
     assert m.fcf_yield == pytest.approx(150.0 / 4950.0 * 100, abs=0.1)
     # raw cap-rule inputs
     assert m.net_income == 160.0 and m.revenue_growth == pytest.approx(11.0, abs=0.1)
+
+
+def test_fcf_margin_uses_annual_revenue_not_ttm():
+    from screener.metrics import compute_metrics
+    # Annual statement Total Revenue = 1000; Yahoo TTM totalRevenue = 2000.
+    # FCF (150) is an annual figure, so the denominator must be the annual 1000.
+    m = compute_metrics(_mk_inputs(info={"totalRevenue": 2000.0}))
+    assert m.fcf_margin == pytest.approx(150.0 / 1000.0 * 100, abs=0.1)
+    assert m.fcf_margin != pytest.approx(150.0 / 2000.0 * 100, abs=0.1)
