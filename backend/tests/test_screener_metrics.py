@@ -1,5 +1,5 @@
 import pytest
-from screener.models import StatementSeries, ScreenerMetrics, ScreenerResult
+from screener.models import StatementSeries, ScreenerMetrics, ScreenerResult, ScreenerInputs
 from screener.metrics import cagr, series_cagr, price_cagr, pct
 
 
@@ -47,3 +47,70 @@ def test_price_cagr_and_pct():
     assert price_cagr([100.0], 3) is None
     assert pct(0.153) == pytest.approx(15.3)
     assert pct(None) is None
+
+
+def _mk_inputs(**over):
+    income = StatementSeries(
+        years=[2025, 2024, 2023, 2022],
+        rows={
+            "EBIT": [200.0, 180.0, 150.0, 120.0],
+            "Tax Rate For Calcs": [0.21, 0.21, 0.21, 0.21],
+            "Net Income": [160.0, 150.0, 130.0, 100.0],
+            "Total Revenue": [1000.0, 900.0, 800.0, 700.0],
+            "Interest Expense": [10.0, 10.0, 10.0, 10.0],
+            "Gross Profit": [500.0, 450.0, 400.0, 350.0],
+            "Operating Income": [220.0, 190.0, 160.0, 130.0],
+            "Diluted EPS": [3.2, 3.0, 2.6, 2.0],
+            "Diluted Average Shares": [50.0, 51.0, 52.0, 53.0],
+        },
+    )
+    balance = StatementSeries(
+        years=[2025, 2024, 2023, 2022],
+        rows={
+            "Invested Capital": [1000.0, 950.0, 900.0, 850.0],
+            "Tangible Book Value": [800.0, 750.0, 700.0, 650.0],
+            "Net Debt": [-50.0, 0.0, 50.0, 100.0],
+            "Ordinary Shares Number": [50.0, 51.0, 52.0, 53.0],
+        },
+    )
+    cashflow = StatementSeries(
+        years=[2025, 2024, 2023, 2022],
+        rows={
+            "Free Cash Flow": [150.0, 130.0, 110.0, 90.0],
+            "Operating Cash Flow": [200.0, 180.0, 160.0, 140.0],
+            "Capital Expenditure": [-50.0, -50.0, -50.0, -50.0],
+            "Stock Based Compensation": [20.0, 20.0, 20.0, 20.0],
+            "Repurchase Of Capital Stock": [-30.0, -30.0, -30.0, -30.0],
+            "Cash Dividends Paid": [-10.0, -10.0, -10.0, -10.0],
+        },
+    )
+    info = {"beta": 1.0, "totalDebt": 100.0, "totalCash": 150.0, "ebitda": 250.0,
+            "marketCap": 5000.0, "operatingMargins": 0.22, "grossMargins": 0.50,
+            "heldPercentInsiders": 0.03, "trailingPE": 25.0, "forwardPE": 20.0,
+            "trailingPegRatio": 1.5, "priceToSalesTrailing12Months": 5.0,
+            "enterpriseValue": 4950.0, "revenueGrowth": 0.11, "sector": "Technology"}
+    info.update(over.pop("info", {}))
+    return ScreenerInputs(ticker="T", info=info, income=income, balance=balance,
+                          cashflow=cashflow, price_monthly=tuple(), risk_free=0.045, **over)
+
+
+def test_roic_and_wacc():
+    from screener.metrics import compute_metrics, roic, wacc as wacc_fn
+    # NOPAT = 200*(1-0.21)=158; /1000 = 15.8%
+    assert roic(200.0, 0.21, 1000.0) == pytest.approx(0.158, abs=1e-4)
+    assert roic(200.0, 0.21, 0) is None
+    inp = _mk_inputs()
+    # WACC in (0, 1); equity-heavy so near cost of equity = 0.045 + 1.0*0.05 = 0.095
+    w = wacc_fn(inp, 0.21)
+    assert 0.05 < w < 0.12
+
+
+def test_compute_section_ii_iii():
+    from screener.metrics import compute_metrics
+    m = compute_metrics(_mk_inputs())
+    assert m.roic_ttm == pytest.approx(15.8, abs=0.1)         # percent
+    assert m.roic_5y_avg is not None
+    assert m.rote == pytest.approx(160.0 / 800.0 * 100, abs=0.1)
+    assert m.net_debt_ebitda == pytest.approx(-50.0 / 250.0, abs=1e-4)  # net cash -> negative
+    assert m.ocf_capex == pytest.approx(200.0 / 50.0, abs=1e-4)
+    assert m.roic_wacc_spread is not None
