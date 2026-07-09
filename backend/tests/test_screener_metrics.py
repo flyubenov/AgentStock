@@ -114,3 +114,27 @@ def test_compute_section_ii_iii():
     assert m.net_debt_ebitda == pytest.approx(-50.0 / 250.0, abs=1e-4)  # net cash -> negative
     assert m.ocf_capex == pytest.approx(200.0 / 50.0, abs=1e-4)
     assert m.roic_wacc_spread is not None
+
+
+def test_compute_section_i_iv_v():
+    from screener.metrics import compute_metrics
+    m = compute_metrics(_mk_inputs())
+    # Section I
+    assert m.revenue_cagr_3y == pytest.approx(
+        ((1000.0 / 700.0) ** (1 / 3) - 1) * 100, abs=0.1)
+    assert m.eps_cagr_3y is not None
+    assert m.fcf_cagr_3y is not None
+    assert m.fcf_margin == pytest.approx(150.0 / 1000.0 * 100, abs=0.1)
+    assert m.op_margin == pytest.approx(22.0, abs=0.1)
+    assert m.gross_margin == pytest.approx(50.0, abs=0.1)
+    # Section IV
+    assert m.shares_cagr_3y is not None and m.shares_cagr_3y < 0  # buyback
+    assert m.sbc_pct_rev == pytest.approx(20.0 / 1000.0 * 100, abs=0.1)
+    assert m.earnings_quality == pytest.approx(200.0 / 160.0, abs=1e-3)
+    assert m.insider_ownership == pytest.approx(3.0, abs=0.1)
+    assert m.shareholder_yield == pytest.approx((30.0 + 10.0) / 5000.0 * 100, abs=0.1)
+    # Section V reference
+    assert m.trailing_pe == 25.0 and m.forward_pe == 20.0 and m.peg == 1.5
+    assert m.fcf_yield == pytest.approx(150.0 / 4950.0 * 100, abs=0.1)
+    # raw cap-rule inputs
+    assert m.net_income == 160.0 and m.revenue_growth == pytest.approx(11.0, abs=0.1)

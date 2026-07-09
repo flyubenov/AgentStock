@@ -127,5 +127,64 @@ def compute_metrics(inp: ScreenerInputs) -> ScreenerMetrics:
         if tbv is not None and shares:
             m.tangible_bv_per_share = tbv / shares
 
+    # --- Section I ---
+    if inc is not None:
+        m.revenue_cagr_3y = pct(series_cagr(inc.series("Total Revenue"), 3))
+        m.eps_cagr_3y = pct(series_cagr(inc.series("Diluted EPS"), 3))
+    if cf is not None:
+        m.fcf_cagr_3y = pct(series_cagr(cf.series("Free Cash Flow"), 3))
+    revenue = info.get("totalRevenue") or (inc.latest("Total Revenue") if inc else None)
+    if fcf is not None and revenue:
+        m.fcf_margin = fcf / revenue * 100.0
+    m.op_margin = pct(info.get("operatingMargins"))
+    m.gross_margin = pct(info.get("grossMargins"))
+    if inc is not None and revenue:
+        # operating-margin trajectory: latest OM minus OM at oldest available year (pp)
+        oi_old = inc.value("Operating Income", min(3, len(inc.years) - 1))
+        rev_old = inc.value("Total Revenue", min(3, len(inc.years) - 1))
+        oi_new = inc.latest("Operating Income")
+        if oi_old is not None and rev_old and oi_new is not None and revenue:
+            m.op_margin_trajectory = (oi_new / revenue - oi_old / rev_old) * 100.0
+
+    # --- Section IV ---
+    if inc is not None:
+        shares_series = inc.series("Diluted Average Shares")
+        m.shares_cagr_3y = pct(series_cagr(shares_series, 3))
+    if cf is not None and revenue:
+        sbc = cf.latest("Stock Based Compensation")
+        if sbc is not None:
+            m.sbc_pct_rev = abs(sbc) / revenue * 100.0
+    if cf is not None:
+        ocf = cf.latest("Operating Cash Flow")
+        ni = inc.latest("Net Income") if inc else None
+        if ocf is not None and ni and abs(ni) > 1e-6:
+            m.earnings_quality = ocf / ni
+    m.insider_ownership = pct(info.get("heldPercentInsiders"))
+    mktcap = info.get("marketCap")
+    if cf is not None and mktcap:
+        buyback = cf.latest("Repurchase Of Capital Stock") or 0.0
+        divs = cf.latest("Cash Dividends Paid") or 0.0
+        m.shareholder_yield = (abs(buyback) + abs(divs)) / mktcap * 100.0
+
+    # --- Section V (reference, not scored) ---
+    m.trailing_pe = info.get("trailingPE")
+    m.forward_pe = info.get("forwardPE")
+    m.peg = info.get("trailingPegRatio")
+    m.price_sales = info.get("priceToSalesTrailing12Months")
+    ev = info.get("enterpriseValue")
+    if fcf and mktcap:
+        m.price_fcf = mktcap / fcf if fcf > 0 else None
+    if fcf is not None and ev:
+        m.fcf_yield = fcf / ev * 100.0
+    if m.fcf_yield is not None and inp.risk_free is not None:
+        m.owner_earnings_yield = m.fcf_yield - inp.risk_free * 100.0
+    m.price_cagr_3y = pct(price_cagr(inp.price_monthly, 3))
+    m.price_cagr_5y = pct(price_cagr(inp.price_monthly, 5))
+
+    # --- raw cap-rule inputs ---
+    m.net_income = inc.latest("Net Income") if inc else None
+    m.revenue_growth = pct(info.get("revenueGrowth"))
+    m.total_cash = info.get("totalCash")
+
     m.sector = info.get("sector")
     return m
