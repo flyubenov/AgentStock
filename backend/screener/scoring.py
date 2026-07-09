@@ -76,3 +76,64 @@ def apply_nudge(base: str, m: ScreenerMetrics) -> str:
                 and m.op_margin is not None):
             return "BALANCED"
     return base
+
+
+ROIC_BANDS = [(20, 10), (15, 8.5), (10, 6.5), (5, 4), (0, 2)]
+SPREAD_BANDS = [(10, 10), (5, 8), (0, 5.5), (-5, 2.5)]
+ROTE_BANDS = [(25, 10), (20, 8.5), (15, 7), (10, 5), (5, 3)]
+GROWTH_BANDS = [(20, 10), (15, 8.5), (10, 7), (5, 5), (2, 3), (0, 1.5)]
+FCF_CAGR_BANDS = [(15, 10), (10, 8), (5, 6), (0, 4)]
+FCF_MARGIN_BANDS = [(20, 10), (15, 8.5), (10, 7), (5, 5), (0, 3)]
+MARGIN_LEVEL_BANDS = [(25, 10), (15, 8), (8, 6), (0, 3)]
+TRAJECTORY_BANDS = [(2, 10), (0, 7), (-2, 4)]
+GROSS_MARGIN_BANDS = [(60, 10), (40, 8), (25, 6), (10, 4)]
+OCF_CAPEX_BANDS = [(5, 10), (3, 8), (2, 6), (1.5, 4), (1, 2)]
+SHARES_BANDS = [(-3, 10), (-1, 8.5), (0, 7), (1, 5), (3, 3)]   # score_low
+SBC_BANDS = [(2, 10), (5, 8), (10, 6), (15, 3.5), (20, 1.5)]   # score_low
+EQ_BANDS = [(1.2, 10), (1.0, 8.5), (0.8, 6), (0.6, 4)]
+INSIDER_BANDS = [(10, 10), (5, 8), (2, 6), (0.5, 4)]
+YIELD_BANDS = [(6, 10), (4, 8.5), (2, 6.5), (0, 4)]
+
+
+def _mean(vals: list[float | None]) -> float | None:
+    present = [v for v in vals if v is not None]
+    return sum(present) / len(present) if present else None
+
+
+def _section_iii(m: ScreenerMetrics, profile: str) -> float | None:
+    p = PROFILES[profile]
+    nde = leverage_score(m.net_debt_ebitda, p["P"])
+    ndf = leverage_score(m.net_debt_fcf, p["Q"])
+    ocf = score_high(m.ocf_capex, OCF_CAPEX_BANDS, 0)
+    # Balance-Sheet Dual-Check: FCF-based debt looks far worse than EBITDA-based
+    # AND EBITDA leverage is healthy (<2.5) -> treat ND/FCF as capex-cycle noise.
+    if (nde is not None and ndf is not None and m.net_debt_ebitda is not None
+            and m.net_debt_ebitda < 2.5 and ndf < nde - 2):
+        ndf = None  # drop the noisy metric
+    return _mean([nde, ndf, ocf])
+
+
+def section_scores(m: ScreenerMetrics, profile: str) -> dict[str, float | None]:
+    section_i = _mean([
+        score_high(m.revenue_cagr_3y, GROWTH_BANDS, 0),
+        score_high(m.eps_cagr_3y, GROWTH_BANDS, 0),
+        score_high(m.fcf_cagr_3y, FCF_CAGR_BANDS, 1),
+        score_high(m.fcf_margin, FCF_MARGIN_BANDS, 0),
+        score_high(m.op_margin, MARGIN_LEVEL_BANDS, 0),
+        score_high(m.op_margin_trajectory, TRAJECTORY_BANDS, 1),
+        score_high(m.gross_margin, GROSS_MARGIN_BANDS, 2),
+    ])
+    section_ii = _mean([
+        score_high(m.roic_ttm, ROIC_BANDS, 0),
+        score_high(m.roic_5y_avg, ROIC_BANDS, 0),
+        score_high(m.roic_wacc_spread, SPREAD_BANDS, 0),
+        score_high(m.rote, ROTE_BANDS, 1),
+    ])
+    section_iv = _mean([
+        score_low(m.shares_cagr_3y, SHARES_BANDS, 1),
+        score_low(m.sbc_pct_rev, SBC_BANDS, 0),
+        score_high(m.earnings_quality, EQ_BANDS, 1.5),
+        score_high(m.insider_ownership, INSIDER_BANDS, 2),
+        score_high(m.shareholder_yield, YIELD_BANDS, 1.5),
+    ])
+    return {"I": section_i, "II": section_ii, "III": _section_iii(m, profile), "IV": section_iv}
