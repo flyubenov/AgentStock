@@ -1,5 +1,5 @@
 import pytest
-from screener.scoring import score_high, score_low, leverage_score, PROFILES, base_profile, apply_nudge, section_scores
+from screener.scoring import score_high, score_low, leverage_score, PROFILES, base_profile, apply_nudge, section_scores, score, MIN_SCORED_SUBSCORES
 from screener.models import ScreenerMetrics
 
 
@@ -106,3 +106,59 @@ def test_financials_section_iii_ignores_leverage():
     m = ScreenerMetrics(net_debt_ebitda=1.0, net_debt_fcf=2.0, ocf_capex=5.0)
     s = section_scores(m, "FINANCIALS")
     assert s["III"] == 10.0  # OCF/CapEx 5.0 -> 10; leverage metrics excluded
+
+
+def test_score_strong_company_high():
+    m = ScreenerMetrics(
+        revenue_cagr_3y=18, eps_cagr_3y=18, fcf_cagr_3y=16, fcf_margin=22,
+        op_margin=28, op_margin_trajectory=3, gross_margin=65,
+        roic_ttm=22, roic_5y_avg=20, roic_wacc_spread=12, rote=26,
+        net_debt_ebitda=1.0, net_debt_fcf=2.0, ocf_capex=6,
+        shares_cagr_3y=-2, sbc_pct_rev=1.5, earnings_quality=1.3,
+        insider_ownership=12, shareholder_yield=7,
+        net_income=100, fcf=100, sector="Technology",
+    )
+    q, sections, profile = score(m, "Technology")
+    assert profile == "TECH_GROWTH"
+    assert 8.0 <= q <= 10.0
+    assert set(sections) == {"I", "II", "III", "IV"}
+
+
+def test_insufficient_data_returns_none():
+    m = ScreenerMetrics(roic_ttm=20, rote=25)  # only 2 sub-scores
+    q, _, _ = score(m, "Technology")
+    assert q is None
+
+
+def test_unprofitable_cap_rule():
+    # negative net income caps at 8.0 even with otherwise strong metrics
+    strong = dict(
+        revenue_cagr_3y=25, eps_cagr_3y=25, fcf_cagr_3y=20, fcf_margin=30,
+        op_margin=30, op_margin_trajectory=4, gross_margin=70,
+        roic_ttm=30, roic_5y_avg=28, roic_wacc_spread=20, rote=30,
+        net_debt_ebitda=0.5, net_debt_fcf=1.0, ocf_capex=8,
+        shares_cagr_3y=-3, sbc_pct_rev=1, earnings_quality=1.5,
+        insider_ownership=15, shareholder_yield=8,
+    )
+    # elite unprofitable (Rule of 40 pass, long runway) -> capped 7.0..8.0
+    elite = ScreenerMetrics(**strong, net_income=-10, fcf=50,
+                            revenue_growth=25, total_cash=100000)
+    q_e, _, _ = score(elite, "Technology")
+    assert 7.0 <= q_e <= 8.0
+    # failing unprofitable (weak growth, no runway) -> forced <= 5.0
+    fail = ScreenerMetrics(**strong, net_income=-100, fcf=-100,
+                           revenue_growth=5, total_cash=100)
+    q_f, _, _ = score(fail, "Technology")
+    assert q_f <= 5.0
+
+
+def test_score_clamped_and_rounded():
+    m = ScreenerMetrics(roic_ttm=0, roic_5y_avg=0, roic_wacc_spread=-10, rote=0,
+                        revenue_cagr_3y=-5, eps_cagr_3y=-5, fcf_cagr_3y=-5,
+                        fcf_margin=-5, op_margin=-5, gross_margin=5,
+                        net_debt_ebitda=10, net_debt_fcf=20, ocf_capex=0.2,
+                        shares_cagr_3y=10, sbc_pct_rev=30, earnings_quality=0.2,
+                        insider_ownership=0, shareholder_yield=-2,
+                        net_income=1, fcf=1, sector="Technology")
+    q, _, _ = score(m, "Technology")
+    assert q >= 1.0 and round(q, 1) == q

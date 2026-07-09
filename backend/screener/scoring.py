@@ -137,3 +137,70 @@ def section_scores(m: ScreenerMetrics, profile: str) -> dict[str, float | None]:
         score_high(m.shareholder_yield, YIELD_BANDS, 1.5),
     ])
     return {"I": section_i, "II": section_ii, "III": _section_iii(m, profile), "IV": section_iv}
+
+
+MIN_SCORED_SUBSCORES = 6
+
+
+def _count_subscores(m: ScreenerMetrics, profile: str) -> int:
+    p = PROFILES[profile]
+    candidates = [
+        m.revenue_cagr_3y, m.eps_cagr_3y, m.fcf_cagr_3y, m.fcf_margin,
+        m.op_margin, m.op_margin_trajectory, m.gross_margin,
+        m.roic_ttm, m.roic_5y_avg, m.roic_wacc_spread, m.rote,
+        m.ocf_capex,
+        m.shares_cagr_3y, m.sbc_pct_rev, m.earnings_quality,
+        m.insider_ownership, m.shareholder_yield,
+    ]
+    n = sum(1 for c in candidates if c is not None)
+    if p["P"] is not None:
+        n += sum(1 for c in (m.net_debt_ebitda, m.net_debt_fcf) if c is not None)
+    return n
+
+
+def _rule_of_40(m: ScreenerMetrics) -> float | None:
+    g = m.revenue_growth if m.revenue_growth is not None else m.revenue_cagr_3y
+    margin = m.fcf_margin if m.fcf_margin is not None else m.op_margin
+    if g is None or margin is None:
+        return None
+    return g + margin
+
+
+def _runway_months(m: ScreenerMetrics) -> float | None:
+    if m.fcf is None or m.fcf >= 0:
+        return float("inf")
+    if m.total_cash is None:
+        return None
+    monthly_burn = abs(m.fcf) / 12.0
+    return m.total_cash / monthly_burn if monthly_burn > 0 else float("inf")
+
+
+def score(m: ScreenerMetrics, sector: str | None):
+    profile = apply_nudge(base_profile(sector), m)
+    if _count_subscores(m, profile) < MIN_SCORED_SUBSCORES:
+        return None, {}, profile
+
+    sections = section_scores(m, profile)
+    weights = dict(zip(("I", "II", "III", "IV"), PROFILES[profile]["w"]))
+
+    # renormalize weights over sections that produced a score
+    active = {k: weights[k] for k in sections if sections[k] is not None and weights[k] > 0}
+    total_w = sum(active.values())
+    if total_w <= 0:
+        return None, sections, profile
+    composite = sum(sections[k] * (w / total_w) for k, w in active.items())
+
+    # Unprofitable Cap Rule
+    if (m.net_income is not None and m.net_income < 0) or (m.fcf is not None and m.fcf < 0):
+        composite = min(composite, 8.0)
+        r40 = _rule_of_40(m)
+        runway = _runway_months(m)
+        elite = r40 is not None and r40 >= 40 and runway is not None and runway >= 24
+        fails = (r40 is not None and r40 < 40) or (runway is not None and runway < 12)
+        if elite:
+            composite = max(min(composite, 8.0), 7.0)
+        elif fails:
+            composite = min(composite, 5.0)
+
+    composite = max(1.0, min(10.0, composite))
+    return round(composite, 1), sections, profile
