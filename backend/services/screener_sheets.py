@@ -60,3 +60,110 @@ def _row_to_result(row: list) -> ScreenerResult:
         quality_score=_to_float(row[3]), sector=row[4] or None,
         sector_profile=row[5] or None, section_scores=sections, metrics=metrics,
     )
+
+
+_SCREENER_TAB = "Screener"
+DATABASE_QSCORE_COL = "Q"
+_LAST_COL = chr(ord("A") + len(_SCREENER_HEADERS) - 1) if len(_SCREENER_HEADERS) <= 26 else None
+
+
+def _col_range() -> str:
+    # supports > 26 columns (AA..) — compute the end column label
+    n = len(_SCREENER_HEADERS)
+    label = ""
+    x = n
+    while x > 0:
+        x, rem = divmod(x - 1, 26)
+        label = chr(ord("A") + rem) + label
+    return f"{_SCREENER_TAB}!A:{label}"
+
+
+def _ensure_screener_sheet(svc, sheet_id: str) -> None:
+    meta = svc.spreadsheets().get(spreadsheetId=sheet_id).execute()
+    titles = [s["properties"]["title"] for s in meta.get("sheets", [])]
+    if _SCREENER_TAB not in titles:
+        svc.spreadsheets().batchUpdate(
+            spreadsheetId=sheet_id,
+            body={"requests": [{"addSheet": {"properties": {"title": _SCREENER_TAB}}}]},
+        ).execute()
+        svc.spreadsheets().values().update(
+            spreadsheetId=sheet_id, range=f"{_SCREENER_TAB}!A1",
+            valueInputOption="RAW", body={"values": [_SCREENER_HEADERS]},
+        ).execute()
+
+
+def _mirror_quality_score(svc, sheet_id: str, ticker: str, score) -> None:
+    # ensure the Database Q1 header, then update Q{row} for this ticker if present
+    svc.spreadsheets().values().update(
+        spreadsheetId=sheet_id, range=f"Database!{DATABASE_QSCORE_COL}1",
+        valueInputOption="RAW", body={"values": [["Quality Score"]]},
+    ).execute()
+    existing = svc.spreadsheets().values().get(
+        spreadsheetId=sheet_id, range="Database!A:A").execute()
+    rows = existing.get("values", [])
+    for i, row in enumerate(rows):
+        if row and row[0].strip().upper() == ticker.upper():
+            svc.spreadsheets().values().update(
+                spreadsheetId=sheet_id,
+                range=f"Database!{DATABASE_QSCORE_COL}{i + 1}",
+                valueInputOption="RAW",
+                body={"values": [[_num(score)]]},
+            ).execute()
+            return
+
+
+def _upsert_sync(r: ScreenerResult) -> None:
+    svc = _get_service()
+    sheet_id = _sheet_id()
+    _ensure_screener_sheet(svc, sheet_id)
+    existing = svc.spreadsheets().values().get(
+        spreadsheetId=sheet_id, range=f"{_SCREENER_TAB}!A:A").execute()
+    rows = existing.get("values", [])
+    target = None
+    for i, row in enumerate(rows):
+        if row and row[0].strip().upper() == r.ticker.upper():
+            target = i + 1
+            break
+    new_row = _result_to_row(r)
+    if target is None:
+        svc.spreadsheets().values().append(
+            spreadsheetId=sheet_id, range=f"{_SCREENER_TAB}!A:A",
+            valueInputOption="RAW", insertDataOption="INSERT_ROWS",
+            body={"values": [new_row]}).execute()
+    else:
+        svc.spreadsheets().values().update(
+            spreadsheetId=sheet_id, range=f"{_SCREENER_TAB}!A{target}",
+            valueInputOption="RAW", body={"values": [new_row]}).execute()
+    _mirror_quality_score(svc, sheet_id, r.ticker, r.quality_score)
+
+
+async def upsert_screener_result(r: ScreenerResult) -> None:
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _upsert_sync, r)
+
+
+def _read_sync() -> list[ScreenerResult]:
+    svc = _get_service()
+    sheet_id = _sheet_id()
+    try:
+        result = svc.spreadsheets().values().get(
+            spreadsheetId=sheet_id, range=_col_range()).execute()
+    except Exception as e:
+        if "Unable to parse range" in str(e) or "400" in str(e):
+            _ensure_screener_sheet(svc, sheet_id)
+            return []
+        raise
+    rows = result.get("values", [])
+    return [_row_to_result(r) for r in rows[1:]] if len(rows) >= 2 else []
+
+
+async def read_screener() -> list[ScreenerResult]:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _read_sync)
+
+
+async def read_screener_one(ticker: str) -> ScreenerResult | None:
+    for r in await read_screener():
+        if r.ticker.upper() == ticker.upper():
+            return r
+    return None

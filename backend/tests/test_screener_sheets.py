@@ -29,3 +29,14 @@ def test_round_trip_preserves_core_fields():
     assert r.sector_profile == "TECH_GROWTH"
     assert r.section_scores["II"] == 9.0
     assert r.metrics[_METRIC_COLS[0]] == 1.23
+
+
+def test_database_qscore_col_constant():
+    from services.screener_sheets import DATABASE_QSCORE_COL
+    assert DATABASE_QSCORE_COL == "Q"
+
+
+def test_headers_have_quality_score_first_metric_block():
+    from services.screener_sheets import _SCREENER_HEADERS
+    assert _SCREENER_HEADERS[3] == "Quality Score"
+    assert "Section I" in _SCREENER_HEADERS and "Section Iv".title() not in _SCREENER_HEADERS
