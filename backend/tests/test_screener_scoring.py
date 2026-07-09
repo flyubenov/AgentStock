@@ -1,5 +1,6 @@
 import pytest
-from screener.scoring import score_high, score_low, leverage_score
+from screener.scoring import score_high, score_low, leverage_score, PROFILES, base_profile, apply_nudge
+from screener.models import ScreenerMetrics
 
 
 def test_score_high_bands():
@@ -29,3 +30,39 @@ def test_leverage_score_is_sector_relative():
     assert leverage_score(3.0, 2.5) == 4.5
     assert leverage_score(None, 2.5) is None
     assert leverage_score(3.0, None) is None      # financials skip
+
+
+def test_profiles_weights_sum_to_one():
+    for name, p in PROFILES.items():
+        assert abs(sum(p["w"]) - 1.0) < 1e-9, name
+
+
+def test_base_profile_mapping_and_default():
+    assert base_profile("Technology") == "TECH_GROWTH"
+    assert base_profile("communication services") == "BALANCED"
+    assert base_profile("Utilities") == "DEFENSIVE_INCOME"
+    assert base_profile("Financial Services") == "FINANCIALS"
+    assert base_profile("Real Estate") == "REIT"
+    assert base_profile(None) == "BALANCED"
+    assert base_profile("Nonsense Sector") == "BALANCED"
+
+
+def test_growth_override_nudge():
+    # BALANCED + high revenue CAGR + net cash -> TECH_GROWTH
+    m = ScreenerMetrics(revenue_cagr_3y=18.0, net_debt=-100.0)
+    assert apply_nudge("BALANCED", m) == "TECH_GROWTH"
+    # not enough growth -> stays BALANCED
+    assert apply_nudge("BALANCED", ScreenerMetrics(revenue_cagr_3y=8.0, net_debt=-100.0)) == "BALANCED"
+
+
+def test_special_profile_data_fit_fallback():
+    # FINANCIALS/REIT label but operates like a normal company (material positive
+    # EBITDA, normal leverage < 4, a real operating-margin signal) -> BALANCED.
+    normal = ScreenerMetrics(ebitda=500.0, net_debt_ebitda=1.0, op_margin=20.0)
+    assert apply_nudge("FINANCIALS", normal) == "BALANCED"
+    assert apply_nudge("REIT", normal) == "BALANCED"
+    # A real bank: no meaningful EBITDA signal -> stays FINANCIALS.
+    assert apply_nudge("FINANCIALS", ScreenerMetrics(ebitda=None)) == "FINANCIALS"
+    # High leverage (>= 4) does not trigger the fallback.
+    assert apply_nudge("REIT", ScreenerMetrics(ebitda=500.0, net_debt_ebitda=6.0,
+                                               op_margin=20.0)) == "REIT"
