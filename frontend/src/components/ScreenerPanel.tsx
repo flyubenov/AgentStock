@@ -121,6 +121,28 @@ function PreProfitCard({ bd }: { bd: ScoreBreakdown }) {
   )
 }
 
+/** Notes when a sector profile excludes structurally-distorted metrics (e.g. a
+ *  lender's FCF/OCF/leverage metrics are not scored). */
+function SectorAdjustmentCard({ bd }: { bd: ScoreBreakdown }) {
+  const sa = bd.sector_adjustment
+  if (!sa) return null
+  return (
+    <div className="bg-[#16161e] border border-[#1e1e2a] rounded-lg p-4">
+      <div className="text-xs text-slate-500 uppercase tracking-wide mb-1">
+        Sector Adjustment · {sa.profile}
+      </div>
+      <p className="text-xs text-slate-500 mb-2">{sa.note}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {sa.excluded.map(e => (
+          <span key={e} className="text-[11px] font-mono text-slate-400 bg-[#1e1e2a] px-2 py-0.5 rounded">
+            {e}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function ScreenerPanel({ result }: { result: ScreenerResult }) {
   const m = result.metrics || {}
   const sections = result.section_scores || {}
@@ -151,6 +173,7 @@ export default function ScreenerPanel({ result }: { result: ScreenerResult }) {
       </div>
 
       {result.score_breakdown && <PreProfitCard bd={result.score_breakdown} />}
+      {result.score_breakdown && <SectorAdjustmentCard bd={result.score_breakdown} />}
 
       {METRIC_GROUPS.map(group => (
         <div key={group.title} className="bg-[#16161e] border border-[#1e1e2a] rounded-lg p-4">

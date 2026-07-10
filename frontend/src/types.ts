@@ -116,10 +116,17 @@ export interface PreProfitBreakdown {
   capped: boolean
 }
 
+export interface SectorAdjustment {
+  profile: string
+  excluded: string[]
+  note: string
+}
+
 export interface ScoreBreakdown {
   fundamentals_composite?: number
   section_weights?: Record<string, number>
   pre_profit?: PreProfitBreakdown | null
+  sector_adjustment?: SectorAdjustment
   final?: number
 }
 
