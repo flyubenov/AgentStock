@@ -5,6 +5,7 @@ from valuation.engine import run as engine_run
 from screener.engine import run as screener_run
 from services.sheets import upsert_result
 from services.screener_sheets import upsert_screener_result
+from models import TickerResult
 
 BATCH_SIZE = int(os.getenv("BATCH_SIZE", "10"))
 
@@ -40,7 +41,7 @@ async def _run_one(ticker: str) -> dict:
                 errors.append(f"screener_write: {e}")
 
     if fv_dump is None:
-        fv_dump = {"ticker": ticker.upper(), "status": "failed", "errors": errors}
+        fv_dump = TickerResult(ticker=ticker.upper(), status="failed", errors=errors).model_dump()
     else:
         fv_dump.setdefault("errors", []).extend(errors)
     fv_dump["screener"] = sc_dump
@@ -64,7 +65,9 @@ async def run_batch(tickers: list[str], job_id: str,
             yield {"type": "ticker_start", "ticker": ticker}
             try:
                 out = await task
-                if out["fv_failed"] and out["result"].get("screener") is None:
+                sc = out["result"].get("screener")
+                sc_failed = sc is None or sc.get("status") == "failed"
+                if out["fv_failed"] and sc_failed:
                     failed += 1
                 else:
                     completed += 1
