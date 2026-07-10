@@ -152,6 +152,37 @@ def test_unprofitable_cap_rule():
     assert q_f <= 5.0
 
 
+def test_rule_of_40_uses_operating_margin_and_caps_growth():
+    from screener.scoring import _rule_of_40
+    # Heavy-capex hyper-growth (NBIS-like): FCF margin is deeply negative from capex,
+    # but operating margin is modest and growth is capped -> Rule of 40 stays healthy.
+    m = ScreenerMetrics(revenue_growth=684.0, op_margin=-32.0, fcf_margin=-695.0)
+    assert _rule_of_40(m) == pytest.approx(100.0 - 32.0)   # min(684,100) + op_margin
+    # FCF margin is used only when operating margin is unavailable.
+    assert _rule_of_40(ScreenerMetrics(revenue_growth=30.0, fcf_margin=15.0)) == pytest.approx(45.0)
+    # A genuinely failing name: low growth, deep operating loss -> well under 40.
+    assert _rule_of_40(ScreenerMetrics(revenue_growth=5.0, op_margin=-40.0)) == pytest.approx(-35.0)
+
+
+def test_heavy_capex_hypergrowth_not_punished_to_failure():
+    # NBIS-like: FCF-negative (capex phase) but elite growth + long runway. The raw
+    # FCF margin (-695%) must not collapse the Rule of 40 and force the <5 floor;
+    # the elite branch should lift the score to >= 7.0.
+    m = ScreenerMetrics(
+        revenue_cagr_3y=240, eps_cagr_3y=-29, fcf_cagr_3y=None, fcf_margin=-695,
+        op_margin=-32, op_margin_trajectory=50, gross_margin=72,
+        roic_ttm=0.6, roic_5y_avg=-4, roic_wacc_spread=-6, rote=1.8,
+        net_debt_ebitda=-11.6, net_debt_fcf=-0.12, ocf_capex=0.09,
+        shares_cagr_3y=-12, sbc_pct_rev=15.7, earnings_quality=4.7,
+        insider_ownership=3.7, shareholder_yield=0,
+        net_income=82.5, fcf=-3.68e9, revenue_growth=684, total_cash=9.37e9,
+        sector="Communication Services",
+    )
+    q, _, profile = score(m, "Communication Services")
+    assert profile == "BALANCED"
+    assert q >= 7.0
+
+
 def test_score_clamped_and_rounded():
     m = ScreenerMetrics(roic_ttm=0, roic_5y_avg=0, roic_wacc_spread=-10, rote=0,
                         revenue_cagr_3y=-5, eps_cagr_3y=-5, fcf_cagr_3y=-5,

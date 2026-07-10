@@ -158,12 +158,21 @@ def _count_subscores(m: ScreenerMetrics, profile: str) -> int:
     return n
 
 
+RULE_OF_40_GROWTH_CAP = 100.0
+
+
 def _rule_of_40(m: ScreenerMetrics) -> float | None:
     g = m.revenue_growth if m.revenue_growth is not None else m.revenue_cagr_3y
-    margin = m.fcf_margin if m.fcf_margin is not None else m.op_margin
+    # Use an operating (profitability) margin, not FCF margin: a company in a heavy
+    # investment phase drives FCF margin far below -100% (capex >> nascent revenue),
+    # which would collapse the Rule of 40 and mislabel an elite growth story as a
+    # failure. Fall back to FCF margin only when operating margin is unavailable.
+    margin = m.op_margin if m.op_margin is not None else m.fcf_margin
     if g is None or margin is None:
         return None
-    return g + margin
+    # Cap the growth contribution so a tiny-revenue-base hyper-growth rate can't
+    # dominate the metric either.
+    return min(g, RULE_OF_40_GROWTH_CAP) + margin
 
 
 def _runway_months(m: ScreenerMetrics) -> float | None:
