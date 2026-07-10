@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams, useLocation, Link } from 'react-router-dom'
 import type { TickerResult } from '../types'
-import { fvGapColor, fvGapLabel } from '../types'
+import { fvGapColor, fvGapLabel, qualityScoreColor } from '../types'
 
 type SortKey = 'fair_value' | 'price_vs_fair_value_pct' | 'ticker'
 
@@ -24,10 +24,10 @@ export default function Results() {
   }
 
   const exportCSV = () => {
-    const headers = ['Ticker', 'Company', 'Stock Type', 'Fair Value', 'Price', 'FV Gap%', 'Verdict']
+    const headers = ['Ticker', 'Company', 'Stock Type', 'Quality Score', 'Fair Value', 'Price', 'FV Gap%', 'Verdict']
     const rows = sorted.map(r => [
       r.ticker, r.company_name, r.stock_type,
-      r.fair_value, r.current_price, r.price_vs_fair_value_pct,
+      r.screener?.quality_score, r.fair_value, r.current_price, r.price_vs_fair_value_pct,
       fvGapLabel(r.price_vs_fair_value_pct),
     ])
     const esc = (v: unknown) => {
@@ -49,7 +49,7 @@ export default function Results() {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-bold text-slate-100">Fair Values — {results.length} tickers</h1>
+        <h1 className="text-xl font-bold text-slate-100">Evaluation results — {results.length} tickers</h1>
         <button onClick={exportCSV} className="text-sm text-slate-400 hover:text-slate-200 border border-[#1e1e2a] px-3 py-1.5 rounded">
           Export CSV
         </button>
@@ -61,6 +61,7 @@ export default function Results() {
               <th className="text-left py-2 px-4 cursor-pointer hover:text-slate-300" onClick={() => toggleSort('ticker')}>Ticker</th>
               <th className="text-left py-2">Company</th>
               <th className="text-left py-2 px-2">Stock Type</th>
+              <th className="text-right py-2 px-2">Quality</th>
               <th className="text-right py-2 px-2 cursor-pointer hover:text-slate-300" onClick={() => toggleSort('fair_value')}>Fair Value</th>
               <th className="text-right py-2 px-2">Price</th>
               <th className="text-right py-2 px-4 cursor-pointer hover:text-slate-300" onClick={() => toggleSort('price_vs_fair_value_pct')}>FV Gap%</th>
@@ -76,6 +77,9 @@ export default function Results() {
                 </td>
                 <td className="py-2 text-slate-400 text-xs max-w-xs truncate">{r.company_name || '—'}</td>
                 <td className="py-2 px-2 text-xs text-slate-500 font-mono">{r.stock_type || '—'}</td>
+                <td className={`py-2 px-2 text-right font-mono text-xs ${qualityScoreColor(r.screener?.quality_score)}`}>
+                  {r.screener?.quality_score != null ? r.screener.quality_score.toFixed(1) : '—'}
+                </td>
                 <td className="py-2 px-2 text-right font-mono text-xs text-slate-300">
                   {r.fair_value != null ? `$${r.fair_value.toFixed(2)}` : '—'}
                 </td>
