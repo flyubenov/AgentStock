@@ -47,16 +47,61 @@ def test_headers_have_quality_score_first_metric_block():
 
 
 def _fake_service(get_error):
-    """Fake Sheets service: the Screener tab exists (so _ensure no-ops) but
-    values().get(...).execute() raises `get_error`."""
+    """Fake Sheets service where the data-range read raises `get_error`. Metadata
+    reports NO Screener tab, so the missing-tab (parse-error) branch takes the
+    create path rather than a second failing read."""
     svc = MagicMock()
-    # spreadsheets().get(...).execute() -> metadata with Screener tab present
-    svc.spreadsheets.return_value.get.return_value.execute.return_value = {
-        "sheets": [{"properties": {"title": "Screener"}}]
-    }
+    # spreadsheets().get(...).execute() -> metadata with no Screener tab yet
+    svc.spreadsheets.return_value.get.return_value.execute.return_value = {"sheets": []}
     # spreadsheets().values().get(...).execute() -> raises
     svc.spreadsheets.return_value.values.return_value.get.return_value.execute.side_effect = get_error
     return svc
+
+
+def test_ensure_screener_sheet_repairs_missing_header_row():
+    """A pre-existing Screener tab with data in row 1 but no header row gets a
+    header row inserted above the data (not overwriting it)."""
+    from services.screener_sheets import _ensure_screener_sheet, _SCREENER_HEADERS
+
+    svc = MagicMock()
+    svc.spreadsheets.return_value.get.return_value.execute.return_value = {
+        "sheets": [{"properties": {"title": "Screener", "sheetId": 42}}]
+    }
+    # row 1 currently holds a data row (ticker in A1), not the header
+    svc.spreadsheets.return_value.values.return_value.get.return_value.execute.return_value = {
+        "values": [["NBIS", "Nebius", "..."]]
+    }
+    _ensure_screener_sheet(svc, "sid")
+
+    # a blank row was inserted at the top of the Screener tab (sheetId 42, rows 0..1)
+    batch_calls = svc.spreadsheets.return_value.batchUpdate.call_args_list
+    assert any(
+        req.get("insertDimension", {}).get("range", {}).get("sheetId") == 42
+        for call in batch_calls
+        for req in call.kwargs.get("body", {}).get("requests", [])
+    ), "expected an insertDimension inserting a header row"
+    # the header row was written to A1
+    update_calls = svc.spreadsheets.return_value.values.return_value.update.call_args_list
+    assert any(
+        call.kwargs.get("body", {}).get("values") == [_SCREENER_HEADERS]
+        for call in update_calls
+    ), "expected the header row to be written to A1"
+
+
+def test_ensure_screener_sheet_noop_when_headers_present():
+    """When row 1 already is the header row, no insert and no header rewrite."""
+    from services.screener_sheets import _ensure_screener_sheet, _SCREENER_HEADERS
+
+    svc = MagicMock()
+    svc.spreadsheets.return_value.get.return_value.execute.return_value = {
+        "sheets": [{"properties": {"title": "Screener", "sheetId": 42}}]
+    }
+    svc.spreadsheets.return_value.values.return_value.get.return_value.execute.return_value = {
+        "values": [_SCREENER_HEADERS]
+    }
+    _ensure_screener_sheet(svc, "sid")
+    svc.spreadsheets.return_value.batchUpdate.assert_not_called()
+    svc.spreadsheets.return_value.values.return_value.update.assert_not_called()
 
 
 def test_read_sync_only_swallows_missing_tab():

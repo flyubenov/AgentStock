@@ -25,6 +25,37 @@ async def test_run_batch_emits_combined_result():
 
 
 @pytest.mark.asyncio
+async def test_pre_profit_fv_is_persisted_to_database():
+    # A PRE_PROFIT FV is status="failed" but must still be upserted so the ticker
+    # gets a Database row (blank Fair Value) and the column-Q score mirror.
+    fv = TickerResult(ticker="NBIS", status="failed", stock_type="PRE_PROFIT",
+                      company_name="Nebius", current_price=100.0)
+    sc = ScreenerResult(ticker="NBIS", status="completed", quality_score=7.0)
+    with patch("orchestrator.batch.engine_run", new=AsyncMock(return_value=fv)), \
+         patch("orchestrator.batch.screener_run", new=AsyncMock(return_value=sc)), \
+         patch("orchestrator.batch.upsert_result", new=AsyncMock()) as up_fv, \
+         patch("orchestrator.batch.upsert_screener_result", new=AsyncMock()) as up_sc:
+        events = [e async for e in batch.run_batch(["NBIS"], "job1", asyncio.Event())]
+    up_fv.assert_awaited_once()   # persisted despite status="failed"
+    up_sc.assert_awaited_once()
+    done = [e for e in events if e["type"] == "ticker_done"]
+    assert done[0]["result"]["screener"]["quality_score"] == 7.0
+
+
+@pytest.mark.asyncio
+async def test_true_fv_failure_is_not_persisted():
+    # A genuine failure (no data, no stock_type) must NOT be written to the Database.
+    fv = TickerResult(ticker="ZZZZ", status="failed")
+    sc = ScreenerResult(ticker="ZZZZ", status="failed")
+    with patch("orchestrator.batch.engine_run", new=AsyncMock(return_value=fv)), \
+         patch("orchestrator.batch.screener_run", new=AsyncMock(return_value=sc)), \
+         patch("orchestrator.batch.upsert_result", new=AsyncMock()) as up_fv, \
+         patch("orchestrator.batch.upsert_screener_result", new=AsyncMock()):
+        [e async for e in batch.run_batch(["ZZZZ"], "job1", asyncio.Event())]
+    up_fv.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_screener_failure_does_not_block_fv():
     fv = TickerResult(ticker="AAPL", status="completed", fair_value=180.0)
     with patch("orchestrator.batch.engine_run", new=AsyncMock(return_value=fv)), \

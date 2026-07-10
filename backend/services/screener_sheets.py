@@ -79,8 +79,8 @@ def _col_range() -> str:
 
 def _ensure_screener_sheet(svc, sheet_id: str) -> None:
     meta = svc.spreadsheets().get(spreadsheetId=sheet_id).execute()
-    titles = [s["properties"]["title"] for s in meta.get("sheets", [])]
-    if _SCREENER_TAB not in titles:
+    props = {s["properties"]["title"]: s["properties"] for s in meta.get("sheets", [])}
+    if _SCREENER_TAB not in props:
         svc.spreadsheets().batchUpdate(
             spreadsheetId=sheet_id,
             body={"requests": [{"addSheet": {"properties": {"title": _SCREENER_TAB}}}]},
@@ -89,6 +89,29 @@ def _ensure_screener_sheet(svc, sheet_id: str) -> None:
             spreadsheetId=sheet_id, range=f"{_SCREENER_TAB}!A1",
             valueInputOption="RAW", body={"values": [_SCREENER_HEADERS]},
         ).execute()
+        return
+    # Tab exists — ensure row 1 is the header row. Repairs a tab created empty (or
+    # populated before headers were ever written): without a header row the reader
+    # skips the first data row via rows[1:] and the columns stay unlabelled.
+    first = svc.spreadsheets().values().get(
+        spreadsheetId=sheet_id, range=f"{_SCREENER_TAB}!1:1").execute().get("values", [])
+    row1 = first[0] if first else []
+    if row1 and row1[0] == _SCREENER_HEADERS[0]:
+        return
+    if row1:
+        # real data already sits in row 1 — insert a blank row above it so the
+        # header write below doesn't overwrite that record
+        svc.spreadsheets().batchUpdate(
+            spreadsheetId=sheet_id,
+            body={"requests": [{"insertDimension": {
+                "range": {"sheetId": props[_SCREENER_TAB]["sheetId"],
+                          "dimension": "ROWS", "startIndex": 0, "endIndex": 1},
+                "inheritFromBefore": False}}]},
+        ).execute()
+    svc.spreadsheets().values().update(
+        spreadsheetId=sheet_id, range=f"{_SCREENER_TAB}!A1",
+        valueInputOption="RAW", body={"values": [_SCREENER_HEADERS]},
+    ).execute()
 
 
 def _mirror_quality_score(svc, sheet_id: str, ticker: str, score) -> None:

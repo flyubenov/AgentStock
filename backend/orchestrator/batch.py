@@ -23,7 +23,12 @@ async def _run_one(ticker: str) -> dict:
         errors.append(f"fair_value: {fv_res}")
     else:
         fv_dump = fv_res.model_dump()
-        if fv_res.status != "failed":
+        # Persist to the Database when the FV either succeeded, or was declined as
+        # PRE_PROFIT: a pre-profit name still carries identity + a valid Quality
+        # Score, so it must get a Database row (blank Fair Value) to appear in the
+        # grid and receive the column-Q score mirror. True failures (no data) are
+        # skipped.
+        if fv_res.status != "failed" or fv_res.stock_type == "PRE_PROFIT":
             try:
                 await upsert_result(fv_res)
             except Exception as e:
