@@ -20,6 +20,8 @@ export interface TickerResult {
   fair_value_breakdown: Record<string, ModelBreakdown>
   status: 'completed' | 'failed'
   errors: string[]
+  quality_score?: number | null
+  screener?: ScreenerResult | null
 }
 
 export interface JobStatus {
@@ -68,5 +70,69 @@ export function fvBadgeClass(pct: number | null): string {
   if (pct > 10) return 'bg-green-900/40 text-green-400 border border-green-700'
   if (pct > 0) return 'bg-blue-900/40 text-blue-400 border border-blue-700'
   if (pct > -10) return 'bg-yellow-900/40 text-yellow-400 border border-yellow-700'
+  return 'bg-red-900/40 text-red-400 border border-red-700'
+}
+
+export interface ScreenerMetrics {
+  revenue_cagr_3y: number | null
+  eps_cagr_3y: number | null
+  fcf_cagr_3y: number | null
+  fcf_margin: number | null
+  op_margin: number | null
+  op_margin_trajectory: number | null
+  gross_margin: number | null
+  roic_ttm: number | null
+  roic_5y_avg: number | null
+  wacc: number | null
+  roic_wacc_spread: number | null
+  rote: number | null
+  net_debt_ebitda: number | null
+  net_debt_fcf: number | null
+  ocf_capex: number | null
+  tangible_bv_per_share: number | null
+  shares_cagr_3y: number | null
+  sbc_pct_rev: number | null
+  earnings_quality: number | null
+  insider_ownership: number | null
+  shareholder_yield: number | null
+  trailing_pe: number | null
+  forward_pe: number | null
+  peg: number | null
+  price_fcf: number | null
+  price_sales: number | null
+  fcf_yield: number | null
+  owner_earnings_yield: number | null
+  price_cagr_3y: number | null
+  price_cagr_5y: number | null
+  [key: string]: number | null | string | undefined
+}
+
+export interface ScreenerResult {
+  ticker: string
+  company_name: string | null
+  last_evaluated: string | null
+  quality_score: number | null
+  sector: string | null
+  sector_profile: string | null
+  section_scores: Record<string, number | null>
+  metrics: Partial<ScreenerMetrics>
+  status: 'completed' | 'failed'
+  errors: string[]
+}
+
+/** 1-10 quality score -> text color band. */
+export function qualityScoreColor(score: number | null | undefined): string {
+  if (score == null) return 'text-slate-400'
+  if (score >= 8) return 'text-green-400'
+  if (score >= 6.5) return 'text-blue-400'
+  if (score >= 5) return 'text-yellow-400'
+  return 'text-red-400'
+}
+
+export function qualityScoreBadgeClass(score: number | null | undefined): string {
+  if (score == null) return 'bg-slate-800 text-slate-300'
+  if (score >= 8) return 'bg-green-900/40 text-green-400 border border-green-700'
+  if (score >= 6.5) return 'bg-blue-900/40 text-blue-400 border border-blue-700'
+  if (score >= 5) return 'bg-yellow-900/40 text-yellow-400 border border-yellow-700'
   return 'bg-red-900/40 text-red-400 border border-red-700'
 }
