@@ -107,6 +107,22 @@ export interface ScreenerMetrics {
   [key: string]: number | null | string | undefined
 }
 
+export interface PreProfitBreakdown {
+  applied: boolean
+  rule_of_40: number | null
+  runway_months: number | 'inf' | null
+  growth_score: number | null
+  blend_weight: number
+  capped: boolean
+}
+
+export interface ScoreBreakdown {
+  fundamentals_composite?: number
+  section_weights?: Record<string, number>
+  pre_profit?: PreProfitBreakdown | null
+  final?: number
+}
+
 export interface ScreenerResult {
   ticker: string
   company_name: string | null
@@ -116,6 +132,7 @@ export interface ScreenerResult {
   sector_profile: string | null
   section_scores: Record<string, number | null>
   metrics: Partial<ScreenerMetrics>
+  score_breakdown?: ScoreBreakdown
   status: 'completed' | 'failed'
   errors: string[]
 }

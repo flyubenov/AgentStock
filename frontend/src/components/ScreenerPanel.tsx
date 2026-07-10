@@ -1,4 +1,4 @@
-import type { ScreenerResult } from '../types'
+import type { ScreenerResult, ScoreBreakdown } from '../types'
 import { qualityScoreColor, qualityScoreBadgeClass } from '../types'
 
 const SECTIONS: [string, string][] = [
@@ -59,6 +59,68 @@ function fmt(v: number | null | undefined, kind: 'pct' | 'ratio' | 'money'): str
   return v.toFixed(2)
 }
 
+function fmtRunway(v: number | 'inf' | null | undefined): string {
+  if (v == null) return '—'
+  if (v === 'inf') return 'no cash burn'
+  return `${v.toFixed(1)} mo`
+}
+
+/** Explains the pre-profit growth adjustment: for an FCF-negative name the score
+ *  blends the section fundamentals with a Rule-of-40 + Cash-Runway growth score. */
+function PreProfitCard({ bd }: { bd: ScoreBreakdown }) {
+  const pp = bd.pre_profit
+  if (!pp || !pp.applied) return null
+  const growthW = pp.blend_weight
+  const fundW = 1 - growthW
+  const fund = bd.fundamentals_composite ?? null
+  const pct = (w: number) => `${Math.round(w * 100)}%`
+
+  return (
+    <div className="bg-[#16161e] border border-[#1e1e2a] rounded-lg p-4">
+      <div className="text-xs text-slate-500 uppercase tracking-wide mb-1">Pre-Profit Growth Adjustment</div>
+      <p className="text-xs text-slate-500 mb-3">
+        This company is free-cash-flow-negative (investment phase), so the headline
+        blends its backward-looking fundamentals with a growth &amp; runway assessment —
+        capital-efficiency metrics aren&apos;t yet meaningful.
+      </p>
+      <table className="w-full text-sm">
+        <tbody>
+          <tr className="border-b border-[#1e1e2a]">
+            <td className="py-1.5 text-slate-400">Fundamentals (Sections I–IV)</td>
+            <td className="py-1.5 text-right font-mono text-slate-300">{fund != null ? fund.toFixed(1) : '—'}</td>
+            <td className="py-1.5 text-right font-mono text-slate-500 w-16">× {pct(fundW)}</td>
+          </tr>
+          <tr className="border-b border-[#1e1e2a]">
+            <td className="py-1.5 text-slate-400">Growth &amp; Runway</td>
+            <td className="py-1.5 text-right font-mono text-slate-300">{pp.growth_score != null ? pp.growth_score.toFixed(1) : '—'}</td>
+            <td className="py-1.5 text-right font-mono text-slate-500 w-16">× {pct(growthW)}</td>
+          </tr>
+          <tr className="border-b border-[#1e1e2a]">
+            <td className="py-1 pl-4 text-slate-500 text-xs">Rule of 40</td>
+            <td className="py-1 text-right font-mono text-slate-400 text-xs" colSpan={2}>{pp.rule_of_40 != null ? pp.rule_of_40.toFixed(1) : '—'}</td>
+          </tr>
+          <tr className="border-b border-[#1e1e2a]">
+            <td className="py-1 pl-4 text-slate-500 text-xs">Cash runway</td>
+            <td className="py-1 text-right font-mono text-slate-400 text-xs" colSpan={2}>{fmtRunway(pp.runway_months)}</td>
+          </tr>
+          <tr>
+            <td className="py-1.5 text-slate-300 font-semibold">Quality Score</td>
+            <td className={`py-1.5 text-right font-mono font-semibold ${qualityScoreColor(bd.final)}`} colSpan={2}>
+              {bd.final != null ? bd.final.toFixed(1) : '—'}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      {pp.capped && (
+        <p className="text-[11px] text-amber-400/80 mt-2">
+          Capped: unprofitable names are held to a maximum of 8.0, and an imminent
+          cash-out (&lt; 12-month runway) caps the score at 5.0.
+        </p>
+      )}
+    </div>
+  )
+}
+
 export default function ScreenerPanel({ result }: { result: ScreenerResult }) {
   const m = result.metrics || {}
   const sections = result.section_scores || {}
@@ -87,6 +149,8 @@ export default function ScreenerPanel({ result }: { result: ScreenerResult }) {
           ))}
         </div>
       </div>
+
+      {result.score_breakdown && <PreProfitCard bd={result.score_breakdown} />}
 
       {METRIC_GROUPS.map(group => (
         <div key={group.title} className="bg-[#16161e] border border-[#1e1e2a] rounded-lg p-4">
