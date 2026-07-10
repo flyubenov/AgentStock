@@ -4,8 +4,8 @@ from fastapi import APIRouter
 from sse_starlette.sse import EventSourceResponse
 from models import AnalyseRequest
 from services.yahoo import validate_ticker
-from services.sheets import read_tickers
-from orchestrator.batch import run_batch
+from services.sheets import read_tickers, read_database
+from orchestrator.batch import run_batch, _run_one
 
 router = APIRouter()
 
@@ -53,12 +53,38 @@ async def start_analysis(request: AnalyseRequest):
     return {"job_id": job_id, "total": len(valid_tickers), "invalid": invalid_tickers}
 
 
+@router.post("/ticker/{ticker}/recalculate")
+async def recalculate_one(ticker: str):
+    out = await _run_one(ticker.strip().upper())
+    return out["result"]
+
+
+@router.post("/recalculate-all")
+async def recalculate_all():
+    rows = await read_database()
+    tickers = [r.ticker.strip().upper() for r in rows if r.ticker and r.ticker.strip()]
+    if not tickers:
+        return {"error": "No tickers in the database to recalculate"}
+    job_id = str(uuid.uuid4())
+    cancel_event = asyncio.Event()
+    _cancel_events[job_id] = cancel_event
+    _jobs[job_id] = {"status": "running", "total": len(tickers),
+                     "completed": 0, "failed": 0, "results": [], "invalid": []}
+    asyncio.create_task(_run_job(job_id, tickers, cancel_event))
+    return {"job_id": job_id, "total": len(tickers)}
+
+
 async def _run_job(job_id: str, tickers: list[str], cancel_event: asyncio.Event):
     job = _jobs[job_id]
     async for event in run_batch(tickers, job_id, cancel_event):
         if event["type"] == "ticker_done":
-            job["results"].append(event["result"])
-            if event["result"]["status"] == "failed":
+            result = event["result"]
+            job["results"].append(result)
+            # A ticker only counts as failed when BOTH pipelines failed; the two
+            # evaluations are independent, so a good screener rescues a failed FV.
+            screener = result.get("screener")
+            screener_failed = screener is None or screener.get("status") == "failed"
+            if result["status"] == "failed" and screener_failed:
                 job["failed"] += 1
             else:
                 job["completed"] += 1

@@ -1,11 +1,27 @@
+import { useEffect, useState } from 'react'
 import { useLocation, Link } from 'react-router-dom'
-import type { TickerResult } from '../types'
+import type { TickerResult, ScreenerResult } from '../types'
 import { fvBadgeClass, fvGapLabel } from '../types'
 import FairValuePanel from '../components/FairValuePanel'
+import ScreenerPanel from '../components/ScreenerPanel'
+
+const API = 'http://localhost:8000'
 
 export default function TickerDetail() {
   const location = useLocation()
   const result: TickerResult | undefined = location.state?.result
+
+  const [tab, setTab] = useState<'fv' | 'screener'>('fv')
+  const [screener, setScreener] = useState<ScreenerResult | null>(result?.screener ?? null)
+
+  useEffect(() => {
+    if (tab === 'screener' && !screener && result?.ticker) {
+      fetch(`${API}/api/screener/${result.ticker}`)
+        .then(r => r.json())
+        .then(d => { if (!d.error) setScreener(d as ScreenerResult) })
+        .catch(() => {})
+    }
+  }, [tab, screener, result])
 
   if (!result) {
     return (
@@ -53,7 +69,27 @@ export default function TickerDetail() {
         </div>
       </div>
 
-      <FairValuePanel result={result} />
+      <div className="flex gap-4 border-b border-[#1e1e2a] mb-4">
+        {(['fv', 'screener'] as const).map(t => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`pb-2 text-sm ${tab === t ? 'text-blue-400 border-b-2 border-blue-400' : 'text-slate-500 hover:text-slate-300'}`}
+          >
+            {t === 'fv' ? 'Fair Value' : 'Screener'}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'fv' ? (
+        <FairValuePanel result={result} />
+      ) : screener ? (
+        <ScreenerPanel result={screener} />
+      ) : (
+        <div className="text-slate-500 text-sm py-8 text-center">
+          No screener data for this ticker yet.
+        </div>
+      )}
 
       {result.errors.length > 0 && (
         <div className="mt-6 bg-red-900/10 border border-red-900/50 rounded-lg p-4">
