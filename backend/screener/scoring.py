@@ -114,11 +114,16 @@ def _section_iii(m: ScreenerMetrics, profile: str) -> float | None:
 
 
 def section_scores(m: ScreenerMetrics, profile: str) -> dict[str, float | None]:
+    # For a lender/insurer, free-cash-flow and operating-cash-flow derived metrics are
+    # structurally distorted (loan originations dominate cash flows), so they are
+    # excluded from scoring — the same principle already applied to the Section III
+    # leverage metrics (zero weight for FINANCIALS).
+    is_fin = profile == "FINANCIALS"
     section_i = _mean([
         score_high(m.revenue_cagr_3y, GROWTH_BANDS, 0),
         score_high(m.eps_cagr_3y, GROWTH_BANDS, 0),
-        score_high(m.fcf_cagr_3y, FCF_CAGR_BANDS, 1),
-        score_high(m.fcf_margin, FCF_MARGIN_BANDS, 0),
+        None if is_fin else score_high(m.fcf_cagr_3y, FCF_CAGR_BANDS, 1),
+        None if is_fin else score_high(m.fcf_margin, FCF_MARGIN_BANDS, 0),
         score_high(m.op_margin, MARGIN_LEVEL_BANDS, 0),
         score_high(m.op_margin_trajectory, TRAJECTORY_BANDS, 1),
         score_high(m.gross_margin, GROSS_MARGIN_BANDS, 2),
@@ -132,7 +137,7 @@ def section_scores(m: ScreenerMetrics, profile: str) -> dict[str, float | None]:
     section_iv = _mean([
         score_low(m.shares_cagr_3y, SHARES_BANDS, 1),
         score_low(m.sbc_pct_rev, SBC_BANDS, 0),
-        score_high(m.earnings_quality, EQ_BANDS, 1.5),
+        None if is_fin else score_high(m.earnings_quality, EQ_BANDS, 1.5),
         score_high(m.insider_ownership, INSIDER_BANDS, 2),
         score_high(m.shareholder_yield, YIELD_BANDS, 1.5),
     ])
@@ -228,21 +233,34 @@ def score(m: ScreenerMetrics, sector: str | None):
         "pre_profit": None,
         "final": None,
     }
+    if profile == "FINANCIALS":
+        breakdown["sector_adjustment"] = {
+            "profile": "FINANCIALS",
+            "excluded": ["FCF Margin", "FCF CAGR", "Earnings Quality (OCF/NI)",
+                         "Leverage (Net Debt / EBITDA & FCF)"],
+            "note": ("Free-cash-flow, operating-cash-flow and leverage metrics are "
+                     "excluded — structurally distorted for lenders."),
+        }
 
     final = composite
-    # Unprofitable Cap Rule: negative NI or FCF caps at 8.0, and blends the section
-    # composite with a pre-profit growth score (Rule of 40 + Cash Runway) so a heavy
-    # investment phase is judged on its growth story — but weak fundamentals still
-    # pull the number down, and an imminent cash-out (< 12mo runway) hard-caps it.
-    if (m.net_income is not None and m.net_income < 0) or (m.fcf is not None and m.fcf < 0):
+    # Unprofitable Cap Rule (Gem): a company with negative net income OR negative FCF
+    # is capped at 8.0.
+    unprofitable = ((m.net_income is not None and m.net_income < 0)
+                    or (m.fcf is not None and m.fcf < 0))
+    # Pre-profit growth branch: only when the company is *operationally* unprofitable
+    # (operating loss). A profitable company with negative FCF — a lender's loan-book
+    # growth, or a heavy capex build — is investing, not burning toward insolvency, so
+    # it is NOT routed through the runway/blend logic (which would misread the loan
+    # outflows as an imminent cash-out).
+    operating_loss = ((m.op_margin is not None and m.op_margin < 0)
+                      or (m.op_margin is None and m.net_income is not None and m.net_income < 0))
+    if operating_loss:
         r40 = _rule_of_40(m)
         runway = _runway_months(m)
         growth = _pre_profit_growth_score(r40, runway)
         capped = False
         if growth is not None:
             final = PP_BLEND_WEIGHT * growth + (1 - PP_BLEND_WEIGHT) * composite
-        if final > UNPROFITABLE_CEIL:
-            final, capped = UNPROFITABLE_CEIL, True
         if runway is not None and runway < IMMINENT_RUNWAY_MONTHS:
             final, capped = min(final, IMMINENT_CEIL), True
         breakdown["pre_profit"] = {
@@ -254,6 +272,10 @@ def score(m: ScreenerMetrics, sector: str | None):
             "blend_weight": PP_BLEND_WEIGHT,
             "capped": capped,
         }
+    if unprofitable and final > UNPROFITABLE_CEIL:
+        final = UNPROFITABLE_CEIL
+        if breakdown["pre_profit"]:
+            breakdown["pre_profit"]["capped"] = True
 
     final = max(1.0, min(10.0, final))
     breakdown["final"] = round(final, 1)

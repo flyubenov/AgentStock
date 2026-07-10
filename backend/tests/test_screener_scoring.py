@@ -130,33 +130,56 @@ def test_insufficient_data_returns_none():
     assert q is None
 
 
-def test_unprofitable_blends_sections_with_growth_and_runway():
-    strong = dict(
-        revenue_cagr_3y=25, eps_cagr_3y=25, fcf_cagr_3y=20, fcf_margin=30,
-        op_margin=30, op_margin_trajectory=4, gross_margin=70,
-        roic_ttm=30, roic_5y_avg=28, roic_wacc_spread=20, rote=30,
-        net_debt_ebitda=0.5, net_debt_fcf=1.0, ocf_capex=8,
-        shares_cagr_3y=-3, sbc_pct_rev=1, earnings_quality=1.5,
-        insider_ownership=15, shareholder_yield=8,
+def test_operating_loss_blends_growth_and_runway():
+    base = dict(
+        revenue_cagr_3y=60, gross_margin=70, op_margin_trajectory=5, rote=6,
+        net_debt_ebitda=0.5, net_debt_fcf=1.0, ocf_capex=3,
+        shares_cagr_3y=-1, sbc_pct_rev=5, earnings_quality=1.1,
+        insider_ownership=8, shareholder_yield=0,
     )
-    # elite unprofitable (strong Rule of 40, no cash burn -> infinite runway):
-    # blended up but held at the 8.0 unprofitable ceiling.
-    elite = ScreenerMetrics(**strong, net_income=-10, fcf=50,
-                            revenue_growth=25, total_cash=100000)
+    # elite operating loss: strong Rule of 40 and positive FCF (no cash burn) -> blended up
+    elite = ScreenerMetrics(**base, op_margin=-8, net_income=-10, fcf=50,
+                            revenue_growth=60, total_cash=1_000_000)
     q_e, _, _, bd_e = score(elite, "Technology")
-    assert 7.0 <= q_e <= 8.0
     assert bd_e["pre_profit"]["applied"] is True
-    assert bd_e["pre_profit"]["capped"] is True
-    # imminent liquidity risk (< 12 months runway) hard-caps at 5.0 even when the
-    # backward-looking sections are pristine.
-    danger = ScreenerMetrics(**strong, net_income=-100, fcf=-200,
+    # imminent liquidity risk: operating loss + < 12 months runway -> hard-capped 5.0
+    danger = ScreenerMetrics(**base, op_margin=-8, net_income=-100, fcf=-200,
                              revenue_growth=5, total_cash=100)
     q_d, _, _, bd_d = score(danger, "Technology")
     assert q_d <= 5.0
     assert bd_d["pre_profit"]["capped"] is True
-    # the blend leaves the final between the raw section composite and the
-    # pre-profit growth score (sections still matter, they are not overridden).
     assert q_e > q_d
+
+
+def test_profitable_company_with_negative_fcf_not_treated_as_burn():
+    # SOFI-like: an operationally profitable lender whose FCF is negative (loan-book
+    # growth). It must NOT be routed through the cash-burn / runway branch, so no
+    # false imminent-liquidity cap fires.
+    m = ScreenerMetrics(
+        revenue_cagr_3y=32, op_margin=18, gross_margin=83, rote=6,
+        shares_cagr_3y=11, sbc_pct_rev=7, insider_ownership=1.4, shareholder_yield=0,
+        ocf_capex=-15,
+        net_income=481e6, fcf=-4e9, revenue_growth=42, total_cash=3.5e9,
+        sector="Financial Services",
+    )
+    q, _, profile, bd = score(m, "Financial Services")
+    assert profile == "FINANCIALS"
+    assert bd["pre_profit"] is None                 # not cash-burning
+    assert "sector_adjustment" in bd                # FCF/OCF metrics excluded
+    assert q == pytest.approx(bd["fundamentals_composite"], abs=0.05)
+
+
+def test_financials_exclude_fcf_and_ocf_metrics_from_sections():
+    # FCF/OCF metrics are structurally distorted for a lender and must not drag the
+    # sections down — the same principle as the Section III leverage exclusion.
+    m = ScreenerMetrics(revenue_cagr_3y=30, op_margin=18, gross_margin=83,
+                        fcf_margin=-110, fcf_cagr_3y=-50, earnings_quality=-7.8,
+                        shares_cagr_3y=0, sbc_pct_rev=5, insider_ownership=5,
+                        shareholder_yield=0, rote=6)
+    s_fin = section_scores(m, "FINANCIALS")
+    s_bal = section_scores(m, "BALANCED")
+    assert s_fin["I"] > s_bal["I"]     # excluding the -110% FCF margin lifts Section I
+    assert s_fin["IV"] > s_bal["IV"]   # excluding the -7.8 earnings quality lifts Section IV
 
 
 def test_rule_of_40_uses_operating_margin_and_caps_growth():
