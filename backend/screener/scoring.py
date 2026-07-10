@@ -184,10 +184,33 @@ def _runway_months(m: ScreenerMetrics) -> float | None:
     return m.total_cash / monthly_burn if monthly_burn > 0 else float("inf")
 
 
+# Unprofitable Cap Rule tunables
+UNPROFITABLE_CEIL = 8.0          # any negative NI/FCF name is capped here
+PP_BLEND_WEIGHT = 0.4            # weight of the pre-profit growth score vs sections
+IMMINENT_RUNWAY_MONTHS = 12.0    # below this, liquidity risk hard-caps the score
+IMMINENT_CEIL = 5.0
+R40_BANDS = [(60, 10), (40, 8.5), (20, 6), (0, 4)]         # score_high, below -> 2
+RUNWAY_BANDS = [(36, 10), (24, 8), (18, 6), (12, 4)]       # months, below -> 2
+
+
+def _pre_profit_growth_score(r40: float | None, runway: float | None) -> float | None:
+    """Score a pre-profit company on Rule of 40 + Cash Runway (1..10), the mean of
+    whichever sub-scores are available."""
+    parts: list[float | None] = []
+    if r40 is not None:
+        parts.append(score_high(r40, R40_BANDS, 2))
+    if runway is not None:
+        parts.append(10.0 if runway == float("inf") else score_high(runway, RUNWAY_BANDS, 2))
+    return _mean(parts)
+
+
 def score(m: ScreenerMetrics, sector: str | None):
+    """Return (quality_score, section_scores, profile, breakdown). `breakdown`
+    explains how the headline was derived — the section composite and, for
+    unprofitable names, the pre-profit growth blend that adjusts it."""
     profile = apply_nudge(base_profile(sector), m)
     if _count_subscores(m, profile) < MIN_SCORED_SUBSCORES:
-        return None, {}, profile
+        return None, {}, profile, {}
 
     sections = section_scores(m, profile)
     weights = dict(zip(("I", "II", "III", "IV"), PROFILES[profile]["w"]))
@@ -196,20 +219,42 @@ def score(m: ScreenerMetrics, sector: str | None):
     active = {k: weights[k] for k in sections if sections[k] is not None and weights[k] > 0}
     total_w = sum(active.values())
     if total_w <= 0:
-        return None, sections, profile
+        return None, sections, profile, {}
     composite = sum(sections[k] * (w / total_w) for k, w in active.items())
 
-    # Unprofitable Cap Rule
+    breakdown: dict = {
+        "fundamentals_composite": round(composite, 2),
+        "section_weights": {k: round(w / total_w, 3) for k, w in active.items()},
+        "pre_profit": None,
+        "final": None,
+    }
+
+    final = composite
+    # Unprofitable Cap Rule: negative NI or FCF caps at 8.0, and blends the section
+    # composite with a pre-profit growth score (Rule of 40 + Cash Runway) so a heavy
+    # investment phase is judged on its growth story — but weak fundamentals still
+    # pull the number down, and an imminent cash-out (< 12mo runway) hard-caps it.
     if (m.net_income is not None and m.net_income < 0) or (m.fcf is not None and m.fcf < 0):
-        composite = min(composite, 8.0)
         r40 = _rule_of_40(m)
         runway = _runway_months(m)
-        elite = r40 is not None and r40 >= 40 and runway is not None and runway >= 24
-        fails = (r40 is not None and r40 < 40) or (runway is not None and runway < 12)
-        if elite:
-            composite = max(min(composite, 8.0), 7.0)
-        elif fails:
-            composite = min(composite, 5.0)
+        growth = _pre_profit_growth_score(r40, runway)
+        capped = False
+        if growth is not None:
+            final = PP_BLEND_WEIGHT * growth + (1 - PP_BLEND_WEIGHT) * composite
+        if final > UNPROFITABLE_CEIL:
+            final, capped = UNPROFITABLE_CEIL, True
+        if runway is not None and runway < IMMINENT_RUNWAY_MONTHS:
+            final, capped = min(final, IMMINENT_CEIL), True
+        breakdown["pre_profit"] = {
+            "applied": growth is not None,
+            "rule_of_40": round(r40, 1) if r40 is not None else None,
+            "runway_months": (None if runway is None else
+                              ("inf" if runway == float("inf") else round(runway, 1))),
+            "growth_score": round(growth, 2) if growth is not None else None,
+            "blend_weight": PP_BLEND_WEIGHT,
+            "capped": capped,
+        }
 
-    composite = max(1.0, min(10.0, composite))
-    return round(composite, 1), sections, profile
+    final = max(1.0, min(10.0, final))
+    breakdown["final"] = round(final, 1)
+    return round(final, 1), sections, profile, breakdown

@@ -1,5 +1,5 @@
 from __future__ import annotations
-import asyncio, os
+import asyncio, json, os
 from datetime import datetime, timezone
 from screener.models import ScreenerResult
 from services.sheets import _get_service, _sheet_id
@@ -22,6 +22,7 @@ _SCREENER_HEADERS = [
     "Ticker", "Company", "Last Evaluated", "Quality Score", "Sector", "Sector Profile",
     "Section I", "Section II", "Section III", "Section IV",
     *[c.replace("_", " ").title() for c in _METRIC_COLS],
+    "Score Breakdown",
 ]
 
 
@@ -41,6 +42,7 @@ def _result_to_row(r: ScreenerResult) -> list:
         r.sector_profile or "",
         *[_num(sec.get(s)) for s in _SECTION_COLS],
         *[_num(metrics.get(c)) for c in _METRIC_COLS],
+        json.dumps(r.score_breakdown or {}),
     ]
 
 
@@ -51,14 +53,26 @@ def _to_float(v):
         return None
 
 
+def _parse_breakdown(v) -> dict:
+    if not v:
+        return {}
+    try:
+        parsed = json.loads(v)
+        return parsed if isinstance(parsed, dict) else {}
+    except (ValueError, TypeError):
+        return {}
+
+
 def _row_to_result(row: list) -> ScreenerResult:
     row = list(row) + [""] * (len(_SCREENER_HEADERS) - len(row))
     sections = {s: _to_float(row[6 + i]) for i, s in enumerate(_SECTION_COLS)}
     metrics = {c: _to_float(row[10 + i]) for i, c in enumerate(_METRIC_COLS)}
+    breakdown = _parse_breakdown(row[10 + len(_METRIC_COLS)])
     return ScreenerResult(
         ticker=row[0], company_name=row[1] or None, last_evaluated=row[2] or None,
         quality_score=_to_float(row[3]), sector=row[4] or None,
         sector_profile=row[5] or None, section_scores=sections, metrics=metrics,
+        score_breakdown=breakdown,
     )
 
 
@@ -97,6 +111,12 @@ def _ensure_screener_sheet(svc, sheet_id: str) -> None:
         spreadsheetId=sheet_id, range=f"{_SCREENER_TAB}!1:1").execute().get("values", [])
     row1 = first[0] if first else []
     if row1 and row1[0] == _SCREENER_HEADERS[0]:
+        if row1 != _SCREENER_HEADERS:
+            # header row exists but is outdated (schema grew) — refresh it in place
+            svc.spreadsheets().values().update(
+                spreadsheetId=sheet_id, range=f"{_SCREENER_TAB}!A1",
+                valueInputOption="RAW", body={"values": [_SCREENER_HEADERS]},
+            ).execute()
         return
     if row1:
         # real data already sits in row 1 — insert a blank row above it so the

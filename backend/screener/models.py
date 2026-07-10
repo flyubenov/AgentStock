@@ -94,5 +94,6 @@ class ScreenerResult(BaseModel):
     sector_profile: str | None = None
     section_scores: dict[str, float | None] = {}
     metrics: dict = {}
+    score_breakdown: dict = {}
     status: Literal["completed", "failed"] = "completed"
     errors: list[str] = []

@@ -13,18 +13,19 @@ async def run(ticker: str) -> ScreenerResult:
         return ScreenerResult(ticker=t, status="failed",
                               errors=["yfinance data unavailable"])
     metrics = compute_metrics(inp)
-    quality, sections, profile = score(metrics, metrics.sector)
+    quality, sections, profile, breakdown = score(metrics, metrics.sector)
     now = datetime.now(timezone.utc).isoformat()
     if quality is None:
         return ScreenerResult(
             ticker=t, company_name=inp.info.get("shortName") or inp.info.get("longName"),
             last_evaluated=now, sector=metrics.sector, sector_profile=profile,
             section_scores=sections, metrics=metrics.model_dump(),
-            status="failed", errors=["insufficient data for a quality score"],
+            score_breakdown=breakdown, status="failed",
+            errors=["insufficient data for a quality score"],
         )
     return ScreenerResult(
         ticker=t, company_name=inp.info.get("shortName") or inp.info.get("longName"),
         last_evaluated=now, quality_score=quality, sector=metrics.sector,
         sector_profile=profile, section_scores=sections, metrics=metrics.model_dump(),
-        status="completed", errors=[],
+        score_breakdown=breakdown, status="completed", errors=[],
     )

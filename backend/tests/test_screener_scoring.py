@@ -118,7 +118,7 @@ def test_score_strong_company_high():
         insider_ownership=12, shareholder_yield=7,
         net_income=100, fcf=100, sector="Technology",
     )
-    q, sections, profile = score(m, "Technology")
+    q, sections, profile, _ = score(m, "Technology")
     assert profile == "TECH_GROWTH"
     assert 8.0 <= q <= 10.0
     assert set(sections) == {"I", "II", "III", "IV"}
@@ -126,12 +126,11 @@ def test_score_strong_company_high():
 
 def test_insufficient_data_returns_none():
     m = ScreenerMetrics(roic_ttm=20, rote=25)  # only 2 sub-scores
-    q, _, _ = score(m, "Technology")
+    q, _, _, _ = score(m, "Technology")
     assert q is None
 
 
-def test_unprofitable_cap_rule():
-    # negative net income caps at 8.0 even with otherwise strong metrics
+def test_unprofitable_blends_sections_with_growth_and_runway():
     strong = dict(
         revenue_cagr_3y=25, eps_cagr_3y=25, fcf_cagr_3y=20, fcf_margin=30,
         op_margin=30, op_margin_trajectory=4, gross_margin=70,
@@ -140,16 +139,24 @@ def test_unprofitable_cap_rule():
         shares_cagr_3y=-3, sbc_pct_rev=1, earnings_quality=1.5,
         insider_ownership=15, shareholder_yield=8,
     )
-    # elite unprofitable (Rule of 40 pass, long runway) -> capped 7.0..8.0
+    # elite unprofitable (strong Rule of 40, no cash burn -> infinite runway):
+    # blended up but held at the 8.0 unprofitable ceiling.
     elite = ScreenerMetrics(**strong, net_income=-10, fcf=50,
                             revenue_growth=25, total_cash=100000)
-    q_e, _, _ = score(elite, "Technology")
+    q_e, _, _, bd_e = score(elite, "Technology")
     assert 7.0 <= q_e <= 8.0
-    # failing unprofitable (weak growth, no runway) -> forced <= 5.0
-    fail = ScreenerMetrics(**strong, net_income=-100, fcf=-100,
-                           revenue_growth=5, total_cash=100)
-    q_f, _, _ = score(fail, "Technology")
-    assert q_f <= 5.0
+    assert bd_e["pre_profit"]["applied"] is True
+    assert bd_e["pre_profit"]["capped"] is True
+    # imminent liquidity risk (< 12 months runway) hard-caps at 5.0 even when the
+    # backward-looking sections are pristine.
+    danger = ScreenerMetrics(**strong, net_income=-100, fcf=-200,
+                             revenue_growth=5, total_cash=100)
+    q_d, _, _, bd_d = score(danger, "Technology")
+    assert q_d <= 5.0
+    assert bd_d["pre_profit"]["capped"] is True
+    # the blend leaves the final between the raw section composite and the
+    # pre-profit growth score (sections still matter, they are not overridden).
+    assert q_e > q_d
 
 
 def test_rule_of_40_uses_operating_margin_and_caps_growth():
@@ -178,9 +185,16 @@ def test_heavy_capex_hypergrowth_not_punished_to_failure():
         net_income=82.5, fcf=-3.68e9, revenue_growth=684, total_cash=9.37e9,
         sector="Communication Services",
     )
-    q, _, profile = score(m, "Communication Services")
+    q, _, profile, bd = score(m, "Communication Services")
     assert profile == "BALANCED"
-    assert q >= 7.0
+    # The raw section composite is ~4.3 (poor capital efficiency); the elite growth
+    # + long runway blend lifts it into the mid-6s — clearly above the composite but
+    # no longer a suspicious 7.0 floor that ignores the weak fundamentals.
+    assert 5.5 <= q <= 6.8
+    assert q > bd["fundamentals_composite"]
+    assert bd["pre_profit"]["applied"] is True
+    assert bd["pre_profit"]["rule_of_40"] == pytest.approx(67.9, abs=0.5)
+    assert bd["pre_profit"]["runway_months"] == pytest.approx(30.6, abs=1.0)
 
 
 def test_score_clamped_and_rounded():
@@ -191,5 +205,5 @@ def test_score_clamped_and_rounded():
                         shares_cagr_3y=10, sbc_pct_rev=30, earnings_quality=0.2,
                         insider_ownership=0, shareholder_yield=-2,
                         net_income=1, fcf=1, sector="Technology")
-    q, _, _ = score(m, "Technology")
+    q, _, _, _ = score(m, "Technology")
     assert q >= 1.0 and round(q, 1) == q

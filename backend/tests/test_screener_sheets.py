@@ -13,7 +13,12 @@ def _res():
         ticker="AAPL", company_name="Apple", last_evaluated="2026-07-08T00:00:00",
         quality_score=8.4, sector="Technology", sector_profile="TECH_GROWTH",
         section_scores={"I": 8.1, "II": 9.0, "III": 7.5, "IV": 8.0},
-        metrics={k: 1.23 for k in _METRIC_COLS}, status="completed",
+        metrics={k: 1.23 for k in _METRIC_COLS},
+        score_breakdown={"fundamentals_composite": 4.3, "final": 6.2,
+                         "pre_profit": {"applied": True, "rule_of_40": 67.9,
+                                        "runway_months": 30.6, "growth_score": 9.0,
+                                        "blend_weight": 0.4, "capped": False}},
+        status="completed",
     )
 
 
@@ -33,6 +38,17 @@ def test_round_trip_preserves_core_fields():
     assert r.sector_profile == "TECH_GROWTH"
     assert r.section_scores["II"] == 9.0
     assert r.metrics[_METRIC_COLS[0]] == 1.23
+    # the score breakdown (JSON column) survives the round trip
+    assert r.score_breakdown["final"] == 6.2
+    assert r.score_breakdown["pre_profit"]["rule_of_40"] == 67.9
+
+
+def test_row_to_result_tolerates_missing_breakdown_column():
+    # a legacy row written before the Score Breakdown column existed
+    legacy = _result_to_row(_res())[:-1]   # drop the JSON column
+    r = _row_to_result(legacy)
+    assert r.ticker == "AAPL"
+    assert r.score_breakdown == {}
 
 
 def test_database_qscore_col_constant():
@@ -86,6 +102,26 @@ def test_ensure_screener_sheet_repairs_missing_header_row():
         call.kwargs.get("body", {}).get("values") == [_SCREENER_HEADERS]
         for call in update_calls
     ), "expected the header row to be written to A1"
+
+
+def test_ensure_screener_sheet_refreshes_outdated_headers():
+    """A header row from an older, shorter schema is refreshed in place (no insert)."""
+    from services.screener_sheets import _ensure_screener_sheet, _SCREENER_HEADERS
+
+    svc = MagicMock()
+    svc.spreadsheets.return_value.get.return_value.execute.return_value = {
+        "sheets": [{"properties": {"title": "Screener", "sheetId": 42}}]
+    }
+    svc.spreadsheets.return_value.values.return_value.get.return_value.execute.return_value = {
+        "values": [_SCREENER_HEADERS[:-1]]   # missing the newest "Score Breakdown" column
+    }
+    _ensure_screener_sheet(svc, "sid")
+    svc.spreadsheets.return_value.batchUpdate.assert_not_called()   # no row inserted
+    update_calls = svc.spreadsheets.return_value.values.return_value.update.call_args_list
+    assert any(
+        call.kwargs.get("body", {}).get("values") == [_SCREENER_HEADERS]
+        for call in update_calls
+    ), "expected the outdated header row to be refreshed in place"
 
 
 def test_ensure_screener_sheet_noop_when_headers_present():
