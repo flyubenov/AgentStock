@@ -267,6 +267,58 @@ def test_heavy_capex_breakdown_and_no_false_cap():
     assert q > 7.0                       # lifted above the un-adjusted ~6.8
 
 
+def test_earnings_distortion_detection():
+    from screener.scoring import _earnings_distorted
+    # ABBV-like: trailing P/E far above forward P/E AND a depressed (negative) EPS CAGR
+    # (Allergan amortization + Humira patent-cliff trough).
+    assert _earnings_distorted(ScreenerMetrics(trailing_pe=122.0, forward_pe=15.2, eps_cagr_3y=-29.1)) is True
+    # NVDA-like: same P/E-ratio signal, but EPS is *growing* fast (forward > trailing
+    # because it compounds, not a trough) -> must NOT rescue a legitimately strong signal.
+    assert _earnings_distorted(ScreenerMetrics(trailing_pe=60.0, forward_pe=30.0, eps_cagr_3y=80.0)) is False
+    # healthy steady name: trailing ~ forward -> not distorted
+    assert _earnings_distorted(ScreenerMetrics(trailing_pe=25.0, forward_pe=22.0, eps_cagr_3y=-5.0)) is False
+    # negative / absent trailing earnings -> no signal (trailing P/E None or <= 0)
+    assert _earnings_distorted(ScreenerMetrics(trailing_pe=None, forward_pe=15.0, eps_cagr_3y=-5.0)) is False
+    assert _earnings_distorted(ScreenerMetrics(trailing_pe=-10.0, forward_pe=15.0, eps_cagr_3y=-5.0)) is False
+    # signal fires but EPS CAGR unavailable -> nothing to exclude
+    assert _earnings_distorted(ScreenerMetrics(trailing_pe=122.0, forward_pe=15.2, eps_cagr_3y=None)) is False
+
+
+def test_earnings_distortion_excludes_eps_growth_from_section_i():
+    # The depressed -29% EPS CAGR must not drag Section I once the distortion fires.
+    base = dict(revenue_cagr_3y=1.75, eps_cagr_3y=-29.1, fcf_cagr_3y=-9.8, fcf_margin=29.1,
+                op_margin=32.2, op_margin_trajectory=0.44, gross_margin=72.0)
+    distorted = ScreenerMetrics(**base, trailing_pe=122.0, forward_pe=15.2)
+    normal = ScreenerMetrics(**base, trailing_pe=30.0, forward_pe=28.0)  # no P/E signal
+    s_dist = section_scores(distorted, "BALANCED")
+    s_norm = section_scores(normal, "BALANCED")
+    assert s_dist["I"] > s_norm["I"]   # excluding the -29% EPS CAGR lifts Section I
+
+
+def test_earnings_distortion_breakdown_and_lift():
+    # End-to-end ABBV-like: the earnings adjustment is recorded, the name is NOT routed
+    # through the pre-profit branch (it is profitable), and excluding the depressed EPS
+    # CAGR lifts the score relative to the same metrics without the distortion signal.
+    base = dict(
+        revenue_cagr_3y=1.75, eps_cagr_3y=-29.1, fcf_cagr_3y=-9.8, fcf_margin=29.1,
+        op_margin=32.2, op_margin_trajectory=0.44, gross_margin=72.0,
+        roic_ttm=9.5, roic_5y_avg=8.9, roic_wacc_spread=4.0,
+        net_debt_ebitda=2.08, net_debt_fcf=3.5, ocf_capex=15.7,
+        shares_cagr_3y=-0.09, sbc_pct_rev=1.56, earnings_quality=4.5,
+        insider_ownership=0.1, shareholder_yield=2.9,
+        net_income=4.2e9, fcf=17.8e9, ebitda=29.9e9,
+    )
+    distorted = ScreenerMetrics(**base, trailing_pe=122.0, forward_pe=15.2, sector="Healthcare")
+    normal = ScreenerMetrics(**base, trailing_pe=30.0, forward_pe=28.0, sector="Healthcare")
+    q_d, _, profile, bd = score(distorted, "Healthcare")
+    q_n, _, _, bd_n = score(normal, "Healthcare")
+    assert profile == "BALANCED"
+    assert "earnings_adjustment" in bd
+    assert "earnings_adjustment" not in bd_n
+    assert bd["pre_profit"] is None      # profitable -> not a pre-profit burn
+    assert q_d > q_n                      # excluding the depressed EPS CAGR lifts the score
+
+
 def test_score_clamped_and_rounded():
     m = ScreenerMetrics(roic_ttm=0, roic_5y_avg=0, roic_wacc_spread=-10, rote=0,
                         revenue_cagr_3y=-5, eps_cagr_3y=-5, fcf_cagr_3y=-5,

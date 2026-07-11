@@ -67,7 +67,7 @@ def fetch_treasury_10y() -> float | None:
         hist = yf.Ticker("^TNX").history(period="5d")
         if hist is None or hist.empty:
             return None
-        return float(hist["Close"].iloc[-1]) / 1000.0  # ^TNX is yield*10 in percent
+        return float(hist["Close"].iloc[-1]) / 100.0  # ^TNX quotes the yield in percent (4.57 = 4.57%)
     except Exception:
         return None
 

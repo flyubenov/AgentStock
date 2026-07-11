@@ -119,6 +119,30 @@ def _heavy_capex_distortion(m: ScreenerMetrics) -> bool:
     return m.fcf < FCF_EBITDA_FLOOR * m.ebitda
 
 
+# Trailing earnings are treated as distorted when the trailing P/E runs far above the
+# forward P/E (trailing_pe / forward_pe > DEPRESSED_PE_RATIO): the market is pricing a
+# large earnings recovery, i.e. today's GAAP earnings are depressed by acquisition
+# amortization or a one-off / patent-cliff trough (ABBV post-Humira, AVGO post-VMware).
+# The trailing-EPS growth metric then measures the accounting trough, not the business,
+# so it is excluded from Section I. This mirrors the Fair-Value engine's forward-EPS
+# swap (same DEPRESSED_PE_RATIO constant).
+DEPRESSED_PE_RATIO = 1.5
+
+
+def _earnings_distorted(m: ScreenerMetrics) -> bool:
+    tpe, fpe = m.trailing_pe, m.forward_pe
+    if tpe is None or fpe is None or tpe <= 0 or fpe <= 0:
+        return False
+    if tpe / fpe <= DEPRESSED_PE_RATIO:
+        return False
+    # A high trailing-over-forward P/E can also mean earnings are *growing* fast
+    # (forward EPS > trailing) — an NVDA-type, not a trough. There the negative-CAGR
+    # rescue must NOT fire, or we would drop a legitimately strong growth signal. Only
+    # exclude when the trailing EPS-growth metric is actually depressed (<= 0), so the
+    # adjustment can only ever remove a drag, never a boost.
+    return m.eps_cagr_3y is not None and m.eps_cagr_3y <= 0
+
+
 def _section_iii(m: ScreenerMetrics, profile: str, heavy_capex: bool = False) -> float | None:
     p = PROFILES[profile]
     nde = leverage_score(m.net_debt_ebitda, p["P"])
@@ -146,9 +170,12 @@ def section_scores(m: ScreenerMetrics, profile: str) -> dict[str, float | None]:
     is_fin = profile == "FINANCIALS"
     heavy_capex = _heavy_capex_distortion(m)
     exclude_fcf = is_fin or heavy_capex
+    # Depressed trailing GAAP EPS (amortization / patent-cliff trough) makes the
+    # trailing EPS-growth metric measure the accounting trough, not the business.
+    exclude_eps_growth = _earnings_distorted(m)
     section_i = _mean([
         score_high(m.revenue_cagr_3y, GROWTH_BANDS, 0),
-        score_high(m.eps_cagr_3y, GROWTH_BANDS, 0),
+        None if exclude_eps_growth else score_high(m.eps_cagr_3y, GROWTH_BANDS, 0),
         None if exclude_fcf else score_high(m.fcf_cagr_3y, FCF_CAGR_BANDS, 1),
         None if exclude_fcf else score_high(m.fcf_margin, FCF_MARGIN_BANDS, 0),
         score_high(m.op_margin, MARGIN_LEVEL_BANDS, 0),
@@ -277,6 +304,16 @@ def score(m: ScreenerMetrics, sector: str | None):
                      "capex is heavily reinvested (e.g. data-centre build-out), so the "
                      "FCF-derived metrics are excluded — deliberate reinvestment isn't "
                      "scored as balance-sheet weakness."),
+        }
+    if _earnings_distorted(m):
+        breakdown["earnings_adjustment"] = {
+            "excluded": ["EPS CAGR (3y)"],
+            "trailing_pe": round(m.trailing_pe, 1) if m.trailing_pe else None,
+            "forward_pe": round(m.forward_pe, 1) if m.forward_pe else None,
+            "note": ("Trailing GAAP EPS is depressed (trailing P/E far above forward P/E) "
+                     "by acquisition amortization or a one-off / patent-cliff trough, so the "
+                     "trailing EPS-growth metric is excluded — it measures the accounting "
+                     "trough, not the business."),
         }
 
     final = composite
