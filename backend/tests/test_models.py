@@ -279,3 +279,28 @@ def test_ev_ebitda_hist_multiple_still_capped_at_20():
     over_cap = m.calc_ev_ebitda(base, GROWTH, hist_multiple=30.0, compress=False)["fair_value"]
     at_cap = m.calc_ev_ebitda(base, GROWTH, hist_multiple=20.0, compress=False)["fair_value"]
     assert over_cap == pytest.approx(at_cap)
+
+
+def test_ev_ebitda_hist_base_projects_statement_ebitda_not_info_ebitda():
+    # The historical median multiple is reconstructed from statement EBITDA, which
+    # can differ ~2x from yfinance info['ebitda'] (content amortization at NFLX).
+    # When a hist base is supplied, the leg must project THAT base, not ebitda_ttm.
+    fin = {"ebitda_ttm": 14_000_000, "net_debt": 0, "shares_outstanding": 100_000}
+    with_base = m.calc_ev_ebitda(fin, GROWTH, hist_multiple=10.0,
+                                 hist_ebitda_base=30_000_000, compress=False)["fair_value"]
+    # equivalent to running with the statement EBITDA as the outright base
+    direct = m.calc_ev_ebitda({**fin, "ebitda_ttm": 30_000_000}, GROWTH,
+                              hist_multiple=10.0, compress=False)["fair_value"]
+    info_base = m.calc_ev_ebitda(fin, GROWTH, hist_multiple=10.0, compress=False)["fair_value"]
+    assert with_base == pytest.approx(direct)
+    assert with_base > info_base  # the bigger statement base lifts the leg
+
+
+def test_ev_ebitda_hist_base_ignored_without_hist_multiple():
+    # A stray base with no hist_multiple must not hijack the current-multiple path.
+    fin = {"ebitda_ttm": 14_000_000, "ev_ebitda": 12.0, "net_debt": 0,
+           "shares_outstanding": 100_000}
+    with_base = m.calc_ev_ebitda(fin, GROWTH, hist_ebitda_base=30_000_000,
+                                 compress=False)["fair_value"]
+    plain = m.calc_ev_ebitda(fin, GROWTH, compress=False)["fair_value"]
+    assert with_base == pytest.approx(plain)

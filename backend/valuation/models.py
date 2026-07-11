@@ -140,11 +140,17 @@ def calc_fcfe(fin: dict, growth: dict) -> dict:
 
 # -- EV/EBITDA -----------------------------------------------------------------
 def calc_ev_ebitda(fin: dict, growth: dict, hist_multiple: float | None = None,
-                   compress: bool = True) -> dict:
+                   hist_ebitda_base: float | None = None, compress: bool = True) -> dict:
     """EV/EBITDA exit-multiple valuation.
 
     hist_multiple: when provided, a historical-median EV/EBITDA replaces the
         current trailing multiple (the forward-tier "anchor to history" basis).
+    hist_ebitda_base: the statement EBITDA the historical median was built from.
+        When anchoring to hist_multiple, the projection base must be on the SAME
+        EBITDA definition as that multiple — yfinance's info['ebitda'] (ebitda_ttm)
+        can differ ~2x from statement EBITDA (content amortization at NFLX), and
+        multiplying the narrow base by a multiple derived from the broad one halves
+        the leg. Ignored unless hist_multiple is also supplied.
     compress: when True (default), the exit multiple is compressed toward a mature
         FCF-conversion-justified level. Forward tiers pass compress=False — a
         historical median (or the GROWTH full multiple) is already a mature level.
@@ -152,6 +158,8 @@ def calc_ev_ebitda(fin: dict, growth: dict, hist_multiple: float | None = None,
     ebitda = fin.get("ebitda_ttm")
     shares = fin.get("shares_outstanding")
     multiple = hist_multiple if hist_multiple is not None else fin.get("ev_ebitda")
+    if hist_multiple is not None and hist_ebitda_base is not None and hist_ebitda_base > 0:
+        ebitda = hist_ebitda_base
     if ebitda is None or multiple is None or not shares:
         return _null_result(True)
     multiple = min(multiple, EV_EBITDA_CAP)

@@ -130,12 +130,28 @@ def ev_ebitda_history_median(rows: list[dict],
     return statistics.median(mults)
 
 
+def latest_statement_ebitda(rows: list[dict]) -> float | None:
+    """The most recent positive statement EBITDA from the reconstruction rows
+    (most-recent-first). This is the projection base that stays consistent with
+    the statement-derived median multiple — using yfinance info['ebitda'] instead
+    mixes two EBITDA definitions (they differ ~2x for content names like NFLX)."""
+    for r in rows:
+        ebitda = r.get("ebitda")
+        if ebitda and ebitda > 0:
+            return ebitda
+    return None
+
+
 @lru_cache(maxsize=256)
-def _fetch_ev_ebitda_history_sync(ticker: str) -> float | None:
+def _fetch_ev_ebitda_history_sync(ticker: str) -> dict | None:
     """Reconstruct annual EV/EBITDA = (avg price * shares + net debt) / EBITDA from
-    income statement + balance sheet + monthly price history, and return the median.
-    Returns None (never raises) when the statements are unavailable/insufficient, or
-    when a stock split postdates the statements (price/share bases would mismatch)."""
+    income statement + balance sheet + monthly price history.
+
+    Returns {"multiple": median EV/EBITDA, "ebitda": latest statement EBITDA} — both
+    on the same statement-EBITDA definition so the caller can project a consistent
+    base against the multiple. Returns None (never raises) when the statements are
+    unavailable/insufficient, or when a stock split postdates the statements
+    (price/share bases would mismatch)."""
     try:
         tk = yf.Ticker(ticker)
         ist, bs = tk.income_stmt, tk.balance_sheet
@@ -171,12 +187,15 @@ def _fetch_ev_ebitda_history_sync(ticker: str) -> float | None:
             net_debt = (debt or 0) - (cash or 0) if (debt is not None or cash is not None) else 0
             rows.append({"avg_price": float(avg_close[year]), "shares": shares,
                          "ebitda": ebitda, "net_debt": net_debt})
-        return ev_ebitda_history_median(rows)
+        median = ev_ebitda_history_median(rows)
+        if median is None:
+            return None
+        return {"multiple": median, "ebitda": latest_statement_ebitda(rows)}
     except Exception:
         return None
 
 
-async def fetch_ev_ebitda_history(ticker: str) -> float | None:
+async def fetch_ev_ebitda_history(ticker: str) -> dict | None:
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, _fetch_ev_ebitda_history_sync, ticker.upper())
 

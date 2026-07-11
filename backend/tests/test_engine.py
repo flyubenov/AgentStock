@@ -295,6 +295,24 @@ def test_evaluate_forward_tier_uses_historical_ev_ebitda():
     assert result["fair_value_breakdown"]["ev_ebitda"]["fair_value"] == pytest.approx(round(expected, 2))
 
 
+def test_evaluate_forward_tier_uses_historical_ev_ebitda_base():
+    # NFLX regression: the historical median is built from statement EBITDA, so the
+    # forward-tier leg must project the supplied statement base (ev_ebitda_hist_base),
+    # not info['ebitda']. Mixing the two (base 14B, multiple from ~30B) halved the leg.
+    from valuation import models as m
+    fin = _large_cap_fin(ebitda_ttm=14_000_000_000, ev_ebitda=22.0,
+                         ev_ebitda_hist=10.0, ev_ebitda_hist_base=30_000_000_000)
+    result = engine.evaluate(fin)
+    assert result["stock_type"] == "LARGE_CAP"
+    growth = engine.build_scenarios(fin)
+    expected = m.calc_ev_ebitda(fin, growth, hist_multiple=10.0,
+                                hist_ebitda_base=30_000_000_000, compress=False)["fair_value"]
+    assert result["fair_value_breakdown"]["ev_ebitda"]["fair_value"] == pytest.approx(round(expected, 2))
+    # and it genuinely exceeds the old mixed-basis leg (info ebitda x hist multiple)
+    mixed = m.calc_ev_ebitda(fin, growth, hist_multiple=10.0, compress=False)["fair_value"]
+    assert expected > mixed
+
+
 def test_evaluate_non_forward_tier_ignores_historical_ev_ebitda():
     # CYCLICAL is not a forward tier: a stray historical multiple is ignored and
     # the current trailing multiple (compressed) is used.

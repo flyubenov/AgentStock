@@ -153,7 +153,8 @@ def evaluate(fin: dict) -> dict:
             # (no compression). Without it, GROWTH keeps its full multiple
             # uncompressed; other tiers compress the current trailing multiple.
             hist = fin.get("ev_ebitda_hist") if is_forward_tier else None
-            r = m.calc_ev_ebitda(fin, growth, hist_multiple=hist,
+            hist_base = fin.get("ev_ebitda_hist_base") if is_forward_tier else None
+            r = m.calc_ev_ebitda(fin, growth, hist_multiple=hist, hist_ebitda_base=hist_base,
                                  compress=(hist is None and not is_growth))
         elif mid == "pe":
             r = m.calc_pe(fin, forward=is_forward_tier)
@@ -230,7 +231,10 @@ async def run(ticker: str) -> TickerResult:
     # (the reconstruction skips itself across a recent split — see services.yahoo).
     hist = await fetch_ev_ebitda_history(ticker)
     if hist is not None:
-        fin["ev_ebitda_hist"] = hist
+        fin["ev_ebitda_hist"] = hist["multiple"]
+        # Project the statement EBITDA the median was built from, not info['ebitda']
+        # (they can differ ~2x — content amortization at NFLX).
+        fin["ev_ebitda_hist_base"] = hist["ebitda"]
 
     data = evaluate(fin)
     data["last_evaluated"] = datetime.now(timezone.utc).isoformat()

@@ -1,6 +1,8 @@
 import pytest
 from datetime import date
-from services.yahoo import ev_ebitda_history_median, statements_predate_split
+from services.yahoo import (
+    ev_ebitda_history_median, latest_statement_ebitda, statements_predate_split,
+)
 
 
 # -- statements_predate_split (split-aware skip) -------------------------------
@@ -48,3 +50,21 @@ def test_ev_ebitda_history_median_skips_nonpositive_ebitda():
 def test_ev_ebitda_history_median_none_when_too_few_years():
     rows = [_row(100.0, 1e9, 10e9, 0), _row(120.0, 1e9, 10e9, 0)]
     assert ev_ebitda_history_median(rows, min_years=3) is None
+
+
+# -- latest_statement_ebitda (consistent projection base) ----------------------
+def test_latest_statement_ebitda_takes_first_positive_row():
+    # Rows are most-recent-first; the base must be the latest statement EBITDA so
+    # it matches the definition the median multiple was built from.
+    rows = [_row(110.0, 1e9, 30e9, 0), _row(68.0, 1e9, 26e9, 0), _row(40.0, 1e9, 21e9, 0)]
+    assert latest_statement_ebitda(rows) == pytest.approx(30e9)
+
+
+def test_latest_statement_ebitda_skips_leading_nonpositive():
+    rows = [_row(110.0, 1e9, 0, 0), _row(68.0, 1e9, -5e9, 0), _row(40.0, 1e9, 21e9, 0)]
+    assert latest_statement_ebitda(rows) == pytest.approx(21e9)
+
+
+def test_latest_statement_ebitda_none_when_no_positive():
+    rows = [_row(110.0, 1e9, 0, 0), _row(68.0, 1e9, -5e9, 0)]
+    assert latest_statement_ebitda(rows) is None
