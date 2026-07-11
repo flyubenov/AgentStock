@@ -11,6 +11,11 @@ from models import TickerResult
 EBITDA_MARGIN_FLOOR = 0.08
 SUSTAINABLE_CEIL = 0.039
 FCF_MARGIN_FLOOR = -0.25
+# Below this FCF/EBITDA conversion, positive trailing FCF is treated as
+# unrepresentative of earning power (capex is eating it — e.g. AMZN's AWS/AI
+# build-out), so the DCF is rerouted onto EV/EBITDA + P/E rather than anchored to
+# the residual. Distinct from FCF_MARGIN_FLOOR, which declines deeply-negative FCF.
+FCF_EBITDA_FLOOR = 0.15
 
 # Operating-compounder tiers: real earnings AND real EBITDA, so they take the
 # "balance past and future" basis — historical-median EV/EBITDA + forward P/E.
@@ -108,6 +113,18 @@ def evaluate(fin: dict) -> dict:
             "errors": ["Negative free cash flow (pre-profit / heavy investment "
                        "phase) — trailing financials don't support a reliable valuation"],
         }
+
+    # Capex-distorted FCF: a DCF-anchored company whose trailing FCF is POSITIVE but
+    # a negligible fraction of EBITDA (capex is eating it — e.g. AMZN's AWS/AI
+    # build-out) cannot be valued off that residual. Reroute the DCF onto EV/EBITDA +
+    # P/E. The P/E leg self-drops when trailing EPS <= 0, renormalising onto EV/EBITDA
+    # alone. Only positive FCF is handled here; deeply-negative FCF is already declined
+    # above by the pre-profit guard.
+    ebitda_ttm = fin.get("ebitda_ttm") or 0
+    if (weights.get("dcf", 0) > 0 and fcf_ttm is not None and fcf_ttm >= 0
+            and ebitda_ttm > 0 and fcf_ttm < FCF_EBITDA_FLOOR * ebitda_ttm):
+        weights = {mid: 0.0 for mid in m.ALL_METHODS}
+        weights["ev_ebitda"], weights["pe"] = 0.70, 0.30
 
     is_growth = stock_type == "GROWTH"
     is_forward_tier = stock_type in FORWARD_TIERS

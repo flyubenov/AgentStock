@@ -220,6 +220,53 @@ def test_heavy_capex_hypergrowth_not_punished_to_failure():
     assert bd["pre_profit"]["runway_months"] == pytest.approx(30.6, abs=1.0)
 
 
+def test_heavy_capex_distortion_detection():
+    from screener.scoring import _heavy_capex_distortion
+    # AMZN-like: healthy EBITDA, positive but tiny FCF, positive op margin.
+    amzn = ScreenerMetrics(ebitda=155.9e9, fcf=7.7e9, op_margin=13.1)
+    assert _heavy_capex_distortion(amzn) is True
+    # healthy converter: FCF a large share of EBITDA -> not distorted
+    assert _heavy_capex_distortion(ScreenerMetrics(ebitda=100.0, fcf=60.0, op_margin=20.0)) is False
+    # operating loss is a genuine pre-profit burn, handled elsewhere -> not this path
+    assert _heavy_capex_distortion(ScreenerMetrics(ebitda=100.0, fcf=1.0, op_margin=-5.0)) is False
+    # no EBITDA signal -> not applicable
+    assert _heavy_capex_distortion(ScreenerMetrics(ebitda=None, fcf=1.0)) is False
+
+
+def test_heavy_capex_excludes_fcf_metrics_and_lifts_sections():
+    # A heavy-capex reinvestor: the depressed FCF margin (Section I) and OCF/CapEx
+    # (Section III) must not drag the score; excluding them lifts both sections.
+    base = dict(
+        revenue_cagr_3y=12, op_margin=13, op_margin_trajectory=8, gross_margin=50,
+        fcf_margin=1.1, fcf_cagr_3y=None, net_debt_ebitda=0.6, net_debt_fcf=12.0,
+        ocf_capex=1.06,
+    )
+    heavy = ScreenerMetrics(**base, ebitda=155.9e9, fcf=7.7e9)
+    normal = ScreenerMetrics(**base)  # no ebitda/fcf -> not flagged
+    s_heavy = section_scores(heavy, "BALANCED")
+    s_normal = section_scores(normal, "BALANCED")
+    assert s_heavy["I"] > s_normal["I"]      # excluding the 1.1% FCF margin lifts Section I
+    assert s_heavy["III"] > s_normal["III"]  # excluding OCF/CapEx lifts Section III
+
+
+def test_heavy_capex_breakdown_and_no_false_cap():
+    # End-to-end: an AMZN-like profitable heavy-capex name gets the capex adjustment
+    # recorded, is NOT routed through the pre-profit branch, and is not capped.
+    m = ScreenerMetrics(
+        revenue_cagr_3y=12, eps_cagr_3y=None, op_margin=13.1, op_margin_trajectory=8.8,
+        gross_margin=50.6, fcf_margin=1.07, roic_ttm=16.8, roic_5y_avg=11.2,
+        roic_wacc_spread=9.6, rote=20.5, net_debt_ebitda=0.59, net_debt_fcf=12.0,
+        ocf_capex=1.06, shares_cagr_3y=2.0, sbc_pct_rev=2.7, earnings_quality=1.8,
+        insider_ownership=8.9, shareholder_yield=0.0,
+        ebitda=155.9e9, fcf=7.7e9, net_income=77.7e9, sector="Consumer Cyclical",
+    )
+    q, _, profile, bd = score(m, "Consumer Cyclical")
+    assert profile == "BALANCED"
+    assert "capex_adjustment" in bd
+    assert bd["pre_profit"] is None      # profitable -> not a pre-profit burn
+    assert q > 7.0                       # lifted above the un-adjusted ~6.8
+
+
 def test_score_clamped_and_rounded():
     m = ScreenerMetrics(roic_ttm=0, roic_5y_avg=0, roic_wacc_spread=-10, rote=0,
                         revenue_cagr_3y=-5, eps_cagr_3y=-5, fcf_cagr_3y=-5,

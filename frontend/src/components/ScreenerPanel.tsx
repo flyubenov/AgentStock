@@ -1,4 +1,4 @@
-import type { ScreenerResult, ScoreBreakdown } from '../types'
+import type { ScreenerResult, ScoreBreakdown, SectorAdjustment } from '../types'
 import { qualityScoreColor, qualityScoreBadgeClass } from '../types'
 
 const SECTIONS: [string, string][] = [
@@ -121,15 +121,14 @@ function PreProfitCard({ bd }: { bd: ScoreBreakdown }) {
   )
 }
 
-/** Notes when a sector profile excludes structurally-distorted metrics (e.g. a
- *  lender's FCF/OCF/leverage metrics are not scored). */
-function SectorAdjustmentCard({ bd }: { bd: ScoreBreakdown }) {
-  const sa = bd.sector_adjustment
+/** Notes when a set of structurally-distorted metrics is excluded from scoring —
+ *  a lender's FCF/OCF/leverage metrics, or a heavy-capex reinvestor's FCF metrics. */
+function AdjustmentCard({ title, sa }: { title: string; sa?: SectorAdjustment }) {
   if (!sa) return null
   return (
     <div className="bg-[#16161e] border border-[#1e1e2a] rounded-lg p-4">
       <div className="text-xs text-slate-500 uppercase tracking-wide mb-1">
-        Sector Adjustment · {sa.profile}
+        {title} · {sa.profile}
       </div>
       <p className="text-xs text-slate-500 mb-2">{sa.note}</p>
       <div className="flex flex-wrap gap-1.5">
@@ -173,7 +172,12 @@ export default function ScreenerPanel({ result }: { result: ScreenerResult }) {
       </div>
 
       {result.score_breakdown && <PreProfitCard bd={result.score_breakdown} />}
-      {result.score_breakdown && <SectorAdjustmentCard bd={result.score_breakdown} />}
+      {result.score_breakdown && (
+        <AdjustmentCard title="Sector Adjustment" sa={result.score_breakdown.sector_adjustment} />
+      )}
+      {result.score_breakdown && (
+        <AdjustmentCard title="Capex Adjustment" sa={result.score_breakdown.capex_adjustment} />
+      )}
 
       {METRIC_GROUPS.map(group => (
         <div key={group.title} className="bg-[#16161e] border border-[#1e1e2a] rounded-lg p-4">

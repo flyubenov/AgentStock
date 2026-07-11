@@ -170,6 +170,25 @@ def test_evaluate_pre_profit_guard_skips_financial():
     assert result["stock_type"] == "FINANCIAL"
 
 
+def test_evaluate_capex_distorted_positive_fcf_reroutes_off_dcf():
+    # AMZN pattern: FCF positive but a negligible fraction of EBITDA (heavy capex).
+    # fcf/revenue is +1% (above the -25% decline floor, so NOT declined), but
+    # fcf/ebitda is ~5% (< 15%), so the DCF is rerouted onto EV/EBITDA + P/E.
+    fin = _large_cap_fin(fcf_ttm=7_695_000_000, ebitda_ttm=155_860_000_000,
+                         revenue_ttm=742_000_000_000, eps_ttm=7.0)
+    result = engine.evaluate(fin)
+    assert result["status"] == "completed"
+    assert "dcf" not in result["fair_value_breakdown"]     # DCF anchored to the residual is dropped
+    assert "ev_ebitda" in result["fair_value_breakdown"]
+
+
+def test_evaluate_capex_reroute_not_fired_for_healthy_conversion():
+    # Positive FCF that is a healthy share of EBITDA (99/130 = 0.76) -> normal DCF path.
+    fin = _large_cap_fin()
+    result = engine.evaluate(fin)
+    assert "dcf" in result["fair_value_breakdown"]
+
+
 def test_evaluate_distorted_earnings_drops_pe_leg():
     # DIVIDEND with distorted GAAP earnings (earnings_growth<0, revenue_growth>0):
     # the P/E leg must be excluded and the remaining models renormalize.

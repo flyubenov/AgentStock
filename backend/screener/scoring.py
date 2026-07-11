@@ -100,14 +100,38 @@ def _mean(vals: list[float | None]) -> float | None:
     return sum(present) / len(present) if present else None
 
 
-def _section_iii(m: ScreenerMetrics, profile: str) -> float | None:
+FCF_EBITDA_FLOOR = 0.15
+
+
+def _heavy_capex_distortion(m: ScreenerMetrics) -> bool:
+    """Operationally profitable, healthy EBITDA, but trailing FCF is a negligible
+    (or negative) fraction of EBITDA because capex is eating it (e.g. AMZN's AWS/AI
+    data-centre build-out). The FCF-derived metrics are then unrepresentative and
+    excluded from scoring — the same principle as the FINANCIALS FCF/OCF exclusion,
+    and mirroring the Fair-Value pipeline's capex-distorted DCF reroute.
+
+    An operating loss is NOT treated here: that is a genuine pre-profit burn, which
+    the pre-profit growth/runway branch handles separately."""
+    if m.ebitda is None or m.ebitda <= 0 or m.fcf is None:
+        return False
+    if m.op_margin is not None and m.op_margin < 0:
+        return False
+    return m.fcf < FCF_EBITDA_FLOOR * m.ebitda
+
+
+def _section_iii(m: ScreenerMetrics, profile: str, heavy_capex: bool = False) -> float | None:
     p = PROFILES[profile]
     nde = leverage_score(m.net_debt_ebitda, p["P"])
     ndf = leverage_score(m.net_debt_fcf, p["Q"])
     ocf = score_high(m.ocf_capex, OCF_CAPEX_BANDS, 0)
+    if heavy_capex:
+        # Capex is deliberately consuming FCF, so the FCF-derived coverage/leverage
+        # metrics are unrepresentative -> judge the balance sheet on EBITDA leverage.
+        ndf = None
+        ocf = None
     # Balance-Sheet Dual-Check: FCF-based debt looks far worse than EBITDA-based
     # AND EBITDA leverage is healthy (<2.5) -> treat ND/FCF as capex-cycle noise.
-    if (nde is not None and ndf is not None and m.net_debt_ebitda is not None
+    elif (nde is not None and ndf is not None and m.net_debt_ebitda is not None
             and m.net_debt_ebitda < 2.5 and ndf < nde - 2):
         ndf = None  # drop the noisy metric
     return _mean([nde, ndf, ocf])
@@ -117,13 +141,16 @@ def section_scores(m: ScreenerMetrics, profile: str) -> dict[str, float | None]:
     # For a lender/insurer, free-cash-flow and operating-cash-flow derived metrics are
     # structurally distorted (loan originations dominate cash flows), so they are
     # excluded from scoring — the same principle already applied to the Section III
-    # leverage metrics (zero weight for FINANCIALS).
+    # leverage metrics (zero weight for FINANCIALS). A heavy-capex reinvestor whose
+    # capex eats its FCF gets the same treatment for the FCF-derived metrics.
     is_fin = profile == "FINANCIALS"
+    heavy_capex = _heavy_capex_distortion(m)
+    exclude_fcf = is_fin or heavy_capex
     section_i = _mean([
         score_high(m.revenue_cagr_3y, GROWTH_BANDS, 0),
         score_high(m.eps_cagr_3y, GROWTH_BANDS, 0),
-        None if is_fin else score_high(m.fcf_cagr_3y, FCF_CAGR_BANDS, 1),
-        None if is_fin else score_high(m.fcf_margin, FCF_MARGIN_BANDS, 0),
+        None if exclude_fcf else score_high(m.fcf_cagr_3y, FCF_CAGR_BANDS, 1),
+        None if exclude_fcf else score_high(m.fcf_margin, FCF_MARGIN_BANDS, 0),
         score_high(m.op_margin, MARGIN_LEVEL_BANDS, 0),
         score_high(m.op_margin_trajectory, TRAJECTORY_BANDS, 1),
         score_high(m.gross_margin, GROSS_MARGIN_BANDS, 2),
@@ -141,7 +168,8 @@ def section_scores(m: ScreenerMetrics, profile: str) -> dict[str, float | None]:
         score_high(m.insider_ownership, INSIDER_BANDS, 2),
         score_high(m.shareholder_yield, YIELD_BANDS, 1.5),
     ])
-    return {"I": section_i, "II": section_ii, "III": _section_iii(m, profile), "IV": section_iv}
+    return {"I": section_i, "II": section_ii,
+            "III": _section_iii(m, profile, heavy_capex), "IV": section_iv}
 
 
 MIN_SCORED_SUBSCORES = 6
@@ -240,6 +268,15 @@ def score(m: ScreenerMetrics, sector: str | None):
                          "Leverage (Net Debt / EBITDA & FCF)"],
             "note": ("Free-cash-flow, operating-cash-flow and leverage metrics are "
                      "excluded — structurally distorted for lenders."),
+        }
+    elif _heavy_capex_distortion(m):
+        breakdown["capex_adjustment"] = {
+            "profile": profile,
+            "excluded": ["FCF Margin", "FCF CAGR", "OCF / CapEx", "Net Debt / FCF"],
+            "note": ("Trailing free cash flow is a negligible share of EBITDA because "
+                     "capex is heavily reinvested (e.g. data-centre build-out), so the "
+                     "FCF-derived metrics are excluded — deliberate reinvestment isn't "
+                     "scored as balance-sheet weakness."),
         }
 
     final = composite

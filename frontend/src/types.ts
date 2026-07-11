@@ -127,6 +127,7 @@ export interface ScoreBreakdown {
   section_weights?: Record<string, number>
   pre_profit?: PreProfitBreakdown | null
   sector_adjustment?: SectorAdjustment
+  capex_adjustment?: SectorAdjustment
   final?: number
 }
 
