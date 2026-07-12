@@ -153,10 +153,28 @@ def _earnings_distorted(m: ScreenerMetrics) -> bool:
 # adjustment can only ever raise the ROIC, never lower it.
 GOODWILL_SHARE_FLOOR = 0.30
 
+# When a company's tangible (ex-goodwill) ROIC already clears its cost of capital while
+# its reported ROIC sits below it, that crossover is itself direct evidence the reported
+# weakness is an acquisition artifact — so a smaller goodwill share is sufficient proof
+# and the floor drops from 0.30 to 0.15. AMD keeps qualifying via the 0.30 floor: its
+# ex-goodwill ROIC (13.8) is still below its beta-capped WACC (14.5), so it has no
+# crossover. VST does (reported 7.8 < WACC 9.6 <= ex-goodwill 10.1) at 0.23 goodwill share.
+GOODWILL_SHARE_FLOOR_XOVER = 0.15
+
+
+def _wacc_crossover(m: ScreenerMetrics) -> bool:
+    if m.roic_ttm is None or m.roic_ex_goodwill is None or m.wacc is None:
+        return False
+    return m.roic_ttm < m.wacc <= m.roic_ex_goodwill
+
+
+def _effective_goodwill_floor(m: ScreenerMetrics) -> float:
+    return GOODWILL_SHARE_FLOOR_XOVER if _wacc_crossover(m) else GOODWILL_SHARE_FLOOR
+
 
 def _acquisition_distorted(m: ScreenerMetrics) -> bool:
     if (m.goodwill_intangible_share is None
-            or m.goodwill_intangible_share < GOODWILL_SHARE_FLOOR):
+            or m.goodwill_intangible_share < _effective_goodwill_floor(m)):
         return False
     if m.roic_ex_goodwill is None or m.roic_ttm is None:
         return False

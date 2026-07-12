@@ -346,6 +346,63 @@ def test_acquisition_distortion_detection():
         trailing_pe=185.0, forward_pe=42.0)) is False
 
 
+def test_wacc_crossover_detection():
+    from screener.scoring import _wacc_crossover
+    # VST-like: reported ROIC below WACC, ex-goodwill ROIC at/above WACC -> crossover.
+    assert _wacc_crossover(ScreenerMetrics(
+        roic_ttm=7.8, wacc=9.6, roic_ex_goodwill=10.1)) is True
+    # Reported ROIC already clears WACC -> no rescue needed, not a crossover.
+    assert _wacc_crossover(ScreenerMetrics(
+        roic_ttm=11.0, wacc=9.6, roic_ex_goodwill=12.0)) is False
+    # AMD-like: even the ex-goodwill ROIC is still below WACC -> not a crossover.
+    assert _wacc_crossover(ScreenerMetrics(
+        roic_ttm=5.1, wacc=14.5, roic_ex_goodwill=13.8)) is False
+    # Missing data -> False.
+    assert _wacc_crossover(ScreenerMetrics(roic_ttm=7.8, wacc=None,
+                                           roic_ex_goodwill=10.1)) is False
+
+
+def test_effective_goodwill_floor_is_dynamic():
+    from screener.scoring import (_effective_goodwill_floor,
+                                  GOODWILL_SHARE_FLOOR, GOODWILL_SHARE_FLOOR_XOVER)
+    # Crossover present -> lowered floor.
+    assert _effective_goodwill_floor(ScreenerMetrics(
+        roic_ttm=7.8, wacc=9.6, roic_ex_goodwill=10.1)) == GOODWILL_SHARE_FLOOR_XOVER
+    # No crossover -> strict floor.
+    assert _effective_goodwill_floor(ScreenerMetrics(
+        roic_ttm=5.1, wacc=14.5, roic_ex_goodwill=13.8)) == GOODWILL_SHARE_FLOOR
+
+
+def test_dynamic_floor_catches_vst_without_regressing_amd():
+    from screener.scoring import _acquisition_distorted
+    # VST-like: goodwill 0.23 (below the 0.30 flat floor) BUT the WACC crossover holds
+    # (7.8 < 9.6 <= 10.1) -> the floor drops to 0.15 -> fires.
+    vst = ScreenerMetrics(goodwill_intangible_share=0.23, roic_ttm=7.8, wacc=9.6,
+                          roic_ex_goodwill=10.1, trailing_pe=26.6, forward_pe=14.7)
+    assert _acquisition_distorted(vst) is True
+    # Same VST metrics but no crossover (WACC bumped above the ex-goodwill ROIC):
+    # floor stays 0.30, 0.23 < 0.30 -> does NOT fire. Isolates the floor mechanism.
+    vst_no_xover = ScreenerMetrics(goodwill_intangible_share=0.23, roic_ttm=7.8,
+                                   wacc=10.5, roic_ex_goodwill=10.1,
+                                   trailing_pe=26.6, forward_pe=14.7)
+    assert _acquisition_distorted(vst_no_xover) is False
+    # AMD-like no-regression: goodwill 0.63, ex-goodwill ROIC 13.8 still < WACC 14.5
+    # (no crossover) -> qualifies via the unchanged 0.30 floor.
+    amd = ScreenerMetrics(goodwill_intangible_share=0.63, roic_ttm=5.1, wacc=14.5,
+                          roic_ex_goodwill=13.8, trailing_pe=185.0, forward_pe=42.0)
+    assert _acquisition_distorted(amd) is True
+
+
+def test_dynamic_floor_does_not_rescue_value_destroyer():
+    from screener.scoring import _acquisition_distorted
+    # INTC-like negative control: goodwill 0.17 would clear the lowered 0.15 floor, but
+    # the tangible business earns far below its cost of capital (1.6 < 13.6 -> no
+    # crossover) and there is no P/E-trough -> correctly NOT rescued.
+    intc = ScreenerMetrics(goodwill_intangible_share=0.17, roic_ttm=1.3, wacc=13.6,
+                           roic_ex_goodwill=1.6, trailing_pe=None, forward_pe=None)
+    assert _acquisition_distorted(intc) is False
+
+
 def test_acquisition_distortion_lifts_section_ii():
     # The goodwill-inflated ROIC drags Section II; scoring it on tangible invested
     # capital lifts the section. ROTE (already tangible) is unchanged either way.
