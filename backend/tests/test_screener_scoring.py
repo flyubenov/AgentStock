@@ -444,6 +444,38 @@ def test_acquisition_distortion_breakdown_and_lift():
     assert q_d == pytest.approx(7.2, abs=0.3)
 
 
+def test_dynamic_floor_lifts_section_ii_for_vst_like():
+    # VST-like DEFENSIVE_INCOME name: goodwill 0.23 with a WACC crossover. The dynamic
+    # floor lets the ex-goodwill ROIC score Section II, lifting it (and the headline)
+    # versus the same metrics with the crossover removed (WACC above ex-goodwill ROIC).
+    base = dict(
+        revenue_cagr_3y=8.9, fcf_margin=7.4, op_margin=26.6, op_margin_trajectory=20.1,
+        gross_margin=38.6, roic_ttm=7.8, roic_5y_avg=8.3, roic_wacc_spread=-1.8,
+        rote=None, roic_ex_goodwill=10.1, roic_5y_ex_goodwill=11.0,
+        goodwill_intangible_share=0.23,
+        net_debt_ebitda=2.84, net_debt_fcf=14.6, ocf_capex=1.48,
+        shares_cagr_3y=-4.6, sbc_pct_rev=0.64, earnings_quality=4.3,
+        insider_ownership=0.79, shareholder_yield=2.85,
+        net_income=944e6, fcf=1318e6, ebitda=6790e6,
+        trailing_pe=26.6, forward_pe=14.7,
+    )
+    distorted = ScreenerMetrics(**base, wacc=9.6, sector="Utilities")        # crossover
+    normal = ScreenerMetrics(**{**base, "wacc": 10.5}, sector="Utilities")   # no crossover
+    s_dist = section_scores(distorted, "DEFENSIVE_INCOME")
+    s_norm = section_scores(normal, "DEFENSIVE_INCOME")
+    assert s_dist["II"] > s_norm["II"]
+
+    q_d, _, profile, bd = score(distorted, "Utilities")
+    q_n, _, _, bd_n = score(normal, "Utilities")
+    assert profile == "DEFENSIVE_INCOME"
+    assert "roic_adjustment" in bd
+    assert "roic_adjustment" not in bd_n
+    assert bd["roic_adjustment"]["tangible_roic"] == pytest.approx(10.1, abs=0.1)
+    assert bd["pre_profit"] is None            # profitable -> not a pre-profit burn
+    assert q_d > q_n
+    assert q_d == pytest.approx(5.7, abs=0.2)
+
+
 def test_score_clamped_and_rounded():
     m = ScreenerMetrics(roic_ttm=0, roic_5y_avg=0, roic_wacc_spread=-10, rote=0,
                         revenue_cagr_3y=-5, eps_cagr_3y=-5, fcf_cagr_3y=-5,
