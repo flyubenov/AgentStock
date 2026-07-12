@@ -360,6 +360,12 @@ def test_wacc_crossover_detection():
     # Missing data -> False.
     assert _wacc_crossover(ScreenerMetrics(roic_ttm=7.8, wacc=None,
                                            roic_ex_goodwill=10.1)) is False
+    # Boundary: ex-goodwill ROIC exactly at WACC is inclusive (<=) -> crossover.
+    assert _wacc_crossover(ScreenerMetrics(
+        roic_ttm=7.8, wacc=10.1, roic_ex_goodwill=10.1)) is True
+    # Boundary: reported ROIC exactly at WACC is exclusive (<) -> not a crossover.
+    assert _wacc_crossover(ScreenerMetrics(
+        roic_ttm=9.6, wacc=9.6, roic_ex_goodwill=10.1)) is False
 
 
 def test_effective_goodwill_floor_is_dynamic():
@@ -395,12 +401,21 @@ def test_dynamic_floor_catches_vst_without_regressing_amd():
 
 def test_dynamic_floor_does_not_rescue_value_destroyer():
     from screener.scoring import _acquisition_distorted
-    # INTC-like negative control: goodwill 0.17 would clear the lowered 0.15 floor, but
-    # the tangible business earns far below its cost of capital (1.6 < 13.6 -> no
-    # crossover) and there is no P/E-trough -> correctly NOT rescued.
+    # INTC-like negative control: no crossover keeps the floor at 0.30, and its 0.17 goodwill
+    # share is below that -> rejected at the floor check (the lowered 0.15 tier never applies).
     intc = ScreenerMetrics(goodwill_intangible_share=0.17, roic_ttm=1.3, wacc=13.6,
                            roic_ex_goodwill=1.6, trailing_pe=None, forward_pe=None)
     assert _acquisition_distorted(intc) is False
+
+
+def test_low_floor_tier_still_requires_pe_trough():
+    from screener.scoring import _acquisition_distorted
+    # Crossover holds (floor drops to 0.15) and goodwill 0.23 clears it, but the P/E gate
+    # fails (trailing ~ forward) -> still not rescued. Proves the P/E-trough gate applies
+    # on the lowered tier too, not just the 0.30 tier.
+    assert _acquisition_distorted(ScreenerMetrics(
+        goodwill_intangible_share=0.23, roic_ttm=7.8, wacc=9.6, roic_ex_goodwill=10.1,
+        trailing_pe=20.0, forward_pe=19.0)) is False
 
 
 def test_acquisition_distortion_lifts_section_ii():
