@@ -131,3 +131,32 @@ def test_real_bank_still_financial():
         "long_business_summary": "A regional bank providing deposit and loan services.",
     }
     assert classify(fin)["stock_type"] == "FINANCIAL"
+
+
+def test_lender_offering_crypto_stays_financial():
+    # SOFI-like: a genuine lender (industry "Credit Services") whose summary mentions a
+    # crypto product. The core-financial industry keeps it FINANCIAL despite the crypto
+    # keywords — regression: SOFI was ejected to EARLY_GROWTH, then declined (no FV) by
+    # the DCF pre-profit guard on its structurally-negative lender FCF.
+    fin = {
+        "sector": "Financial Services",
+        "industry": "Credit Services",
+        "long_business_summary": (
+            "SoFi offers lending and financial services products, including SoFi Crypto, "
+            "a new digital asset trading platform."
+        ),
+        "revenue_growth": 0.42,
+    }
+    assert classify(fin)["stock_type"] == "FINANCIAL"
+
+
+def test_crypto_name_without_lending_industry_not_financial():
+    # Guard against over-broadening: a Financial-Services-tagged crypto/data-center name
+    # that is NOT a core-financial industry still gets the keyword override.
+    fin = {
+        "sector": "Financial Services",
+        "industry": "Capital Markets",
+        "long_business_summary": "A cryptocurrency exchange and digital asset platform.",
+        "revenue_growth": 0.42,
+    }
+    assert classify(fin)["stock_type"] != "FINANCIAL"

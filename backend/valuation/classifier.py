@@ -19,6 +19,13 @@ NON_FINANCIAL_KEYWORDS = [
     "data center", "data centre", "mining", "miner",
 ]
 
+# Industries where the FINANCIAL valuation methods (P/B + RIM + P/E) genuinely fit —
+# balance-sheet lenders / banks / insurers. A name in one of these stays FINANCIAL even
+# when it also offers a crypto product (e.g. SoFi's "digital asset trading platform"),
+# overriding NON_FINANCIAL_KEYWORDS — which targets crypto miners / data-center operators
+# mis-tagged as Financial Services, not real lenders that merely offer crypto.
+CORE_FINANCIAL_INDUSTRIES = ("bank", "credit services", "mortgage", "insurance")
+
 # Default method weights per stock type. Keys match the MethodId set:
 # dcf, fcfe, ev_ebitda, pe, ev_sales, ddm, pb, rim, sotp, nav.
 _TYPE_WEIGHTS: dict[str, dict[str, float]] = {
@@ -57,9 +64,14 @@ def _detect_type(fin: dict) -> str:
     payout_ratio = fin.get("payout_ratio") or 0
     trailing_pe = fin.get("trailing_pe") or 0
 
-    # 1. Financial
-    if sector == "Financial Services" and not any(kw in summary for kw in NON_FINANCIAL_KEYWORDS):
-        return "FINANCIAL"
+    # 1. Financial. A core-financial industry (bank / lender / insurer) stays FINANCIAL
+    # even if the summary mentions crypto — the de-financialize keyword override only
+    # applies to Financial-Services names that are NOT a balance-sheet lender (crypto
+    # miners / data-center operators mis-tagged as Financial Services).
+    if sector == "Financial Services":
+        is_core_financial = any(kw in industry for kw in CORE_FINANCIAL_INDUSTRIES)
+        if is_core_financial or not any(kw in summary for kw in NON_FINANCIAL_KEYWORDS):
+            return "FINANCIAL"
 
     # 2. Asset-heavy / Real Estate
     if sector == "Real Estate" or (ebitda <= 0 and 0 < market_cap < 2_000_000_000):
