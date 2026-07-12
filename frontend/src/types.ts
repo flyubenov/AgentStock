@@ -128,6 +128,7 @@ export interface ScoreBreakdown {
   pre_profit?: PreProfitBreakdown | null
   sector_adjustment?: SectorAdjustment
   capex_adjustment?: SectorAdjustment
+  roic_adjustment?: SectorAdjustment
   final?: number
 }
 

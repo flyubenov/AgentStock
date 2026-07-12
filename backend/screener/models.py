@@ -54,6 +54,13 @@ class ScreenerMetrics(BaseModel):
     wacc: float | None = None
     roic_wacc_spread: float | None = None
     rote: float | None = None
+    # Section II — acquisition-distortion variants (ROIC on tangible invested
+    # capital, i.e. excluding goodwill & intangibles): used in place of the reported
+    # ROIC when a large past acquisition inflates invested capital and amortization
+    # depresses EBIT (see _acquisition_distorted).
+    roic_ex_goodwill: float | None = None
+    roic_5y_ex_goodwill: float | None = None
+    goodwill_intangible_share: float | None = None
     # Section III (ratios; tangible_bv_per_share is currency)
     net_debt_ebitda: float | None = None
     net_debt_fcf: float | None = None

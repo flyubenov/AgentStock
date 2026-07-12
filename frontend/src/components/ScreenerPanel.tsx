@@ -178,6 +178,9 @@ export default function ScreenerPanel({ result }: { result: ScreenerResult }) {
       {result.score_breakdown && (
         <AdjustmentCard title="Capex Adjustment" sa={result.score_breakdown.capex_adjustment} />
       )}
+      {result.score_breakdown && (
+        <AdjustmentCard title="Acquisition Adjustment" sa={result.score_breakdown.roic_adjustment} />
+      )}
 
       {METRIC_GROUPS.map(group => (
         <div key={group.title} className="bg-[#16161e] border border-[#1e1e2a] rounded-lg p-4">

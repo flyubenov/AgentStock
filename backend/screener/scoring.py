@@ -143,6 +143,36 @@ def _earnings_distorted(m: ScreenerMetrics) -> bool:
     return m.eps_cagr_3y is not None and m.eps_cagr_3y <= 0
 
 
+# A large past acquisition (e.g. AMD/Xilinx) distorts ROIC from both sides: goodwill &
+# intangibles inflate the invested-capital denominator, and their amortization depresses
+# the EBIT numerator. The reported ROIC then measures the deal price tag, not the
+# operating business — while ROTE (tangible book) reads far healthier. When that is the
+# case, Section II scores a ROIC computed on tangible invested capital instead. Gated so
+# a serial over-payer genuinely destroying value is NOT rescued: earnings must be
+# amortization-depressed with a priced-in recovery (trailing P/E >> forward P/E), and the
+# adjustment can only ever raise the ROIC, never lower it.
+GOODWILL_SHARE_FLOOR = 0.30
+
+
+def _acquisition_distorted(m: ScreenerMetrics) -> bool:
+    if (m.goodwill_intangible_share is None
+            or m.goodwill_intangible_share < GOODWILL_SHARE_FLOOR):
+        return False
+    if m.roic_ex_goodwill is None or m.roic_ttm is None:
+        return False
+    # can only ever help, never hurt
+    if m.roic_ex_goodwill <= m.roic_ttm:
+        return False
+    # amortization-depressed earnings with a priced-in recovery (reuses the same
+    # trailing/forward P/E signal as _earnings_distorted, but WITHOUT its eps_cagr<=0
+    # gate — a fast-growing acquirer like AMD has a positive EPS CAGR yet is still
+    # carrying acquisition amortization).
+    tpe, fpe = m.trailing_pe, m.forward_pe
+    if tpe is None or fpe is None or tpe <= 0 or fpe <= 0:
+        return False
+    return tpe / fpe > DEPRESSED_PE_RATIO
+
+
 def _section_iii(m: ScreenerMetrics, profile: str, heavy_capex: bool = False) -> float | None:
     p = PROFILES[profile]
     nde = leverage_score(m.net_debt_ebitda, p["P"])
@@ -182,10 +212,19 @@ def section_scores(m: ScreenerMetrics, profile: str) -> dict[str, float | None]:
         score_high(m.op_margin_trajectory, TRAJECTORY_BANDS, 1),
         score_high(m.gross_margin, GROSS_MARGIN_BANDS, 2),
     ])
+    # Acquisition-distorted names score ROIC (and its WACC spread) on tangible invested
+    # capital, so goodwill/amortization from a past deal isn't read as poor capital
+    # efficiency. ROTE (already tangible-based) is unchanged.
+    if _acquisition_distorted(m):
+        roic_ttm_val = m.roic_ex_goodwill
+        roic_5y_val = m.roic_5y_ex_goodwill if m.roic_5y_ex_goodwill is not None else m.roic_5y_avg
+        spread_val = (m.roic_ex_goodwill - m.wacc) if (m.wacc is not None) else m.roic_wacc_spread
+    else:
+        roic_ttm_val, roic_5y_val, spread_val = m.roic_ttm, m.roic_5y_avg, m.roic_wacc_spread
     section_ii = _mean([
-        score_high(m.roic_ttm, ROIC_BANDS, 0),
-        score_high(m.roic_5y_avg, ROIC_BANDS, 0),
-        score_high(m.roic_wacc_spread, SPREAD_BANDS, 0),
+        score_high(roic_ttm_val, ROIC_BANDS, 0),
+        score_high(roic_5y_val, ROIC_BANDS, 0),
+        score_high(spread_val, SPREAD_BANDS, 0),
         score_high(m.rote, ROTE_BANDS, 1),
     ])
     section_iv = _mean([
@@ -304,6 +343,19 @@ def score(m: ScreenerMetrics, sector: str | None):
                      "capex is heavily reinvested (e.g. data-centre build-out), so the "
                      "FCF-derived metrics are excluded — deliberate reinvestment isn't "
                      "scored as balance-sheet weakness."),
+        }
+    if _acquisition_distorted(m):
+        breakdown["roic_adjustment"] = {
+            "profile": profile,
+            "excluded": ["ROIC (TTM)", "ROIC (5y avg)", "ROIC − WACC spread"],
+            "reported_roic": round(m.roic_ttm, 1) if m.roic_ttm is not None else None,
+            "tangible_roic": round(m.roic_ex_goodwill, 1) if m.roic_ex_goodwill is not None else None,
+            "goodwill_intangible_share": (round(m.goodwill_intangible_share, 2)
+                                          if m.goodwill_intangible_share is not None else None),
+            "note": ("A large past acquisition loads goodwill & intangibles onto invested "
+                     "capital while its amortization depresses EBIT, so reported ROIC "
+                     "understates the operating business. ROIC and its WACC spread are "
+                     "scored on tangible invested capital (ex goodwill) instead."),
         }
     if _earnings_distorted(m):
         breakdown["earnings_adjustment"] = {

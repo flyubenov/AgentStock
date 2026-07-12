@@ -140,6 +140,33 @@ def test_compute_section_i_iv_v():
     assert m.net_income == 160.0 and m.revenue_growth == pytest.approx(11.0, abs=0.1)
 
 
+def test_wacc_caps_inflated_beta():
+    from screener.metrics import wacc as wacc_fn, BETA_CEILING
+    # A stale/aggressive beta (3.0) is capped at 2.0 for the cost-of-equity hurdle.
+    high = wacc_fn(_mk_inputs(info={"beta": 3.0}), 0.21)
+    capped = wacc_fn(_mk_inputs(info={"beta": BETA_CEILING}), 0.21)
+    assert high == pytest.approx(capped, abs=1e-9)
+    # A normal beta (1.0) is untouched — below the ceiling.
+    normal = wacc_fn(_mk_inputs(info={"beta": 1.0}), 0.21)
+    assert normal < capped
+
+
+def test_roic_ex_goodwill_computed_from_tangible_capital():
+    from screener.metrics import compute_metrics
+    # Add goodwill & intangibles to the balance sheet: tangible IC = 1000 - 600 = 400,
+    # so ROIC ex-goodwill = 200*(1-0.21)/400 = 39.5%, and the goodwill share = 0.6.
+    inp = _mk_inputs()
+    inp.balance.rows["Goodwill And Other Intangible Assets"] = [600.0, 570.0, 540.0, 510.0]
+    m = compute_metrics(inp)
+    assert m.roic_ex_goodwill == pytest.approx(200.0 * 0.79 / 400.0 * 100, abs=0.1)
+    assert m.roic_ex_goodwill > m.roic_ttm            # tangible base is smaller
+    assert m.goodwill_intangible_share == pytest.approx(0.6, abs=1e-3)
+    assert m.roic_5y_ex_goodwill is not None
+    # No goodwill reported -> the ex-goodwill metrics stay None (no material acquisition).
+    m0 = compute_metrics(_mk_inputs())
+    assert m0.roic_ex_goodwill is None and m0.goodwill_intangible_share is None
+
+
 def test_fcf_margin_uses_annual_revenue_not_ttm():
     from screener.metrics import compute_metrics
     # Annual statement Total Revenue = 1000; Yahoo TTM totalRevenue = 2000.

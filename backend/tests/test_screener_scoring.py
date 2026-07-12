@@ -319,6 +319,74 @@ def test_earnings_distortion_breakdown_and_lift():
     assert q_d > q_n                      # excluding the depressed EPS CAGR lifts the score
 
 
+def test_acquisition_distortion_detection():
+    from screener.scoring import _acquisition_distorted
+    # AMD-like: goodwill dominates invested capital, tangible ROIC far above reported,
+    # trailing P/E >> forward P/E (amortization-depressed, recovery priced in).
+    amd = ScreenerMetrics(goodwill_intangible_share=0.63, roic_ttm=5.1,
+                          roic_ex_goodwill=13.8, trailing_pe=185.0, forward_pe=42.0)
+    assert _acquisition_distorted(amd) is True
+    # Low goodwill share -> not acquisition-heavy -> no adjustment.
+    assert _acquisition_distorted(ScreenerMetrics(
+        goodwill_intangible_share=0.10, roic_ttm=5.1, roic_ex_goodwill=6.0,
+        trailing_pe=185.0, forward_pe=42.0)) is False
+    # Goodwill-heavy but no P/E recovery signal (trailing ~ forward): a genuine
+    # over-payer must NOT be rescued.
+    assert _acquisition_distorted(ScreenerMetrics(
+        goodwill_intangible_share=0.63, roic_ttm=5.1, roic_ex_goodwill=13.8,
+        trailing_pe=20.0, forward_pe=19.0)) is False
+    # Fires even with a positive EPS CAGR (unlike _earnings_distorted): a fast-growing
+    # acquirer still carries acquisition amortization. eps_cagr is irrelevant here.
+    assert _acquisition_distorted(ScreenerMetrics(
+        goodwill_intangible_share=0.63, roic_ttm=5.1, roic_ex_goodwill=13.8,
+        trailing_pe=185.0, forward_pe=42.0, eps_cagr_3y=46.7)) is True
+    # Missing tangible ROIC -> no adjustment.
+    assert _acquisition_distorted(ScreenerMetrics(
+        goodwill_intangible_share=0.63, roic_ttm=5.1, roic_ex_goodwill=None,
+        trailing_pe=185.0, forward_pe=42.0)) is False
+
+
+def test_acquisition_distortion_lifts_section_ii():
+    # The goodwill-inflated ROIC drags Section II; scoring it on tangible invested
+    # capital lifts the section. ROTE (already tangible) is unchanged either way.
+    base = dict(roic_ttm=5.1, roic_5y_avg=2.6, roic_wacc_spread=-11.8, rote=20.5,
+                wacc=14.5, roic_ex_goodwill=13.8, roic_5y_ex_goodwill=9.9)
+    distorted = ScreenerMetrics(**base, goodwill_intangible_share=0.63,
+                                trailing_pe=185.0, forward_pe=42.0)
+    normal = ScreenerMetrics(**base, goodwill_intangible_share=0.63,
+                             trailing_pe=20.0, forward_pe=19.0)  # no recovery signal
+    s_dist = section_scores(distorted, "TECH_GROWTH")
+    s_norm = section_scores(normal, "TECH_GROWTH")
+    assert s_dist["II"] > s_norm["II"]
+
+
+def test_acquisition_distortion_breakdown_and_lift():
+    # End-to-end AMD-like: the roic adjustment is recorded, the tangible ROIC is scored
+    # (lifting the score vs. the same metrics without the distortion signal), and the
+    # name is NOT routed through the pre-profit branch (it is profitable).
+    base = dict(
+        revenue_cagr_3y=13.6, eps_cagr_3y=46.7, fcf_cagr_3y=29.3, fcf_margin=19.4,
+        op_margin=14.4, op_margin_trajectory=5.3, gross_margin=53.1,
+        roic_ttm=5.1, roic_5y_avg=2.6, roic_wacc_spread=-11.8, rote=20.5, wacc=14.5,
+        roic_ex_goodwill=13.8, roic_5y_ex_goodwill=9.9, goodwill_intangible_share=0.63,
+        net_debt_ebitda=-1.14, net_debt_fcf=-1.26, ocf_capex=7.9,
+        shares_cagr_3y=1.4, sbc_pct_rev=4.7, earnings_quality=1.8,
+        insider_ownership=0.4, shareholder_yield=0.2,
+        net_income=4.3e9, fcf=6.7e9, ebitda=7.4e9,
+    )
+    distorted = ScreenerMetrics(**base, trailing_pe=185.0, forward_pe=42.0, sector="Technology")
+    normal = ScreenerMetrics(**base, trailing_pe=25.0, forward_pe=22.0, sector="Technology")
+    q_d, sec_d, profile, bd = score(distorted, "Technology")
+    q_n, _, _, bd_n = score(normal, "Technology")
+    assert profile == "TECH_GROWTH"
+    assert "roic_adjustment" in bd
+    assert "roic_adjustment" not in bd_n
+    assert bd["roic_adjustment"]["tangible_roic"] == pytest.approx(13.8, abs=0.1)
+    assert bd["pre_profit"] is None            # profitable -> not a pre-profit burn
+    assert q_d > q_n                            # tangible ROIC lifts the score
+    assert q_d == pytest.approx(7.2, abs=0.3)
+
+
 def test_score_clamped_and_rounded():
     m = ScreenerMetrics(roic_ttm=0, roic_5y_avg=0, roic_wacc_spread=-10, rote=0,
                         revenue_cagr_3y=-5, eps_cagr_3y=-5, fcf_cagr_3y=-5,

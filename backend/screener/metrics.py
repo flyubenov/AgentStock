@@ -43,6 +43,12 @@ def pct(x: float | None) -> float | None:
 
 ERP = 0.05  # equity risk premium (assumed constant)
 DEFAULT_RISK_FREE = 0.043
+# yfinance occasionally reports a stale/aggressive beta (e.g. AMD's 2.47, reflecting its
+# 2022 crash window) that inflates the cost-of-equity hurdle and pins the ROIC-WACC
+# spread sub-score at zero. Cap the beta feeding WACC: a beta above 2.0 is already
+# "very risky", and pushing beyond it is usually noise rather than signal. Can only
+# lower an over-stated hurdle, never raise it; normal betas (0.5-1.8) are untouched.
+BETA_CEILING = 2.0
 
 
 def _tax_rate(income: StatementSeries | None) -> float:
@@ -60,11 +66,28 @@ def roic(ebit: float | None, tax_rate: float, invested_capital: float | None) ->
     return ebit * (1 - tax_rate) / invested_capital
 
 
+def goodwill_intangibles(bal: StatementSeries | None, idx: int) -> float | None:
+    """Goodwill + other intangible assets for a given year. Prefers the combined
+    balance-sheet row; falls back to summing the components. Returns None when
+    neither is reported (a company with no material acquisitions)."""
+    if bal is None:
+        return None
+    combined = bal.value("Goodwill And Other Intangible Assets", idx)
+    if combined is not None:
+        return combined
+    gw = bal.value("Goodwill", idx)
+    intang = bal.value("Other Intangible Assets", idx)
+    if gw is None and intang is None:
+        return None
+    return (gw or 0.0) + (intang or 0.0)
+
+
 def wacc(inp: ScreenerInputs, tax_rate: float) -> float | None:
     info = inp.info
     beta = info.get("beta")
     if beta is None:
         return None
+    beta = min(beta, BETA_CEILING)
     rf = inp.risk_free if inp.risk_free is not None else DEFAULT_RISK_FREE
     cost_equity = rf + beta * ERP
     debt = info.get("totalDebt") or 0.0
@@ -89,12 +112,27 @@ def compute_metrics(inp: ScreenerInputs) -> ScreenerMetrics:
     if inc is not None and bal is not None:
         m.roic_ttm = pct(roic(inc.latest("EBIT"), tax, bal.latest("Invested Capital")))
         annual = []
+        annual_ex = []  # ROIC on tangible invested capital (ex goodwill & intangibles)
         for i in range(len(inc.years)):
-            r = roic(inc.value("EBIT", i), tax, bal.value("Invested Capital", i))
+            ic = bal.value("Invested Capital", i)
+            r = roic(inc.value("EBIT", i), tax, ic)
             if r is not None:
                 annual.append(r)
+            gwi = goodwill_intangibles(bal, i)
+            if ic is not None and gwi is not None:
+                r_ex = roic(inc.value("EBIT", i), tax, ic - gwi)
+                if r_ex is not None:
+                    annual_ex.append(r_ex)
         if annual:
             m.roic_5y_avg = pct(sum(annual) / len(annual))
+        if annual_ex:
+            m.roic_5y_ex_goodwill = pct(sum(annual_ex) / len(annual_ex))
+        ic0 = bal.latest("Invested Capital")
+        gwi0 = goodwill_intangibles(bal, 0)
+        if ic0 is not None and gwi0 is not None:
+            m.roic_ex_goodwill = pct(roic(inc.latest("EBIT"), tax, ic0 - gwi0))
+            if ic0 > 0:
+                m.goodwill_intangible_share = gwi0 / ic0
         ni = inc.latest("Net Income")
         tbv = bal.latest("Tangible Book Value")
         if ni is not None and tbv and tbv > 0:
