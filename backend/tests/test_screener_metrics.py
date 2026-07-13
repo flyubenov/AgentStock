@@ -174,3 +174,22 @@ def test_fcf_margin_uses_annual_revenue_not_ttm():
     m = compute_metrics(_mk_inputs(info={"totalRevenue": 2000.0}))
     assert m.fcf_margin == pytest.approx(150.0 / 1000.0 * 100, abs=0.1)
     assert m.fcf_margin != pytest.approx(150.0 / 2000.0 * 100, abs=0.1)
+
+
+def test_op_margin_prefers_statement_over_broken_info():
+    from screener.metrics import compute_metrics
+    # IREN-shaped: info operatingMargins is broken (-64.5%) but the statement is
+    # healthy (Operating Income 220 / Total Revenue 1000 = +22%). Trust the statement.
+    m = compute_metrics(_mk_inputs(info={"operatingMargins": -0.645}))
+    assert m.op_margin == pytest.approx(22.0, abs=0.1)
+
+
+def test_op_margin_falls_back_to_info_without_statement():
+    from screener.metrics import compute_metrics
+    from screener.models import ScreenerInputs
+    inp = ScreenerInputs(ticker="X",
+                         info={"operatingMargins": 0.15, "totalRevenue": 1000.0},
+                         income=None, balance=None, cashflow=None,
+                         price_monthly=tuple(), risk_free=0.045)
+    m = compute_metrics(inp)
+    assert m.op_margin == pytest.approx(15.0, abs=0.1)

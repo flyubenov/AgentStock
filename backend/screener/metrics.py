@@ -174,7 +174,15 @@ def compute_metrics(inp: ScreenerInputs) -> ScreenerMetrics:
     revenue = (inc.latest("Total Revenue") if inc else None) or info.get("totalRevenue")
     if fcf is not None and revenue:
         m.fcf_margin = fcf / revenue * 100.0
-    m.op_margin = pct(info.get("operatingMargins"))
+    oi = inc.latest("Operating Income") if inc is not None else None
+    stmt_rev = inc.latest("Total Revenue") if inc is not None else None
+    if oi is not None and stmt_rev:
+        # Statement-primary: a single broken info['operatingMargins'] (e.g. IREN's
+        # -64.5% vs a real +4.4%) must not override a healthy statement. Use the
+        # statement's own revenue as the denominator for a consistent basis.
+        m.op_margin = oi / stmt_rev * 100.0
+    else:
+        m.op_margin = pct(info.get("operatingMargins"))
     m.gross_margin = pct(info.get("grossMargins"))
     if inc is not None and revenue:
         # operating-margin trajectory: latest OM minus OM at oldest available year (pp)
