@@ -279,7 +279,14 @@ RULE_OF_40_GROWTH_CAP = 100.0
 
 
 def _rule_of_40(m: ScreenerMetrics) -> float | None:
-    g = m.revenue_growth if m.revenue_growth is not None else m.revenue_cagr_3y
+    # Statement YoY first (info revenue_growth can be broken, e.g. IREN's 0.0);
+    # then info growth; then the 3y CAGR. Explicit None checks so a real 0% holds.
+    if m.revenue_growth_yoy is not None:
+        g = m.revenue_growth_yoy
+    elif m.revenue_growth is not None:
+        g = m.revenue_growth
+    else:
+        g = m.revenue_cagr_3y
     # Use an operating (profitability) margin, not FCF margin: a company in a heavy
     # investment phase drives FCF margin far below -100% (capex >> nascent revenue),
     # which would collapse the Rule of 40 and mislabel an elite growth story as a

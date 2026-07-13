@@ -182,6 +182,20 @@ def test_financials_exclude_fcf_and_ocf_metrics_from_sections():
     assert s_fin["IV"] > s_bal["IV"]   # excluding the -7.8 earnings quality lifts Section IV
 
 
+def test_rule_of_40_prefers_statement_yoy_growth():
+    from screener.scoring import _rule_of_40
+    # Statement YoY wins over the broken info revenue_growth (IREN: 0.0 broken).
+    m = ScreenerMetrics(revenue_growth_yoy=167.7, revenue_growth=0.0,
+                        revenue_cagr_3y=50.0, op_margin=4.4)
+    assert _rule_of_40(m) == pytest.approx(100.0 + 4.4)   # 167.7 capped at 100 + margin
+    # Falls back to info revenue_growth when yoy is missing.
+    m2 = ScreenerMetrics(revenue_growth=30.0, revenue_cagr_3y=50.0, op_margin=10.0)
+    assert _rule_of_40(m2) == pytest.approx(40.0)
+    # Falls back to 3y CAGR when both are missing.
+    m3 = ScreenerMetrics(revenue_cagr_3y=25.0, op_margin=10.0)
+    assert _rule_of_40(m3) == pytest.approx(35.0)
+
+
 def test_rule_of_40_uses_operating_margin_and_caps_growth():
     from screener.scoring import _rule_of_40
     # Heavy-capex hyper-growth (NBIS-like): FCF margin is deeply negative from capex,
