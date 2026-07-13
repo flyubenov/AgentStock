@@ -86,6 +86,7 @@ class ScreenerMetrics(BaseModel):
     net_income: float | None = None
     fcf: float | None = None
     revenue_growth: float | None = None
+    revenue_growth_yoy: float | None = None   # statement latest-FY vs prior-FY (percent)
     total_cash: float | None = None
     net_debt: float | None = None
     ebitda: float | None = None

@@ -193,3 +193,18 @@ def test_op_margin_falls_back_to_info_without_statement():
                          price_monthly=tuple(), risk_free=0.045)
     m = compute_metrics(inp)
     assert m.op_margin == pytest.approx(15.0, abs=0.1)
+
+
+def test_revenue_growth_yoy_from_statement():
+    from screener.metrics import compute_metrics
+    # Two most-recent statement revenues: 1000 vs 900 -> +11.1% YoY (percent).
+    m = compute_metrics(_mk_inputs())
+    assert m.revenue_growth_yoy == pytest.approx((1000.0 / 900.0 - 1) * 100, abs=0.1)
+
+
+def test_revenue_growth_yoy_none_with_one_point():
+    from screener.metrics import compute_metrics
+    inp = _mk_inputs()
+    inp.income.rows["Total Revenue"] = [1000.0]  # only one year available
+    m = compute_metrics(inp)
+    assert m.revenue_growth_yoy is None

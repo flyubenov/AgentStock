@@ -169,6 +169,9 @@ def compute_metrics(inp: ScreenerInputs) -> ScreenerMetrics:
     if inc is not None:
         m.revenue_cagr_3y = pct(series_cagr(inc.series("Total Revenue"), 3))
         m.eps_cagr_3y = pct(series_cagr(inc.series("Diluted EPS"), 3))
+        rev_series = inc.series("Total Revenue")
+        if len(rev_series) >= 2 and rev_series[0] is not None and rev_series[1]:
+            m.revenue_growth_yoy = (rev_series[0] / rev_series[1] - 1) * 100.0
     if cf is not None:
         m.fcf_cagr_3y = pct(series_cagr(cf.series("Free Cash Flow"), 3))
     revenue = (inc.latest("Total Revenue") if inc else None) or info.get("totalRevenue")
