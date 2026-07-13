@@ -52,7 +52,7 @@ async def test_run_uses_real_fcf_from_cashflow():
 _IREN_INFO = {
     "symbol": "IREN", "shortName": "IREN Limited", "currentPrice": 41.14,
     "marketCap": 8_000_000_000, "sharesOutstanding": 200_000_000,
-    "freeCashflow": -1_130_000_000, "operatingCashflow": 246_000_000,
+    "freeCashflow": -1_130_000_000, "operatingCashflow": -50_000_000,
     "ebitda": 147_000_000, "totalRevenue": 501_000_000,
     "trailingEps": 0.77, "forwardEps": 0.90, "bookValue": 7.5,
     "trailingPE": 53.0, "forwardPE": 30.0, "revenueGrowth": 0.0,
@@ -74,6 +74,6 @@ async def test_run_iren_reroutes_to_completed_fair_value():
     assert result.status == "completed"
     assert result.stock_type == "MID_CAP"
     assert result.fair_value is not None
-    assert 0 < result.fair_value < _IREN_INFO["currentPrice"]   # valued & expensive (~-63%)
+    assert 20 < result.fair_value < _IREN_INFO["currentPrice"]   # valued & expensive (~-63%)
     assert "ev_ebitda" in result.fair_value_breakdown
     assert "dcf" not in result.fair_value_breakdown
