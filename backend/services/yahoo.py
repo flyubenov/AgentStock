@@ -142,6 +142,20 @@ def latest_statement_ebitda(rows: list[dict]) -> float | None:
     return None
 
 
+def _statement_revenue_yoy(rows: list[dict]) -> float | None:
+    """Year-over-year revenue growth (as a fraction) from the two most-recent
+    reconstruction rows (most-recent-first). None when fewer than two rows or the
+    prior-year revenue is missing/non-positive. Feeds build_scenarios as a growth
+    fallback when yfinance info['revenueGrowth'] is broken (statement-primary)."""
+    if len(rows) < 2:
+        return None
+    latest = rows[0].get("revenue")
+    prior = rows[1].get("revenue")
+    if latest is None or not prior or prior <= 0:
+        return None
+    return latest / prior - 1.0
+
+
 @lru_cache(maxsize=256)
 def _fetch_ev_ebitda_history_sync(ticker: str) -> dict | None:
     """Reconstruct annual EV/EBITDA = (avg price * shares + net debt) / EBITDA from
@@ -182,15 +196,17 @@ def _fetch_ev_ebitda_history_sync(ticker: str) -> dict | None:
                 continue
             ebitda = _cell(ist, "EBITDA", col)
             shares = _cell(ist, "Diluted Average Shares", col)
+            revenue = _cell(ist, "Total Revenue", col)
             debt = _cell(bs, "Total Debt", col) if col in bs.columns else None
             cash = _cell(bs, "Cash Cash Equivalents And Short Term Investments", col) if col in bs.columns else None
             net_debt = (debt or 0) - (cash or 0) if (debt is not None or cash is not None) else 0
             rows.append({"avg_price": float(avg_close[year]), "shares": shares,
-                         "ebitda": ebitda, "net_debt": net_debt})
+                         "ebitda": ebitda, "net_debt": net_debt, "revenue": revenue})
         median = ev_ebitda_history_median(rows)
         if median is None:
             return None
-        return {"multiple": median, "ebitda": latest_statement_ebitda(rows)}
+        return {"multiple": median, "ebitda": latest_statement_ebitda(rows),
+                "revenue_growth": _statement_revenue_yoy(rows)}
     except Exception:
         return None
 

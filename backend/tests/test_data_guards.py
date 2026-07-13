@@ -2,6 +2,7 @@ import pytest
 from datetime import date
 from services.yahoo import (
     ev_ebitda_history_median, latest_statement_ebitda, statements_predate_split,
+    _statement_revenue_yoy,
 )
 
 
@@ -68,3 +69,16 @@ def test_latest_statement_ebitda_skips_leading_nonpositive():
 def test_latest_statement_ebitda_none_when_no_positive():
     rows = [_row(110.0, 1e9, 0, 0), _row(68.0, 1e9, -5e9, 0)]
     assert latest_statement_ebitda(rows) is None
+
+
+# -- _statement_revenue_yoy (YoY growth from reconstruction rows) ---------------
+def test_statement_revenue_yoy_latest_over_prior():
+    # Rows most-recent-first: 501 vs 187 -> +167.9% (fraction 1.679).
+    rows = [{"revenue": 501e6}, {"revenue": 187e6}, {"revenue": 75e6}]
+    assert _statement_revenue_yoy(rows) == pytest.approx(501e6 / 187e6 - 1)
+
+
+def test_statement_revenue_yoy_none_when_insufficient():
+    assert _statement_revenue_yoy([{"revenue": 100.0}]) is None
+    assert _statement_revenue_yoy([{"revenue": 100.0}, {"revenue": None}]) is None
+    assert _statement_revenue_yoy([{"revenue": 100.0}, {"revenue": 0.0}]) is None
