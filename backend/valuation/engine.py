@@ -57,7 +57,8 @@ def build_scenarios(fin: dict, distorted_cap: float = 0.20) -> dict:
     if _earnings_distorted(fin):
         raw = min(fin.get("revenue_growth") or 0, distorted_cap)
     else:
-        raw = fin.get("earnings_growth") or fin.get("revenue_growth") or 0.07
+        raw = (fin.get("earnings_growth") or fin.get("revenue_growth")
+               or fin.get("revenue_growth_stmt") or 0.07)
     base = max(0.02, min(float(raw), 0.20))
     return {
         "optimistic": min(base + 0.05, 0.20),

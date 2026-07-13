@@ -323,3 +323,18 @@ def test_evaluate_non_forward_tier_ignores_historical_ev_ebitda():
     growth = engine.build_scenarios(fin)
     expected = m.calc_ev_ebitda(fin, growth)["fair_value"]  # current multiple, compressed
     assert result["fair_value_breakdown"]["ev_ebitda"]["fair_value"] == pytest.approx(round(expected, 2))
+
+
+def test_build_scenarios_statement_growth_fallback_when_info_broken():
+    # info revenueGrowth is the broken 0 and earnings_growth is None, so the
+    # statement fallback supplies growth. IREN: +167.7% -> capped at 20%.
+    s = engine.build_scenarios({"revenue_growth": 0, "earnings_growth": None,
+                                "revenue_growth_stmt": 1.677})
+    assert s["realistic"] == 0.20
+
+
+def test_build_scenarios_statement_growth_ignored_when_info_valid():
+    # A valid nonzero info growth must win; the statement fallback never fires.
+    s = engine.build_scenarios({"revenue_growth": 0.05, "earnings_growth": None,
+                                "revenue_growth_stmt": 1.677})
+    assert s["realistic"] == pytest.approx(0.05)
