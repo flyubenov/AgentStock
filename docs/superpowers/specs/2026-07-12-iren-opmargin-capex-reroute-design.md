@@ -180,9 +180,10 @@ if (weights.get("dcf", 0) > 0 and fcf_ttm is not None and revenue_ttm
     if ebitda_ttm > 0 and ocf_ttm is not None and ocf_ttm > 0:
         # Capex-distorted, negative-FCF variant: operations generate cash (OCF > 0) and
         # EBITDA is valuable, so deeply negative FCF is a capex/investment choice, not a
-        # burn. Value on EV/EBITDA + P/E, the same reroute the positive-FCF capex case uses.
+        # burn. Value on EV/EBITDA + P/E, but lean harder on the multiple than the
+        # positive-FCF case does (0.85/0.15, not 0.70/0.30) — see rationale below.
         weights = {mid: 0.0 for mid in m.ALL_METHODS}
-        weights["ev_ebitda"], weights["pe"] = 0.70, 0.30
+        weights["ev_ebitda"], weights["pe"] = 0.85, 0.15
     else:
         return { ... existing PRE_PROFIT decline ... }
 ```
@@ -193,7 +194,12 @@ if (weights.get("dcf", 0) > 0 and fcf_ttm is not None and revenue_ttm
   computable. EPS is deliberately **not** in the gate — it is accrual (IREN's net income is
   inflated by non-cash bitcoin fair-value gains) and would wrongly exclude legitimate
   heavy-depreciation investors; the P/E leg self-drops when EPS ≤ 0 anyway.
-- Weights (0.70 / 0.30) match the existing positive-FCF reroute for consistency.
+- **Weights (0.85 / 0.15), *not* the positive-FCF reroute's 0.70 / 0.30.** The gate excludes EPS
+  precisely because deeply-negative-FCF names in this branch tend to carry accrual-distorted
+  earnings (IREN's net income is inflated by non-cash bitcoin fair-value gains). It would be
+  inconsistent to distrust net income for *eligibility* and then trust it for 30% of the *value*,
+  so the P/E leg is cut to 0.15 and EV/EBITDA carries 0.85. (The positive-FCF reroute keeps
+  0.70/0.30 — clean-earnings AMZN-style names — and is left unchanged.)
 - The existing positive-FCF reroute block below stays unchanged.
 - IREN: EBITDA +$147M, OCF +$246M → reroute.
 
@@ -254,7 +260,9 @@ raw = (fin.get("earnings_growth") or fin.get("revenue_growth")
 - Growth from statement fallback → scenarios {opt 0.20, real 0.20, pess 0.16} (capped).
 - EV/EBITDA leg ≈ **$15.4** (statement EBITDA base $286M, hist multiple 16.8, no compression),
   P/E leg ≈ **$14.6** (trailing EPS $0.77 × capped 21× × 0.9 MOS).
-- **Composite FV ≈ $15 (−63% vs $41.14 price)** — was: no FV / declined.
+- **Composite FV ≈ $15 (−63% vs $41.14 price)** at 0.85/0.15 (0.85·15.4 + 0.15·14.6 ≈ 15.3) —
+  was: no FV / declined. The weight shift barely moves the number here (the two legs nearly
+  coincide); it matters for names where BTC-inflated EPS pushes the P/E leg far above the multiple.
 
 ### Fix #2 conflict check
 
@@ -285,7 +293,7 @@ Unit / behavior tests to add (TDD, alongside existing `test_screener_*` and `tes
 
 **Fix #2**
 - `_statement_revenue_yoy` returns latest/prior − 1; `None` when insufficient.
-- Reroute fires for deeply-negative-FCF + EBITDA>0 + OCF>0 → weights ev_ebitda 0.70 / pe 0.30, FV
+- Reroute fires for deeply-negative-FCF + EBITDA>0 + OCF>0 → weights ev_ebitda 0.85 / pe 0.15, FV
   produced.
 - Still declines when OCF ≤ 0 (genuine burn) or EBITDA ≤ 0.
 - `build_scenarios` uses `revenue_growth_stmt` only when info growth fields are falsy; unaffected
