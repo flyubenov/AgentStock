@@ -515,3 +515,55 @@ def test_score_clamped_and_rounded():
                         net_income=1, fcf=1, sector="Technology")
     q, _, _, _ = score(m, "Technology")
     assert q >= 1.0 and round(q, 1) == q
+
+
+def _iren_inputs():
+    from screener.models import StatementSeries, ScreenerInputs
+    # IREN-shaped: broken info operatingMargins (-64.5%) & revenueGrowth (0.0), but
+    # healthy statements. FCF deeply negative from a data-centre capex build-out.
+    inc = StatementSeries(years=[2025, 2024, 2023, 2022], rows={
+        "EBIT": [22.1e6, -30e6, -40e6, -20e6], "Tax Rate For Calcs": [0.21] * 4,
+        "Net Income": [87e6, -170e6, -50e6, -10e6],
+        "Total Revenue": [501e6, 187e6, 75e6, 30e6],
+        "Interest Expense": [5e6, 4e6, 3e6, 2e6],
+        "Gross Profit": [340e6, 120e6, 45e6, 18e6],
+        "Operating Income": [22.1e6, -30e6, -40e6, -20e6],
+        "Diluted EPS": [0.77, -1.5, -0.6, -0.2],
+        "Diluted Average Shares": [200e6, 150e6, 120e6, 100e6]})
+    bal = StatementSeries(years=[2025, 2024, 2023, 2022], rows={
+        "Invested Capital": [2000e6, 1200e6, 800e6, 500e6],
+        "Tangible Book Value": [1500e6, 900e6, 600e6, 400e6],
+        "Net Debt": [-200e6, -100e6, 50e6, 100e6],
+        "Ordinary Shares Number": [200e6, 150e6, 120e6, 100e6]})
+    cf = StatementSeries(years=[2025, 2024, 2023, 2022], rows={
+        "Free Cash Flow": [-1.13e9, -800e6, -400e6, -200e6],
+        "Operating Cash Flow": [246e6, 50e6, -20e6, -10e6],
+        "Capital Expenditure": [-1.37e9, -850e6, -380e6, -190e6],
+        "Stock Based Compensation": [30e6] * 4,
+        "Repurchase Of Capital Stock": [0] * 4, "Cash Dividends Paid": [0] * 4})
+    info = {"symbol": "IREN", "shortName": "IREN Limited", "sector": "Technology",
+            "beta": 2.5, "marketCap": 8e9, "totalDebt": 300e6, "totalCash": 500e6,
+            "ebitda": 147e6, "operatingMargins": -0.645, "grossMargins": 0.68,
+            "heldPercentInsiders": 0.10, "trailingPE": 53.0, "forwardPE": 30.0,
+            "trailingPegRatio": 1.0, "priceToSalesTrailing12Months": 16.0,
+            "enterpriseValue": 7.8e9, "revenueGrowth": 0.0, "totalRevenue": 501e6,
+            "freeCashflow": -1.13e9}
+    return ScreenerInputs(ticker="IREN", info=info, income=inc, balance=bal,
+                          cashflow=cf, price_monthly=tuple(), risk_free=0.045)
+
+
+def test_iren_shaped_profitable_capex_investor_not_pre_profit():
+    from screener.metrics import compute_metrics
+    from screener.scoring import score
+    inp = _iren_inputs()
+    m = compute_metrics(inp)
+    # Statement wins over both broken info fields.
+    assert m.op_margin == pytest.approx(22.1e6 / 501e6 * 100, abs=0.5)   # not -64.5
+    assert m.revenue_growth_yoy == pytest.approx((501.0 / 187.0 - 1) * 100, abs=1.0)
+    q, _, profile, bd = score(m, inp.info["sector"])
+    # Positive op margin -> NOT routed through the operating-loss / pre-profit branch.
+    assert bd["pre_profit"] is None
+    # Capex-eaten FCF metrics excluded as deliberate reinvestment (AMZN-style).
+    assert "capex_adjustment" in bd
+    # Clear of the reported 4.0 hole (exact value not asserted — see unit tests).
+    assert q > 4.0
