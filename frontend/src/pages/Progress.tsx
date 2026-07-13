@@ -1,15 +1,35 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useAnalysisStream } from '../hooks/useAnalysisStream'
 import ProgressBar from '../components/ProgressBar'
-import { fvGapColor } from '../types'
+import type { TickerResult } from '../types'
+import { fvGapColor, qualityScoreColor } from '../types'
 import { cn } from '../lib/utils'
+
+type SortKey = 'quality' | 'fair_value' | 'price_vs_fair_value_pct'
 
 export default function Progress() {
   const { jobId } = useParams<{ jobId: string }>()
   const navigate = useNavigate()
   const location = useLocation()
   const { status, total, completed, failed, results, tickerStatuses, cancel } = useAnalysisStream(jobId ?? null)
+  const [sortKey, setSortKey] = useState<SortKey>('price_vs_fair_value_pct')
+  const [sortAsc, setSortAsc] = useState(false)
+
+  const sortVal = (r: TickerResult, key: SortKey): number | null => {
+    if (key === 'quality') return r.screener?.quality_score ?? null
+    return r[key] ?? null
+  }
+  const sorted = [...results].sort((a, b) => {
+    const av = sortVal(a, sortKey) ?? (sortAsc ? Infinity : -Infinity)
+    const bv = sortVal(b, sortKey) ?? (sortAsc ? Infinity : -Infinity)
+    return sortAsc ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1)
+  })
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortAsc(p => !p)
+    else { setSortKey(key); setSortAsc(false) }
+  }
+  const arrow = (key: SortKey) => (sortKey === key ? (sortAsc ? ' ▲' : ' ▼') : '')
 
   useEffect(() => {
     if (status === 'completed') {
@@ -74,15 +94,19 @@ export default function Progress() {
               <tr className="border-b border-[#1e1e2a] text-xs text-slate-600">
                 <th className="text-left py-2 px-4">Ticker</th>
                 <th className="text-left py-2">Company</th>
-                <th className="text-right py-2 px-2">Fair Value</th>
-                <th className="text-right py-2 pr-4">vs Price</th>
+                <th className="text-right py-2 px-2 cursor-pointer hover:text-slate-300 select-none" onClick={() => toggleSort('quality')}>Quality{arrow('quality')}</th>
+                <th className="text-right py-2 px-2 cursor-pointer hover:text-slate-300 select-none" onClick={() => toggleSort('fair_value')}>Fair Value{arrow('fair_value')}</th>
+                <th className="text-right py-2 pr-4 cursor-pointer hover:text-slate-300 select-none" onClick={() => toggleSort('price_vs_fair_value_pct')}>vs Price{arrow('price_vs_fair_value_pct')}</th>
               </tr>
             </thead>
             <tbody>
-              {results.map(r => (
+              {sorted.map(r => (
                 <tr key={r.ticker} className="border-b border-[#1e1e2a] hover:bg-[#1a1a24]">
                   <td className="py-2 px-4 font-mono font-semibold text-blue-400">{r.ticker}</td>
                   <td className="py-2 text-slate-400 text-xs">{r.company_name || '—'}</td>
+                  <td className={`py-2 px-2 text-right font-mono text-xs ${qualityScoreColor(r.screener?.quality_score)}`}>
+                    {r.screener?.quality_score != null ? r.screener.quality_score.toFixed(1) : '—'}
+                  </td>
                   <td className="py-2 px-2 text-right font-mono text-slate-300">
                     {r.fair_value != null ? `$${r.fair_value.toFixed(2)}` : '—'}
                   </td>

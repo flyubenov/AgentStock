@@ -5,13 +5,32 @@ import { fvGapColor, qualityScoreColor } from '../types'
 
 const API = 'http://localhost:8000'
 
+type SortKey = 'quality' | 'fair_value' | 'price_vs_fair_value_pct'
+
 export default function Database() {
   const [results, setResults] = useState<TickerResult[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [recalcAll, setRecalcAll] = useState(false)
+  const [sortKey, setSortKey] = useState<SortKey>('price_vs_fair_value_pct')
+  const [sortAsc, setSortAsc] = useState(false)
   const navigate = useNavigate()
+
+  const sortVal = (r: TickerResult, key: SortKey): number | null => {
+    if (key === 'quality') return r.quality_score ?? null
+    return r[key] ?? null
+  }
+  const sorted = [...results].sort((a, b) => {
+    const av = sortVal(a, sortKey) ?? (sortAsc ? Infinity : -Infinity)
+    const bv = sortVal(b, sortKey) ?? (sortAsc ? Infinity : -Infinity)
+    return sortAsc ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1)
+  })
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) setSortAsc(p => !p)
+    else { setSortKey(key); setSortAsc(false) }
+  }
+  const arrow = (key: SortKey) => (sortKey === key ? (sortAsc ? ' ▲' : ' ▼') : '')
 
   const load = async () => {
     setLoading(true)
@@ -97,16 +116,16 @@ export default function Database() {
                 <th className="text-left py-2 px-4">Ticker</th>
                 <th className="text-left py-2">Company</th>
                 <th className="text-left py-2 px-2">Stock Type</th>
-                <th className="text-right py-2 px-2">Quality</th>
-                <th className="text-right py-2 px-2">Fair Value</th>
+                <th className="text-right py-2 px-2 cursor-pointer hover:text-slate-300 select-none" onClick={() => toggleSort('quality')}>Quality{arrow('quality')}</th>
+                <th className="text-right py-2 px-2 cursor-pointer hover:text-slate-300 select-none" onClick={() => toggleSort('fair_value')}>Fair Value{arrow('fair_value')}</th>
                 <th className="text-right py-2 px-2">Price</th>
-                <th className="text-right py-2 px-4">Gap%</th>
+                <th className="text-right py-2 px-4 cursor-pointer hover:text-slate-300 select-none" onClick={() => toggleSort('price_vs_fair_value_pct')}>Gap%{arrow('price_vs_fair_value_pct')}</th>
                 <th className="text-right py-2 px-4">Evaluated</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {results.map(r => (
+              {sorted.map(r => (
                 <tr key={r.ticker} className="border-b border-[#1e1e2a] hover:bg-[#1a1a24]">
                   <td className="py-2 px-4">
                     <Link
