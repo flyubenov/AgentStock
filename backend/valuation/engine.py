@@ -242,6 +242,10 @@ async def run(ticker: str) -> TickerResult:
     rf = real_fcf(cashflow, fin.get("fcf_ttm"))
     if rf is not None:
         fin["fcf_ttm"] = rf
+    if cashflow:
+        ocf = cashflow.get("operating_cash_flow")
+        if ocf is not None:
+            fin["ocf_ttm"] = ocf   # statement-primary; gate falls back to info operating_cashflow
 
     # Forward tiers anchor EV/EBITDA to its historical median when reconstructable
     # (the reconstruction skips itself across a recent split — see services.yahoo).
@@ -251,6 +255,8 @@ async def run(ticker: str) -> TickerResult:
         # Project the statement EBITDA the median was built from, not info['ebitda']
         # (they can differ ~2x — content amortization at NFLX).
         fin["ev_ebitda_hist_base"] = hist["ebitda"]
+        if hist.get("revenue_growth") is not None:
+            fin["revenue_growth_stmt"] = hist["revenue_growth"]
 
     data = evaluate(fin)
     data["last_evaluated"] = datetime.now(timezone.utc).isoformat()

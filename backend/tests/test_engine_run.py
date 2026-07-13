@@ -47,3 +47,33 @@ async def test_run_uses_real_fcf_from_cashflow():
         lowered = (await engine.run("AAPL")).fair_value
     # real FCF (20B) is below the info-dict FCF (99B), so DCF + EV/EBITDA conversion drop
     assert lowered < baseline
+
+
+_IREN_INFO = {
+    "symbol": "IREN", "shortName": "IREN Limited", "currentPrice": 41.14,
+    "marketCap": 8_000_000_000, "sharesOutstanding": 200_000_000,
+    "freeCashflow": -1_130_000_000, "operatingCashflow": 246_000_000,
+    "ebitda": 147_000_000, "totalRevenue": 501_000_000,
+    "trailingEps": 0.77, "forwardEps": 0.90, "bookValue": 7.5,
+    "trailingPE": 53.0, "forwardPE": 30.0, "revenueGrowth": 0.0,
+    "enterpriseToEbitda": 20.0, "enterpriseToRevenue": 16.0,
+    "sector": "Technology", "industry": "Software",
+    "totalDebt": 300_000_000, "totalCash": 500_000_000,
+}
+_IREN_CF = {"free_cash_flow": -1_130_000_000, "operating_cash_flow": 246_000_000,
+            "capital_expenditure": -1_370_000_000}
+_IREN_HIST = {"multiple": 16.8, "ebitda": 286_000_000, "revenue_growth": 1.677}
+
+
+@pytest.mark.asyncio
+async def test_run_iren_reroutes_to_completed_fair_value():
+    with patch("valuation.engine.fetch_ticker_info", return_value=_IREN_INFO), \
+         patch("valuation.engine.fetch_ticker_cashflow", return_value=_IREN_CF), \
+         patch("valuation.engine.fetch_ev_ebitda_history", return_value=_IREN_HIST):
+        result = await engine.run("IREN")
+    assert result.status == "completed"
+    assert result.stock_type == "MID_CAP"
+    assert result.fair_value is not None
+    assert 0 < result.fair_value < _IREN_INFO["currentPrice"]   # valued & expensive (~-63%)
+    assert "ev_ebitda" in result.fair_value_breakdown
+    assert "dcf" not in result.fair_value_breakdown
