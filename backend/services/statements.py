@@ -8,7 +8,10 @@ except ImportError:
     _YFRateLimitError = None
 
 _RETRIES = 3
-_BACKOFF = 8.0
+# seconds, multiplied by attempt number (3, 6 = 9s worst case). Kept short so a
+# rate-limited statement fetch releases its yf_pool worker quickly instead of holding
+# a thread for tens of seconds.
+_BACKOFF = 3.0
 
 
 def _is_rate_limit(e: Exception) -> bool:

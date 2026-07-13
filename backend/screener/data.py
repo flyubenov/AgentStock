@@ -1,10 +1,10 @@
 from __future__ import annotations
-import asyncio
 from services.yahoo import fetch_ticker_info
 from services.statements import (
     fetch_income_stmt, fetch_balance_sheet, fetch_cashflow_annual,
     fetch_treasury_10y, fetch_price_monthly,
 )
+from services.yf_pool import run_yf
 from screener.models import ScreenerInputs, StatementSeries
 
 
@@ -15,8 +15,6 @@ async def fetch_screener_inputs(ticker: str) -> ScreenerInputs | None:
     except Exception:
         return None
 
-    loop = asyncio.get_event_loop()
-
     def _blocking():
         return {
             "income": fetch_income_stmt(t),
@@ -26,7 +24,7 @@ async def fetch_screener_inputs(ticker: str) -> ScreenerInputs | None:
             "price": fetch_price_monthly(t),
         }
 
-    d = await loop.run_in_executor(None, _blocking)
+    d = await run_yf(_blocking)
     return ScreenerInputs(
         ticker=t,
         info=info,

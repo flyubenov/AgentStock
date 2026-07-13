@@ -1,9 +1,9 @@
-import asyncio
 import statistics
 import time
 import yfinance as yf
 from functools import lru_cache
 from datetime import date as _date
+from services.yf_pool import run_yf
 
 EV_EBITDA_HISTORY_MIN_YEARS = 3
 
@@ -13,13 +13,15 @@ except ImportError:
     _YFRateLimitError = None  # older yfinance versions
 
 _RATE_LIMIT_RETRIES = 3
-_RATE_LIMIT_BACKOFF = 8.0  # seconds; multiplied by attempt number (8, 16, 24 = 48s max)
+# seconds, multiplied by attempt number (3, 6 = 9s worst case). Kept short so a
+# rate-limited fetch releases its pool worker quickly; the dedicated yf_pool already
+# contains the blast radius, this bounds how long a single fetch can hold a thread.
+_RATE_LIMIT_BACKOFF = 3.0
 
 
 async def fetch_ticker_info(ticker: str) -> dict:
-    """Async wrapper around yfinance Ticker.info."""
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, _fetch_sync, ticker.upper())
+    """Async wrapper around yfinance Ticker.info (dedicated yfinance pool)."""
+    return await run_yf(_fetch_sync, ticker.upper())
 
 
 @lru_cache(maxsize=256)
@@ -81,9 +83,8 @@ def _fetch_cashflow_sync(ticker: str) -> dict | None:
 
 
 async def fetch_ticker_cashflow(ticker: str) -> dict | None:
-    """Async wrapper around _fetch_cashflow_sync."""
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, _fetch_cashflow_sync, ticker.upper())
+    """Async wrapper around _fetch_cashflow_sync (dedicated yfinance pool)."""
+    return await run_yf(_fetch_cashflow_sync, ticker.upper())
 
 
 def real_fcf(cashflow: dict | None, info_fcf: float | None) -> float | None:
@@ -212,8 +213,7 @@ def _fetch_ev_ebitda_history_sync(ticker: str) -> dict | None:
 
 
 async def fetch_ev_ebitda_history(ticker: str) -> dict | None:
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, _fetch_ev_ebitda_history_sync, ticker.upper())
+    return await run_yf(_fetch_ev_ebitda_history_sync, ticker.upper())
 
 
 def extract_financials(info: dict) -> dict:
