@@ -101,19 +101,34 @@ def evaluate(fin: dict) -> dict:
     # emit a misleading number.
     fcf_ttm = fin.get("fcf_ttm")
     revenue_ttm = fin.get("revenue_ttm")
+    ocf_ttm = fin.get("ocf_ttm")
+    if ocf_ttm is None:
+        ocf_ttm = fin.get("operating_cashflow")   # info fallback
+    ebitda_ttm = fin.get("ebitda_ttm") or 0
     if (weights.get("dcf", 0) > 0 and fcf_ttm is not None and revenue_ttm
             and fcf_ttm / revenue_ttm < FCF_MARGIN_FLOOR):
-        return {
-            "ticker": fin.get("ticker") or "",
-            "company_name": fin.get("company_name"),
-            "current_price": fin.get("current_price"),
-            "last_evaluated": None, "stock_type": "PRE_PROFIT",
-            "fair_value": None, "price_vs_fair_value_pct": None,
-            "fair_value_breakdown": {},
-            "status": "failed",
-            "errors": ["Negative free cash flow (pre-profit / heavy investment "
-                       "phase) — trailing financials don't support a reliable valuation"],
-        }
+        if ebitda_ttm > 0 and ocf_ttm is not None and ocf_ttm > 0:
+            # Capex-distorted, negative-FCF variant: operations generate cash (OCF > 0)
+            # and EBITDA is valuable, so deeply negative FCF is a capex/investment
+            # choice, not a burn. Value on EV/EBITDA + P/E, leaning harder on the
+            # multiple than the positive-FCF case (0.85/0.15) because these names carry
+            # accrual-distorted earnings (e.g. IREN's net income is inflated by non-cash
+            # bitcoin fair-value gains) — so EPS is excluded from the gate and trusted
+            # for only 15% of the value.
+            weights = {mid: 0.0 for mid in m.ALL_METHODS}
+            weights["ev_ebitda"], weights["pe"] = 0.85, 0.15
+        else:
+            return {
+                "ticker": fin.get("ticker") or "",
+                "company_name": fin.get("company_name"),
+                "current_price": fin.get("current_price"),
+                "last_evaluated": None, "stock_type": "PRE_PROFIT",
+                "fair_value": None, "price_vs_fair_value_pct": None,
+                "fair_value_breakdown": {},
+                "status": "failed",
+                "errors": ["Negative free cash flow (pre-profit / heavy investment "
+                           "phase) — trailing financials don't support a reliable valuation"],
+            }
 
     # Capex-distorted FCF: a DCF-anchored company whose trailing FCF is POSITIVE but
     # a negligible fraction of EBITDA (capex is eating it — e.g. AMZN's AWS/AI

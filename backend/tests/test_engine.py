@@ -144,15 +144,42 @@ def test_evaluate_sotp_flagged_approx():
 
 
 def test_evaluate_pre_profit_guard_fires():
-    # Deeply FCF-negative, DCF-anchored (MID_CAP) -> declined as PRE_PROFIT.
-    fin = _large_cap_fin(market_cap=16_000_000_000,
-                         fcf_ttm=-1_130_000_000, revenue_ttm=757_000_000)
+    # Deeply FCF-negative AND operations consume cash (OCF < 0) -> genuine burn,
+    # declined as PRE_PROFIT (not a capex investor).
+    fin = _large_cap_fin(market_cap=16_000_000_000, fcf_ttm=-1_130_000_000,
+                         revenue_ttm=757_000_000, operating_cashflow=-200_000_000)
     result = engine.evaluate(fin)
     assert result["status"] == "failed"
     assert result["stock_type"] == "PRE_PROFIT"
     assert result["fair_value"] is None
     assert result["price_vs_fair_value_pct"] is None
     assert "Negative free cash flow" in result["errors"][0]
+
+
+def test_evaluate_negative_fcf_reroutes_when_cash_generative():
+    # IREN pattern: FCF deeply negative from a capex build, but EBITDA > 0 and OCF > 0
+    # (operations self-fund) -> reroute onto EV/EBITDA (0.85) + P/E (0.15), not decline.
+    fin = _large_cap_fin(market_cap=16_000_000_000, fcf_ttm=-1_130_000_000,
+                         revenue_ttm=757_000_000, operating_cashflow=246_000_000,
+                         ebitda_ttm=286_000_000, eps_ttm=0.77, forward_eps=0.90)
+    result = engine.evaluate(fin)
+    assert result["status"] == "completed"
+    assert result["stock_type"] == "MID_CAP"
+    assert "dcf" not in result["fair_value_breakdown"]
+    assert "ev_ebitda" in result["fair_value_breakdown"]
+    assert result["fair_value_breakdown"]["ev_ebitda"]["weight"] == pytest.approx(0.85)
+    if "pe" in result["fair_value_breakdown"]:
+        assert result["fair_value_breakdown"]["pe"]["weight"] == pytest.approx(0.15)
+
+
+def test_evaluate_negative_fcf_declines_when_ebitda_nonpositive():
+    # OCF > 0 but EBITDA <= 0 -> no operating-profit anchor for a multiple -> decline.
+    fin = _large_cap_fin(market_cap=16_000_000_000, fcf_ttm=-1_130_000_000,
+                         revenue_ttm=757_000_000, operating_cashflow=246_000_000,
+                         ebitda_ttm=-50_000_000)
+    result = engine.evaluate(fin)
+    assert result["status"] == "failed"
+    assert result["stock_type"] == "PRE_PROFIT"
 
 
 def test_evaluate_pre_profit_guard_not_fired_when_fcf_positive():
