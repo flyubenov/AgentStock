@@ -12,6 +12,14 @@ EBITDA_CONV_CAP = 0.65
 MATURE_EV_SALES = 2.0
 MATURE_PE_CAP = 21.0
 PEG_CEILING = 2.0  # GROWTH tier: forward P/E may run up to growth% * this before capping
+# yfinance's trailing `earningsGrowth` is a single-quarter YoY figure that can print a
+# tiny positive value on a genuinely fast-growing name (e.g. HOOD 2.7% against ~49%
+# revenue growth), collapsing the PEG target multiple. When earnings growth is below
+# GROWTH_TRUST_FLOOR *and* revenue growth exceeds it by GROWTH_REVENUE_RATIO, source the
+# PEG growth from the bounded revenue figure instead. Guarded so a healthy signal
+# (TSLA 8.3% — revenue doesn't clear the ratio; QCOM 173% — above the floor) is untouched.
+GROWTH_TRUST_FLOOR = 0.10
+GROWTH_REVENUE_RATIO = 3.0
 
 # Size-coupled growth fade: larger companies face base-rate drag (a $2T company
 # cannot compound a high rate for a decade the way a small one can), so their
@@ -189,14 +197,24 @@ def calc_ev_sales(fin: dict, growth: dict) -> dict:
 # -- P/E (capped market multiple) ----------------------------------------------
 def _forward_target_pe(fin: dict) -> float | None:
     """Forward-tier target: forward P/E capped by a PEG ceiling (growth% * PEG_CEILING).
+    The PEG growth is sourced from earnings growth, but re-sourced from bounded revenue
+    growth when earnings growth is an unreliable small-positive value badly contradicted
+    by much stronger revenue growth (see GROWTH_TRUST_FLOOR / GROWTH_REVENUE_RATIO), and
+    falls back to revenue growth outright when earnings growth is missing or <= 0.
     Returns None when forward P/E or a positive growth signal is unavailable, so the
     caller can fall back to the mature trailing-P/E path."""
     fpe = fin.get("forward_pe")
     if not fpe or fpe <= 0:
         return None
     g = fin.get("earnings_growth")
+    rev_g = fin.get("revenue_growth") or 0
+    # A small-but-positive trailing earnings-growth figure badly contradicted by much
+    # stronger revenue growth is treated as an unreliable single-quarter yfinance
+    # artifact -> source growth from the bounded revenue figure instead.
+    if g is not None and 0 < g < GROWTH_TRUST_FLOOR and rev_g > g * GROWTH_REVENUE_RATIO:
+        g = rev_g
     if g is None or g <= 0:
-        g = fin.get("revenue_growth") or 0
+        g = rev_g
     if g <= 0:
         return None
     return min(fpe, g * 100 * PEG_CEILING)

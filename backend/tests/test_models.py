@@ -227,6 +227,56 @@ def test_pe_non_forward_unchanged_with_forward_present():
     assert fv == pytest.approx(10.0 * m.MATURE_PE_CAP * m.MOS)
 
 
+def test_pe_forward_overrides_noise_earnings_growth_with_revenue():
+    # HOOD shape: tiny-positive earnings growth badly contradicted by strong revenue
+    # growth -> source growth from revenue (bounded), not the 2.7% noise value.
+    fin = {"eps_ttm": 2.06, "trailing_pe": 53.3, "forward_pe": 36.0,
+           "earnings_growth": 0.027, "revenue_growth": 0.151}
+    target = min(36.0, 0.151 * 100 * m.PEG_CEILING)   # = 30.2x
+    fv = m.calc_pe(fin, forward=True)["fair_value"]
+    assert fv == pytest.approx(2.06 * target * m.MOS)
+
+
+def test_pe_forward_keeps_healthy_earnings_growth_below_floor():
+    # TSLA shape: earnings growth is below the floor but revenue growth does NOT
+    # clear the ratio (0.158 !> 0.083*3) -> earnings growth is kept, leg unchanged.
+    fin = {"eps_ttm": 2.58, "trailing_pe": 358.9, "forward_pe": 153.0,
+           "earnings_growth": 0.083, "revenue_growth": 0.158}
+    target = min(153.0, 0.083 * 100 * m.PEG_CEILING)  # = 16.6x
+    fv = m.calc_pe(fin, forward=True)["fair_value"]
+    assert fv == pytest.approx(2.58 * target * m.MOS)
+
+
+def test_pe_forward_keeps_high_earnings_growth_above_floor():
+    # QCOM shape: earnings growth well above the floor is always trusted, even when
+    # revenue growth is negative -> no override, forward_pe binds.
+    fin = {"eps_ttm": 9.31, "trailing_pe": 19.76, "forward_pe": 16.71,
+           "earnings_growth": 1.73, "revenue_growth": -0.035}
+    fv = m.calc_pe(fin, forward=True)["fair_value"]
+    assert fv == pytest.approx(9.31 * 16.71 * m.MOS)
+
+
+def test_pe_forward_override_needs_material_ratio():
+    # Guard the ratio: revenue only modestly above earnings growth must NOT override.
+    fin = {"eps_ttm": 10.0, "trailing_pe": 40.0, "forward_pe": 30.0,
+           "earnings_growth": 0.05, "revenue_growth": 0.10}   # 0.10 !> 0.05*3
+    target = min(30.0, 0.05 * 100 * m.PEG_CEILING)   # = 10x, off earnings growth
+    fv = m.calc_pe(fin, forward=True)["fair_value"]
+    assert fv == pytest.approx(10.0 * target * m.MOS)
+
+
+def test_pe_forward_override_ignores_nonpositive_revenue_under_floor():
+    # Small-positive earnings growth under the floor but revenue growth is negative
+    # (or missing) -> override must NOT fire; the earnings-growth signal is kept.
+    target = min(30.0, 0.05 * 100 * m.PEG_CEILING)   # = 10x, off earnings growth
+    neg = {"eps_ttm": 10.0, "trailing_pe": 40.0, "forward_pe": 30.0,
+           "earnings_growth": 0.05, "revenue_growth": -0.20}
+    assert m.calc_pe(neg, forward=True)["fair_value"] == pytest.approx(10.0 * target * m.MOS)
+    missing = {"eps_ttm": 10.0, "trailing_pe": 40.0, "forward_pe": 30.0,
+               "earnings_growth": 0.05, "revenue_growth": None}
+    assert m.calc_pe(missing, forward=True)["fair_value"] == pytest.approx(10.0 * target * m.MOS)
+
+
 def test_pe_forward_normalizes_depressed_trailing_eps():
     # Trailing EPS depressed by amortization (trailing P/E >> forward P/E, e.g.
     # AVGO post-VMware): the forward leg values off forward EPS, not the
