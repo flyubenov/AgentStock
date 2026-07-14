@@ -197,6 +197,10 @@ def calc_ev_sales(fin: dict, growth: dict) -> dict:
 # -- P/E (capped market multiple) ----------------------------------------------
 def _forward_target_pe(fin: dict) -> float | None:
     """Forward-tier target: forward P/E capped by a PEG ceiling (growth% * PEG_CEILING).
+    The PEG growth is sourced from earnings growth, but re-sourced from bounded revenue
+    growth when earnings growth is an unreliable small-positive value badly contradicted
+    by much stronger revenue growth (see GROWTH_TRUST_FLOOR / GROWTH_REVENUE_RATIO), and
+    falls back to revenue growth outright when earnings growth is missing or <= 0.
     Returns None when forward P/E or a positive growth signal is unavailable, so the
     caller can fall back to the mature trailing-P/E path."""
     fpe = fin.get("forward_pe")

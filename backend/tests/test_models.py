@@ -265,6 +265,18 @@ def test_pe_forward_override_needs_material_ratio():
     assert fv == pytest.approx(10.0 * target * m.MOS)
 
 
+def test_pe_forward_override_ignores_nonpositive_revenue_under_floor():
+    # Small-positive earnings growth under the floor but revenue growth is negative
+    # (or missing) -> override must NOT fire; the earnings-growth signal is kept.
+    target = min(30.0, 0.05 * 100 * m.PEG_CEILING)   # = 10x, off earnings growth
+    neg = {"eps_ttm": 10.0, "trailing_pe": 40.0, "forward_pe": 30.0,
+           "earnings_growth": 0.05, "revenue_growth": -0.20}
+    assert m.calc_pe(neg, forward=True)["fair_value"] == pytest.approx(10.0 * target * m.MOS)
+    missing = {"eps_ttm": 10.0, "trailing_pe": 40.0, "forward_pe": 30.0,
+               "earnings_growth": 0.05, "revenue_growth": None}
+    assert m.calc_pe(missing, forward=True)["fair_value"] == pytest.approx(10.0 * target * m.MOS)
+
+
 def test_pe_forward_normalizes_depressed_trailing_eps():
     # Trailing EPS depressed by amortization (trailing P/E >> forward P/E, e.g.
     # AVGO post-VMware): the forward leg values off forward EPS, not the
