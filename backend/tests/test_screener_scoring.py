@@ -567,3 +567,108 @@ def test_iren_shaped_profitable_capex_investor_not_pre_profit():
     assert "capex_adjustment" in bd
     # Clear of the reported 4.0 hole (exact value not asserted — see unit tests).
     assert q > 4.0
+
+
+def _snps():
+    # SNPS-shaped (Synopsys mid-2025, just after the ~$35B Ansys acquisition closed):
+    # goodwill & intangibles dominate invested capital (95%), so the trailing statements
+    # carry the FULL deal — acquisition debt & intangible amortization — but only a stub
+    # of Ansys's EBITDA/operating income. Op margin (12.97) and op-margin trajectory
+    # (-12.16) are amortization-depressed; leverage (6.25x/7.85x) is full debt over
+    # pre-consolidation EBITDA/FCF. Trailing P/E 96.9 vs forward 24.6 = a huge trough.
+    return ScreenerMetrics(
+        revenue_cagr_3y=15.19, eps_cagr_3y=8.53, fcf_cagr_3y=-5.52, fcf_margin=19.13,
+        op_margin=12.97, op_margin_trajectory=-12.16, gross_margin=82.6,
+        roic_ttm=4.22, roic_5y_avg=15.07, roic_wacc_spread=-5.64, rote=None, wacc=9.87,
+        roic_ex_goodwill=79.09, roic_5y_ex_goodwill=45.0, goodwill_intangible_share=0.9466,
+        net_debt_ebitda=6.25, net_debt_fcf=7.85, ocf_capex=8.96,
+        shares_cagr_3y=1.92, sbc_pct_rev=12.66, earnings_quality=1.14,
+        insider_ownership=2.99, shareholder_yield=0.0,
+        trailing_pe=96.87, forward_pe=24.64,
+        net_income=1332e6, fcf=1349e6, ebitda=1696e6, sector="Technology",
+    )
+
+
+def test_dominant_acquisition_detection():
+    from screener.scoring import _dominant_acquisition
+    # SNPS-like: acquisition-distorted AND goodwill dominates invested capital -> True.
+    assert _dominant_acquisition(_snps()) is True
+    # AMD-like: acquisition-distorted but goodwill share 0.63 (< 0.70 threshold) -> a
+    # long-digested normal acquirer, NOT dominant.
+    assert _dominant_acquisition(ScreenerMetrics(
+        goodwill_intangible_share=0.63, roic_ttm=5.1, roic_ex_goodwill=13.8,
+        wacc=14.5, trailing_pe=185.0, forward_pe=42.0)) is False
+    # VST-like: goodwill share 0.23 -> not dominant.
+    assert _dominant_acquisition(ScreenerMetrics(
+        goodwill_intangible_share=0.23, roic_ttm=7.8, roic_ex_goodwill=10.1, wacc=9.6,
+        trailing_pe=26.6, forward_pe=14.7)) is False
+    # Dominant goodwill share but NOT acquisition-distorted (no P/E recovery signal) ->
+    # a genuine value-destroyer / write-down, not a fresh deal being digested -> False.
+    assert _dominant_acquisition(ScreenerMetrics(
+        goodwill_intangible_share=0.95, roic_ttm=4.2, roic_ex_goodwill=79.0, wacc=9.9,
+        trailing_pe=20.0, forward_pe=19.0)) is False
+
+
+def test_acq_margin_distorted_requires_negative_trajectory():
+    from screener.scoring import _acq_margin_distorted
+    # SNPS-like: dominant acquisition with a collapsed (negative) op-margin trajectory
+    # -> amortization is depressing the margin -> distorted.
+    assert _acq_margin_distorted(_snps()) is True
+    # Dominant acquisition but the margin is still IMPROVING (trajectory >= 0): the deal
+    # isn't currently depressing margins -> keep the metric (can only ever help).
+    m = _snps().model_copy(update={"op_margin_trajectory": 5.3})
+    assert _acq_margin_distorted(m) is False
+    # Not a dominant acquisition -> never margin-distorted, whatever the trajectory.
+    assert _acq_margin_distorted(ScreenerMetrics(
+        goodwill_intangible_share=0.23, roic_ttm=7.8, roic_ex_goodwill=10.1, wacc=9.6,
+        trailing_pe=26.6, forward_pe=14.7, op_margin_trajectory=-8.0)) is False
+
+
+def test_acq_leverage_distorted_requires_net_leverage():
+    from screener.scoring import _acq_leverage_distorted
+    # SNPS-like: dominant acquisition and net-levered (debt raised for the deal) -> the
+    # leverage ratios are overstated (full debt over pre-consolidation EBITDA).
+    assert _acq_leverage_distorted(_snps()) is True
+    # Dominant acquisition but net-CASH (net_debt_ebitda < 0): the favourable leverage
+    # score is real, not a mismatch artifact -> keep it (can only ever help).
+    m = _snps().model_copy(update={"net_debt_ebitda": -1.0, "net_debt_fcf": -1.2})
+    assert _acq_leverage_distorted(m) is False
+    # Not a dominant acquisition -> never leverage-distorted.
+    assert _acq_leverage_distorted(ScreenerMetrics(
+        goodwill_intangible_share=0.23, roic_ttm=7.8, roic_ex_goodwill=10.1, wacc=9.6,
+        trailing_pe=26.6, forward_pe=14.7, net_debt_ebitda=2.84)) is False
+
+
+def test_dominant_acquisition_excludes_margin_and_leverage_from_sections():
+    # The amortization-depressed op margin/trajectory (Section I) and the mismatched
+    # leverage ratios (Section III) must not drag the score. Isolate the effect by
+    # comparing against a control whose goodwill share is below the dominant threshold
+    # (so the ROIC adjustment still fires identically in both — only the new margin/
+    # leverage exclusion differs).
+    dist = _snps()
+    control = _snps().model_copy(update={"goodwill_intangible_share": 0.60})
+    s_dist = section_scores(dist, "TECH_GROWTH")
+    s_ctrl = section_scores(control, "TECH_GROWTH")
+    assert s_dist["I"] > s_ctrl["I"]     # excluding the depressed op margin + trajectory
+    assert s_dist["III"] > s_ctrl["III"]  # excluding the mismatched leverage ratios
+    assert s_dist["II"] == s_ctrl["II"]  # ROIC adjustment unchanged between the two
+
+
+def test_dominant_acquisition_breakdown_and_lift():
+    # End-to-end SNPS-like: the acquisition-consolidation adjustment is recorded, the
+    # name is NOT routed through the pre-profit branch (profitable), and excluding the
+    # amortization-depressed margin + mismatched leverage lifts the headline out of the
+    # artificially-low ~6.5 into the ~7.8 range that reflects the real franchise.
+    dist = _snps()
+    control = _snps().model_copy(update={"goodwill_intangible_share": 0.60})
+    q_d, sec_d, profile, bd = score(dist, "Technology")
+    q_c, _, _, bd_c = score(control, "Technology")
+    assert profile == "TECH_GROWTH"
+    assert "acquisition_consolidation_adjustment" in bd
+    assert "acquisition_consolidation_adjustment" not in bd_c
+    excluded = bd["acquisition_consolidation_adjustment"]["excluded"]
+    assert "Operating Margin" in excluded
+    assert "Net Debt / EBITDA" in excluded
+    assert bd["pre_profit"] is None       # profitable -> not a pre-profit burn
+    assert q_d > q_c                       # the exclusion lifts the score
+    assert q_d == pytest.approx(7.8, abs=0.3)
