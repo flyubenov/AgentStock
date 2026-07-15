@@ -191,12 +191,61 @@ def _acquisition_distorted(m: ScreenerMetrics) -> bool:
     return tpe / fpe > DEPRESSED_PE_RATIO
 
 
-def _section_iii(m: ScreenerMetrics, profile: str, heavy_capex: bool = False) -> float | None:
+# A just-closed acquisition whose goodwill & intangibles DOMINATE invested capital
+# (e.g. SNPS after the ~$35B Ansys deal, ~95%) distorts the trailing statements from
+# both ends: they carry the FULL deal — acquisition debt and intangible amortization —
+# but only a partial-period stub of the acquired company's EBITDA / operating income.
+# So the trailing operating margin is amortization-depressed and the leverage ratios are
+# full post-deal debt measured against pre-consolidation EBITDA / FCF. This is distinct
+# from a normal acquirer that long since digested a deal (AMD 0.63, VST 0.23 goodwill
+# share): those keep their trailing margin & leverage. The threshold is set above AMD's
+# 0.63 so only a balance-sheet-dominating fresh deal qualifies.
+DOMINANT_ACQUISITION_GOODWILL_SHARE = 0.70
+
+
+def _dominant_acquisition(m: ScreenerMetrics) -> bool:
+    """A fresh, balance-sheet-dominating acquisition (see the constant above). Requires
+    the acquisition-distortion signal (goodwill-inflated ROIC + priced-in P/E recovery)
+    AND goodwill/intangibles being the overwhelming majority of invested capital — so a
+    genuine write-down / value-destroyer (no P/E recovery) or a long-digested normal
+    acquirer does not qualify."""
+    if not _acquisition_distorted(m):
+        return False
+    s = m.goodwill_intangible_share
+    return s is not None and s >= DOMINANT_ACQUISITION_GOODWILL_SHARE
+
+
+def _acq_margin_distorted(m: ScreenerMetrics) -> bool:
+    """Operating margin (and its trajectory) are amortization-depressed by a dominant
+    fresh acquisition ONLY when the trajectory actually collapsed post-deal (< 0). A
+    name whose margin is still improving despite the deal is not currently margin-
+    distorted, so the metric is kept — the adjustment can only ever remove a drag."""
+    return (_dominant_acquisition(m)
+            and m.op_margin_trajectory is not None and m.op_margin_trajectory < 0)
+
+
+def _acq_leverage_distorted(m: ScreenerMetrics) -> bool:
+    """Leverage ratios are overstated by a dominant fresh acquisition ONLY when the name
+    actually levered up for the deal (net-levered). A net-cash acquirer's favourable
+    leverage score is real, not a mismatch artifact, so it is kept — the adjustment can
+    only ever remove a drag, never lower a good score (e.g. AMD stays net-cash-scored)."""
+    return (_dominant_acquisition(m)
+            and m.net_debt_ebitda is not None and m.net_debt_ebitda > 0)
+
+
+def _section_iii(m: ScreenerMetrics, profile: str, heavy_capex: bool = False,
+                 exclude_acq_leverage: bool = False) -> float | None:
     p = PROFILES[profile]
     nde = leverage_score(m.net_debt_ebitda, p["P"])
     ndf = leverage_score(m.net_debt_fcf, p["Q"])
     ocf = score_high(m.ocf_capex, OCF_CAPEX_BANDS, 0)
-    if heavy_capex:
+    if exclude_acq_leverage:
+        # A dominant fresh acquisition's full debt measured against pre-consolidation
+        # trailing EBITDA / FCF overstates leverage -> judge the balance sheet on the
+        # undistorted OCF / CapEx coverage instead.
+        nde = None
+        ndf = None
+    elif heavy_capex:
         # Capex is deliberately consuming FCF, so the FCF-derived coverage/leverage
         # metrics are unrepresentative -> judge the balance sheet on EBITDA leverage.
         ndf = None
@@ -221,13 +270,17 @@ def section_scores(m: ScreenerMetrics, profile: str) -> dict[str, float | None]:
     # Depressed trailing GAAP EPS (amortization / patent-cliff trough) makes the
     # trailing EPS-growth metric measure the accounting trough, not the business.
     exclude_eps_growth = _earnings_distorted(m)
+    # A dominant fresh acquisition's intangible amortization depresses the operating
+    # margin and collapses its trajectory (see _acq_margin_distorted) — the same
+    # amortization that the ROIC adjustment strips from the Section II numerator.
+    exclude_acq_margin = _acq_margin_distorted(m)
     section_i = _mean([
         score_high(m.revenue_cagr_3y, GROWTH_BANDS, 0),
         None if exclude_eps_growth else score_high(m.eps_cagr_3y, GROWTH_BANDS, 0),
         None if exclude_fcf else score_high(m.fcf_cagr_3y, FCF_CAGR_BANDS, 1),
         None if exclude_fcf else score_high(m.fcf_margin, FCF_MARGIN_BANDS, 0),
-        score_high(m.op_margin, MARGIN_LEVEL_BANDS, 0),
-        score_high(m.op_margin_trajectory, TRAJECTORY_BANDS, 1),
+        None if exclude_acq_margin else score_high(m.op_margin, MARGIN_LEVEL_BANDS, 0),
+        None if exclude_acq_margin else score_high(m.op_margin_trajectory, TRAJECTORY_BANDS, 1),
         score_high(m.gross_margin, GROSS_MARGIN_BANDS, 2),
     ])
     # Acquisition-distorted names score ROIC (and its WACC spread) on tangible invested
@@ -253,7 +306,9 @@ def section_scores(m: ScreenerMetrics, profile: str) -> dict[str, float | None]:
         score_high(m.shareholder_yield, YIELD_BANDS, 1.5),
     ])
     return {"I": section_i, "II": section_ii,
-            "III": _section_iii(m, profile, heavy_capex), "IV": section_iv}
+            "III": _section_iii(m, profile, heavy_capex,
+                                exclude_acq_leverage=_acq_leverage_distorted(m)),
+            "IV": section_iv}
 
 
 MIN_SCORED_SUBSCORES = 6
@@ -382,6 +437,26 @@ def score(m: ScreenerMetrics, sector: str | None):
                      "understates the operating business. ROIC and its WACC spread are "
                      "scored on tangible invested capital (ex goodwill) instead."),
         }
+    if _dominant_acquisition(m):
+        excluded: list[str] = []
+        if _acq_margin_distorted(m):
+            excluded += ["Operating Margin", "Operating-Margin Trajectory"]
+        if _acq_leverage_distorted(m):
+            excluded += ["Net Debt / EBITDA", "Net Debt / FCF"]
+        if excluded:
+            breakdown["acquisition_consolidation_adjustment"] = {
+                "profile": profile,
+                "excluded": excluded,
+                "goodwill_intangible_share": (round(m.goodwill_intangible_share, 2)
+                                              if m.goodwill_intangible_share is not None else None),
+                "note": ("A just-closed acquisition whose goodwill & intangibles dominate "
+                         "invested capital: the trailing statements carry the full deal "
+                         "(acquisition debt and intangible amortization) but only a partial "
+                         "period of the acquired company's EBITDA / operating income. The "
+                         "amortization-depressed operating margin and the mismatched leverage "
+                         "ratios (full debt over pre-consolidation EBITDA / FCF) are excluded — "
+                         "the same amortization the ROIC adjustment strips from Section II."),
+            }
     if _earnings_distorted(m):
         breakdown["earnings_adjustment"] = {
             "excluded": ["EPS CAGR (3y)"],
