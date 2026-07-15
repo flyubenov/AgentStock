@@ -604,3 +604,16 @@ def test_evaluate_non_financial_pb_keeps_flat_coe():
     assert out["stock_type"] == "DIVIDEND"
     exp_pb = m.calc_pb({**fin})["fair_value"]   # default DISCOUNT_RATE
     assert out["fair_value_breakdown"]["pb"]["fair_value"] == pytest.approx(round(exp_pb, 2))
+
+
+def test_evaluate_distorted_roe_bank_pb_leg_is_guarded():
+    # ROE 0.45 (thin-book artifact, ALL-like): the P/B leg is clipped to the
+    # ROE_PB_CAP_MULT x FINANCIAL_COE cap, strictly below the un-guarded value.
+    fin = _bank_fin(return_on_equity=0.45, eps_ttm=45.0)
+    guarded = engine.evaluate(fin)["fair_value_breakdown"]["pb"]["fair_value"]
+    g = min(m.TERMINAL_GROWTH, m.FINANCIAL_COE - 0.01)
+    bvps = fin["book_value_per_share"]
+    capped_pb = (m.ROE_PB_CAP_MULT * m.FINANCIAL_COE - g) / (m.FINANCIAL_COE - g)
+    unguarded_pb = (0.45 - g) / (m.FINANCIAL_COE - g)
+    assert guarded == pytest.approx(round(bvps * capped_pb * m.MOS, 2))
+    assert guarded < round(bvps * unguarded_pb * m.MOS, 2)
