@@ -597,6 +597,20 @@ def test_evaluate_respects_preset_cost_of_equity():
     assert bd["pb"]["fair_value"] == pytest.approx(round(exp_pb, 2))
 
 
+def test_evaluate_overrides_flat_default_coe():
+    # extract_financials hardcodes cost_of_equity = DISCOUNT_RATE (0.10) as the flat
+    # default; a FINANCIAL name carrying that default must still be re-discounted at
+    # FINANCIAL_COE (regression: the live pipeline never sends None, so an is-None-only
+    # gate left RIM stuck at 0.10).
+    fin = _bank_fin(cost_of_equity=m.DISCOUNT_RATE)
+    growth = engine.build_scenarios(fin)
+    exp_pb = m.calc_pb({**fin, "cost_of_equity": m.FINANCIAL_COE})["fair_value"]
+    exp_rim = m.calc_rim({**fin, "cost_of_equity": m.FINANCIAL_COE}, growth)["fair_value"]
+    bd = engine.evaluate(fin)["fair_value_breakdown"]
+    assert bd["pb"]["fair_value"] == pytest.approx(round(exp_pb, 2))
+    assert bd["rim"]["fair_value"] == pytest.approx(round(exp_rim, 2))
+
+
 def test_evaluate_non_financial_pb_keeps_flat_coe():
     # A DIVIDEND name has a P/B leg (0.10 weight) but must NOT get FINANCIAL_COE.
     fin = _dividend_fin()
