@@ -408,3 +408,57 @@ def test_cap_eligible_ocf_info_fallback():
 
 def test_cap_eligible_no_cashflow_data_not_eligible():
     assert engine._cap_eligible({"earnings_growth": 0.5}) is False
+
+
+def _hypergrower_fin(**over):
+    fin = {"fcf_ttm": 3.9e9, "ebitda_ttm": 4.8e9, "ocf_ttm": 4.0e9,
+           "revenue_growth_stmt": 0.70, "revenue_growth": 0.59,
+           "earnings_growth": 1.13}
+    fin.update(over)
+    return fin
+
+
+def test_build_scenarios_elevated_cap_for_eligible_hypergrower():
+    # statement growth 0.70 -> cap saturates at the 0.25 ceiling
+    s = engine.build_scenarios(_hypergrower_fin())
+    assert s["realistic"] == pytest.approx(0.25)
+    assert s["optimistic"] == pytest.approx(0.25)     # capped at the elevated ceiling
+
+
+def test_build_scenarios_statement_growth_preferred_over_info():
+    # info 0.30 would give 0.2125; statement 0.70 wins -> 0.25
+    s = engine.build_scenarios(_hypergrower_fin(revenue_growth_stmt=0.70, revenue_growth=0.30))
+    assert s["realistic"] == pytest.approx(0.25)
+
+
+def test_build_scenarios_info_growth_when_stmt_absent():
+    # no statement growth -> info 0.40 -> _growth_cap(0.40) = 0.225
+    s = engine.build_scenarios(
+        _hypergrower_fin(revenue_growth_stmt=None, revenue_growth=0.40, earnings_growth=1.0))
+    assert s["realistic"] == pytest.approx(0.225)
+
+
+def test_build_scenarios_ceiling_backstop_on_absurd_growth():
+    s = engine.build_scenarios(_hypergrower_fin(revenue_growth_stmt=3.0))
+    assert s["realistic"] == pytest.approx(0.25)      # 300% growth still capped
+
+
+def test_build_scenarios_ineligible_burner_stays_base():
+    # FCF < 0 and OCF < 0 -> not eligible -> cap stays 0.20 despite 70% growth
+    s = engine.build_scenarios(
+        _hypergrower_fin(fcf_ttm=-1e8, ebitda_ttm=-1e7, ocf_ttm=-2e7, revenue_growth_stmt=0.70))
+    assert s["realistic"] == pytest.approx(0.20)
+
+
+def test_build_scenarios_ddm_path_not_elevated_for_hypergrower():
+    # DDM copy (distorted_cap=SUSTAINABLE_CEIL) must NOT receive the elevated cap
+    s = engine.build_scenarios(_hypergrower_fin(), distorted_cap=engine.SUSTAINABLE_CEIL)
+    assert s["realistic"] <= 0.20
+
+
+def test_build_scenarios_distorted_earnings_not_elevated():
+    # eg < 0, rg > 0 -> distorted: raw pre-capped at distorted_cap (0.20), so even an
+    # eligible hyper-grower does not get the elevated cap
+    s = engine.build_scenarios(
+        _hypergrower_fin(earnings_growth=-0.09, revenue_growth=0.70, revenue_growth_stmt=0.70))
+    assert s["realistic"] == pytest.approx(0.20)

@@ -85,15 +85,26 @@ def build_scenarios(fin: dict, distorted_cap: float = 0.20) -> dict:
     distorted_cap bounds the revenue-sourced rate. The default (0.20, the normal
     ceiling) is for the bounded-horizon legs (DCF/EV/EBITDA/PE), which can carry
     the real rate. The perpetuity-based DDM passes distorted_cap=SUSTAINABLE_CEIL
-    so Gordon growth can't overshoot the discount rate."""
+    so Gordon growth can't overshoot the discount rate.
+
+    The near-term cap is revenue-coupled: an eligible (cash-generative) hyper-grower
+    earns up to GROWTH_CAP_CEIL (0.25), sourced statement-YoY-first. The elevated cap
+    rides only the normal bounded-horizon path (distorted_cap >= GROWTH_CAP_BASE);
+    the DDM path keeps the flat base."""
+    cap = GROWTH_CAP_BASE
+    if distorted_cap >= GROWTH_CAP_BASE and _cap_eligible(fin):
+        g = fin.get("revenue_growth_stmt")
+        if g is None:
+            g = fin.get("revenue_growth") or 0.0
+        cap = _growth_cap(g)
     if _earnings_distorted(fin):
         raw = min(fin.get("revenue_growth") or 0, distorted_cap)
     else:
         raw = (fin.get("earnings_growth") or fin.get("revenue_growth")
                or fin.get("revenue_growth_stmt") or 0.07)
-    base = max(0.02, min(float(raw), 0.20))
+    base = max(0.02, min(float(raw), cap))
     return {
-        "optimistic": min(base + 0.05, 0.20),
+        "optimistic": min(base + 0.05, cap),
         "realistic": base,
         "pessimistic": max(base - 0.04, 0.02),
     }
