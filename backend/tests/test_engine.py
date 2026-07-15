@@ -462,3 +462,25 @@ def test_build_scenarios_distorted_earnings_not_elevated():
     s = engine.build_scenarios(
         _hypergrower_fin(earnings_growth=-0.09, revenue_growth=0.70, revenue_growth_stmt=0.70))
     assert s["realistic"] == pytest.approx(0.20)
+
+
+def _growth_evalfin(**over):
+    fin = {"ticker": "TST", "company_name": "Test", "current_price": 100.0,
+           "market_cap": 150e9, "shares_outstanding": 3e8, "revenue_ttm": 6e9,
+           "ebitda_ttm": 4.8e9, "ev_ebitda": 25.0, "ev_sales": 10.0,
+           "fcf_ttm": 3.9e9, "ocf_ttm": 4.0e9, "net_debt": 1e9, "eps_ttm": 11.0,
+           "trailing_pe": 39.0, "forward_pe": 20.0, "forward_eps": 21.0,
+           "earnings_growth": 1.0, "dividend_yield": 0.0,
+           "sector": "Communication Services", "industry": "Advertising Agencies",
+           "return_on_equity": 0.3, "book_value_per_share": 10.0}
+    fin.update(over)
+    return fin
+
+
+def test_evaluate_hypergrower_fv_exceeds_slow_growth_twin():
+    fast = engine.evaluate(_growth_evalfin(revenue_growth=0.59, revenue_growth_stmt=0.70))
+    slow = engine.evaluate(_growth_evalfin(revenue_growth=0.11, revenue_growth_stmt=0.11))
+    assert fast["stock_type"] == "GROWTH"
+    assert slow["stock_type"] == "GROWTH"
+    # Same everything except the cap (0.25 vs 0.20) -> fast fair value is strictly higher
+    assert fast["fair_value"] > slow["fair_value"]
