@@ -136,6 +136,15 @@ def evaluate(fin: dict) -> dict:
     """Pure valuation pipeline. Returns a result dict (no IO, no timestamps)."""
     classification = classify(fin)
     stock_type = classification["stock_type"]
+    # Banks / lenders / insurers are financed below the flat 10% default; discount
+    # their book-value legs (P/B + RIM) at FINANCIAL_COE. Copy so the caller's dict is
+    # never mutated. extract_financials hardcodes cost_of_equity = DISCOUNT_RATE (0.10)
+    # as the flat default, so treat None *or* that default as "unset" and override; a
+    # genuine per-name COE (anything other than the flat default) is respected.
+    if stock_type == "FINANCIAL":
+        coe = fin.get("cost_of_equity")
+        if coe is None or coe == m.DISCOUNT_RATE:
+            fin = {**fin, "cost_of_equity": m.FINANCIAL_COE}
     weights = {mid: classification["method_weights"][mid]["weight"] for mid in m.ALL_METHODS}
     weights = pick_ev_multiple(weights, fin)
 
