@@ -303,7 +303,11 @@ def calc_sotp(fin: dict) -> dict:
     ebitda = fin.get("ebitda_ttm")
     multiple = fin.get("ev_ebitda")
     shares = fin.get("shares_outstanding")
-    if ebitda is None or multiple is None or not shares:
+    # A non-positive EBITDA or multiple cannot yield a meaningful EV/EBITDA-based SOTP:
+    # ebitda * multiple would either reconstruct ~current EV via a double-negative
+    # (circular, and it defeats the cap below) or push the leg negative.
+    if (ebitda is None or ebitda <= 0
+            or multiple is None or multiple <= 0 or not shares):
         return _null_result(False)
     multiple = min(multiple, EV_EBITDA_CAP)
     net_debt = fin.get("net_debt") or 0
