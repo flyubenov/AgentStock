@@ -160,3 +160,60 @@ def test_crypto_name_without_lending_industry_not_financial():
         "revenue_growth": 0.42,
     }
     assert classify(fin)["stock_type"] != "FINANCIAL"
+
+
+def _payment_network_fin(**over):
+    # Visa-shape: asset-light transaction network tagged "Credit Services", no loan book.
+    fin = {
+        "sector": "Financial Services", "industry": "Credit Services",
+        "long_business_summary": (
+            "Visa operates as a payment technology company. It operates VisaNet, a "
+            "transaction processing network that enables authorization, clearing, and "
+            "settlement of payment transactions, and Visa Direct for money movement."
+        ),
+        "revenue_growth": 0.171, "eps_ttm": 11.43,
+        "dividend_yield": 0.0075, "market_cap": 677_000_000_000,
+    }
+    fin.update(over)
+    return fin
+
+
+def test_payment_network_reclassified_out_of_financial():
+    # V/MA: a pure payment network must NOT get the book-value (P/B + RIM) methods —
+    # book value is trivial vs earning power. Falls through to the size/growth rules.
+    assert classify(_payment_network_fin())["stock_type"] == "GROWTH"
+
+
+def test_payment_network_above_trillion_is_large_cap():
+    # Documents the GROWTH vs LARGE_CAP boundary: a >$1T network fails the GROWTH
+    # size gate and lands in the LARGE_CAP size default.
+    assert classify(_payment_network_fin(market_cap=1_200_000_000_000))["stock_type"] == "LARGE_CAP"
+
+
+def test_network_lender_hybrid_stays_financial():
+    # AXP-shape: operates a payments network BUT also carries a real loan book
+    # (deposits + non-card lending), so book methods still apply -> stays FINANCIAL.
+    fin = {
+        "sector": "Financial Services", "industry": "Credit Services",
+        "long_business_summary": (
+            "American Express operates as an integrated payments company, offering "
+            "credit and charge cards, and banking and financing products including "
+            "deposits and non-card lending, as well as network services."
+        ),
+        "revenue_growth": 0.09, "eps_ttm": 14.0,
+        "dividend_yield": 0.011, "market_cap": 242_000_000_000,
+    }
+    assert classify(fin)["stock_type"] == "FINANCIAL"
+
+
+def test_pure_lender_credit_services_stays_financial():
+    # SYF-shape: a genuine consumer lender with no network language stays FINANCIAL.
+    fin = {
+        "sector": "Financial Services", "industry": "Credit Services",
+        "long_business_summary": (
+            "A consumer financial services company providing credit cards, installment "
+            "loans, and deposit products including certificates of deposit."
+        ),
+        "revenue_growth": 0.05,
+    }
+    assert classify(fin)["stock_type"] == "FINANCIAL"

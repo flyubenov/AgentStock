@@ -26,6 +26,27 @@ NON_FINANCIAL_KEYWORDS = [
 # mis-tagged as Financial Services, not real lenders that merely offer crypto.
 CORE_FINANCIAL_INDUSTRIES = ("bank", "credit services", "mortgage", "insurance")
 
+# yfinance's "Credit Services" industry is a mixed bucket: it holds balance-sheet
+# lenders (Synchrony/Capital One/SoFi — the loan book IS the business, so P/B + RIM
+# fit) AND asset-light payment networks (Visa/Mastercard — toll-takers with no loan
+# book, trivial book value vs earning power). A pure network is one whose summary
+# shows network/processor language but NONE of the balance-sheet-book language. Such
+# a name is de-financialized so the book-value methods don't crush it; it falls
+# through to the normal size/growth rules. A hybrid that both runs a network AND
+# carries a loan book (deposits / lending, e.g. American Express) keeps FINANCIAL.
+PAYMENT_NETWORK_KEYWORDS = (
+    "payment technology", "transaction processing", "payments company",
+    "payment-related", "digital payments", "money movement", "two-sided network",
+    "payment network", "payments network",
+)
+LENDER_KEYWORDS = (
+    "deposit products", "certificates of deposit", "money market deposit",
+    "savings deposit", "checking account", "time deposit", "installment loan",
+    "personal loan", "student loan", "home loan", "loan products", "card member loan",
+    "loan receivable", "loans receivable", "consumer banking", "mortgage",
+    "accepts checking", "banking products", "deposit program", "lending",
+)
+
 # Default method weights per stock type. Keys match the MethodId set:
 # dcf, fcfe, ev_ebitda, pe, ev_sales, ddm, pb, rim, sotp, nav.
 _TYPE_WEIGHTS: dict[str, dict[str, float]] = {
@@ -39,6 +60,16 @@ _TYPE_WEIGHTS: dict[str, dict[str, float]] = {
     "CONGLOMERATE": {"dcf": 0.00, "fcfe": 0.00, "ev_ebitda": 0.30, "pe": 0.00, "ev_sales": 0.00, "ddm": 0.00, "pb": 0.00, "rim": 0.00, "sotp": 0.40, "nav": 0.30},
     "ASSET_HEAVY":  {"dcf": 0.30, "fcfe": 0.00, "ev_ebitda": 0.00, "pe": 0.25, "ev_sales": 0.00, "ddm": 0.00, "pb": 0.00, "rim": 0.00, "sotp": 0.00, "nav": 0.45},
 }
+
+
+def _is_payment_network(summary: str) -> bool:
+    """A pure asset-light payment network: network/processor language present, none
+    of the balance-sheet-book (deposit/loan) language. These carry no meaningful loan
+    book, so the FINANCIAL book-value methods (P/B + RIM) don't fit — route them to
+    the normal size/growth rules. A network + loan-book hybrid (e.g. Amex) matches a
+    LENDER keyword and stays FINANCIAL."""
+    return (any(kw in summary for kw in PAYMENT_NETWORK_KEYWORDS)
+            and not any(kw in summary for kw in LENDER_KEYWORDS))
 
 
 def classify(fin: dict) -> dict:
@@ -68,7 +99,7 @@ def _detect_type(fin: dict) -> str:
     # even if the summary mentions crypto — the de-financialize keyword override only
     # applies to Financial-Services names that are NOT a balance-sheet lender (crypto
     # miners / data-center operators mis-tagged as Financial Services).
-    if sector == "Financial Services":
+    if sector == "Financial Services" and not _is_payment_network(summary):
         is_core_financial = any(kw in industry for kw in CORE_FINANCIAL_INDUSTRIES)
         if is_core_financial or not any(kw in summary for kw in NON_FINANCIAL_KEYWORDS):
             return "FINANCIAL"
