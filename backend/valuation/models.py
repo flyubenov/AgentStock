@@ -11,6 +11,14 @@ EBITDA_CONV_FLOOR = 0.40
 EBITDA_CONV_CAP = 0.65
 MATURE_EV_SALES = 2.0
 MATURE_PE_CAP = 21.0
+# Banks / lenders / insurers are financed at a lower cost of equity than the flat
+# DISCOUNT_RATE default; the FINANCIAL bucket discounts its book-value legs (P/B, RIM)
+# at FINANCIAL_COE. Gated to stock_type == "FINANCIAL" in engine.evaluate.
+FINANCIAL_COE = 0.085
+# Distorted-ROE guard for the justified P/B leg: a growth-adjusted multiple with a low
+# COE amplifies an unsustainable ROE (e.g. ALL's ~45% off a thin post-buyback book).
+# Cap the ROE used in calc_pb at this multiple of the COE (3.0 x 0.085 = 25.5%).
+ROE_PB_CAP_MULT = 3.0
 PEG_CEILING = 2.0  # GROWTH tier: forward P/E may run up to growth% * this before capping
 # yfinance's trailing `earningsGrowth` is a single-quarter YoY figure that can print a
 # tiny positive value on a genuinely fast-growing name (e.g. HOOD 2.7% against ~49%
@@ -265,15 +273,26 @@ def calc_ddm(fin: dict, growth: dict) -> dict:
     return {"scenarios": scenarios, "fair_value": _avg(scenarios), "weight": 0.0, "has_scenarios": True}
 
 
-# -- P/B (justified) -----------------------------------------------------------
+# -- P/B (justified, growth-adjusted) ------------------------------------------
 def calc_pb(fin: dict) -> dict:
+    """Justified P/B = (ROE - g) / (COE - g), the growth-adjusted Gordon form.
+
+    COE is the leg's discount rate: fin['cost_of_equity'] when supplied (the
+    FINANCIAL bucket sets FINANCIAL_COE in engine.evaluate), else DISCOUNT_RATE.
+    g is bounded strictly below COE. At ROE == COE the multiple is exactly 1.0.
+    The ROE input is capped at ROE_PB_CAP_MULT x COE so a distorted, unsustainable
+    ROE (thin-book insurer artifact) can't run the multiple away."""
     bvps = fin.get("book_value_per_share")
     roe = fin.get("return_on_equity")
     if bvps is None or roe is None:
         return _null_result(False)
-    justified_pb = roe / DISCOUNT_RATE
+    coe = fin.get("cost_of_equity") or DISCOUNT_RATE
+    roe = min(roe, ROE_PB_CAP_MULT * coe)
+    g = min(TERMINAL_GROWTH, coe - 0.01)
+    justified_pb = (roe - g) / (coe - g)
     fv = _apply_mos(bvps * max(justified_pb, 0.1))
-    return {"scenarios": {k: fv for k in SCENARIO_KEYS}, "fair_value": fv, "weight": 0.0, "has_scenarios": False}
+    return {"scenarios": {k: fv for k in SCENARIO_KEYS}, "fair_value": fv,
+            "weight": 0.0, "has_scenarios": False}
 
 
 # -- RIM (residual income) -----------------------------------------------------

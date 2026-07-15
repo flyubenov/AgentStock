@@ -25,6 +25,53 @@ def test_pb_floor_justified_pb_at_0_1():
     assert r["fair_value"] == pytest.approx(10.0 * 0.1 * 0.90)
 
 
+def test_pb_roe_equals_coe_is_one_times_book():
+    # Invariant: at ROE == COE the growth-adjusted P/B is exactly 1.0, for any COE.
+    fin = {"book_value_per_share": 100.0, "return_on_equity": 0.085,
+           "cost_of_equity": 0.085}
+    assert m.calc_pb(fin)["fair_value"] == pytest.approx(90.0)   # 100 * 1.0 * 0.90
+
+
+def test_pb_growth_adjusted_at_bank_coe():
+    # roe 0.178, coe 0.085, g 0.03 -> (0.178-0.03)/(0.085-0.03) = 2.69090909
+    fin = {"book_value_per_share": 100.0, "return_on_equity": 0.178,
+           "cost_of_equity": 0.085}
+    assert m.calc_pb(fin)["fair_value"] == pytest.approx(242.1818, abs=1e-3)
+
+
+def test_pb_defaults_to_discount_rate_when_coe_absent():
+    # No cost_of_equity -> COE = DISCOUNT_RATE (0.10): (0.178-0.03)/(0.10-0.03)=2.11428
+    fin = {"book_value_per_share": 100.0, "return_on_equity": 0.178}
+    assert m.calc_pb(fin)["fair_value"] == pytest.approx(190.2857, abs=1e-3)
+
+
+def test_pb_lower_coe_lifts_value_for_roe_above_coe():
+    hi = m.calc_pb({"book_value_per_share": 100.0, "return_on_equity": 0.178,
+                    "cost_of_equity": 0.10})["fair_value"]
+    lo = m.calc_pb({"book_value_per_share": 100.0, "return_on_equity": 0.178,
+                    "cost_of_equity": 0.085})["fair_value"]
+    assert lo > hi
+
+
+def test_pb_distorted_roe_is_capped():
+    # roe 0.452 (ALL-like), coe 0.085, cap 3x -> ROE clipped to 0.255
+    # justified = (0.255-0.03)/(0.085-0.03) = 4.09090909 -> 100 * 4.0909 * 0.90
+    fin = {"book_value_per_share": 100.0, "return_on_equity": 0.452,
+           "cost_of_equity": 0.085}
+    capped = m.calc_pb(fin)["fair_value"]
+    assert capped == pytest.approx(368.1818, abs=1e-3)
+    # strictly below what the uncapped ROE would have produced
+    uncapped_pb = (0.452 - 0.03) / (0.085 - 0.03)
+    assert capped < 100.0 * uncapped_pb * 0.90
+
+
+def test_pb_floor_holds_at_bank_coe_for_subgrowth_roe():
+    # roe 0.02 < g -> justified negative -> floored at 0.1 -> 100 * 0.1 * 0.90
+    fin = {"book_value_per_share": 100.0, "return_on_equity": 0.02,
+           "cost_of_equity": 0.085}
+    assert m.calc_pb(fin)["fair_value"] == pytest.approx(9.0)
+
+
 def test_missing_inputs_return_null():
     assert m.calc_dcf({"fcf_ttm": None, "shares_outstanding": 1000}, GROWTH)["fair_value"] is None
     assert m.calc_ev_ebitda({"ebitda_ttm": None, "ev_ebitda": 10, "shares_outstanding": 1}, GROWTH)["fair_value"] is None
