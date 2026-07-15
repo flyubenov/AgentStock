@@ -27,7 +27,7 @@ GROWTH_CAP_SLOPE = 0.125
 
 # Operating-compounder tiers: real earnings AND real EBITDA, so they take the
 # "balance past and future" basis — historical-median EV/EBITDA + forward P/E.
-FORWARD_TIERS = {"LARGE_CAP", "MID_CAP", "GROWTH"}
+FORWARD_TIERS = {"MEGA_CAP", "LARGE_CAP", "MID_CAP", "GROWTH"}
 
 # pe and ev_ebitda are dispatched explicitly (they take method-basis flags); the
 # maps cover the remaining methods with uniform signatures.
