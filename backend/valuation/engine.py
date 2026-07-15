@@ -17,6 +17,14 @@ FCF_MARGIN_FLOOR = -0.25
 # the residual. Distinct from FCF_MARGIN_FLOOR, which declines deeply-negative FCF.
 FCF_EBITDA_FLOOR = 0.15
 
+# Revenue-coupled growth cap: hyper-growers earn a modest, bounded increment of
+# near-term growth credit above the flat base. The ramp is deliberately shallow
+# (+1pp of cap per 8pp of growth) and the 0.25 ceiling — reached at g=0.60 — is the
+# ultimate backstop against a noisy-high growth reading.
+GROWTH_CAP_BASE = 0.20
+GROWTH_CAP_CEIL = 0.25
+GROWTH_CAP_SLOPE = 0.125
+
 # Operating-compounder tiers: real earnings AND real EBITDA, so they take the
 # "balance past and future" basis — historical-median EV/EBITDA + forward P/E.
 FORWARD_TIERS = {"LARGE_CAP", "MID_CAP", "GROWTH"}
@@ -31,6 +39,14 @@ _SCENARIO_FN = {
     "ev_sales": m.calc_ev_sales,
     "rim": m.calc_rim,
 }
+
+
+def _growth_cap(g: float) -> float:
+    """Near-term growth cap coupled to revenue growth: flat GROWTH_CAP_BASE until
+    growth passes GROWTH_CAP_BASE, then a gentle linear ramp to GROWTH_CAP_CEIL
+    (reached at g=0.60). The ceiling bounds a noisy-high growth reading."""
+    return min(GROWTH_CAP_CEIL,
+               GROWTH_CAP_BASE + GROWTH_CAP_SLOPE * max(0.0, g - GROWTH_CAP_BASE))
 
 
 def _earnings_distorted(fin: dict) -> bool:

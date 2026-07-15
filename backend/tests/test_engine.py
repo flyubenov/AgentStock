@@ -365,3 +365,20 @@ def test_build_scenarios_statement_growth_ignored_when_info_valid():
     s = engine.build_scenarios({"revenue_growth": 0.05, "earnings_growth": None,
                                 "revenue_growth_stmt": 1.677})
     assert s["realistic"] == pytest.approx(0.05)
+
+
+def test_growth_cap_below_threshold_is_base():
+    assert engine._growth_cap(0.10) == pytest.approx(0.20)
+    assert engine._growth_cap(0.20) == pytest.approx(0.20)
+
+
+def test_growth_cap_ramps_linearly():
+    assert engine._growth_cap(0.30) == pytest.approx(0.2125)
+    assert engine._growth_cap(0.40) == pytest.approx(0.225)
+    assert engine._growth_cap(0.50) == pytest.approx(0.2375)
+
+
+def test_growth_cap_saturates_at_ceiling():
+    assert engine._growth_cap(0.60) == pytest.approx(0.25)
+    assert engine._growth_cap(0.70) == pytest.approx(0.25)
+    assert engine._growth_cap(1.68) == pytest.approx(0.25)   # IREN-shape backstop
