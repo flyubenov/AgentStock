@@ -23,7 +23,7 @@ async def test_run_returns_completed_ticker_result():
         result = await engine.run("AAPL")
     assert isinstance(result, TickerResult)
     assert result.status == "completed"
-    assert result.stock_type == "LARGE_CAP"
+    assert result.stock_type == "MEGA_CAP"  # AAPL at $3T is a mega-cap (>$1T tier)
     assert result.fair_value is not None
     assert result.last_evaluated is not None
 

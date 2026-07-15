@@ -27,7 +27,7 @@ GROWTH_CAP_SLOPE = 0.125
 
 # Operating-compounder tiers: real earnings AND real EBITDA, so they take the
 # "balance past and future" basis — historical-median EV/EBITDA + forward P/E.
-FORWARD_TIERS = {"LARGE_CAP", "MID_CAP", "GROWTH"}
+FORWARD_TIERS = {"MEGA_CAP", "LARGE_CAP", "MID_CAP", "GROWTH"}
 
 # pe and ev_ebitda are dispatched explicitly (they take method-basis flags); the
 # maps cover the remaining methods with uniform signatures.
@@ -258,6 +258,20 @@ def evaluate(fin: dict) -> dict:
     fair_value: float | None = None
     if breakdown:
         fair_value = sum(b["weight"] * b["fair_value"] for b in breakdown.values())
+
+    # A non-positive composite is not a valuation — a negative-FCF DCF leg (or similar)
+    # dragged the blend at or below zero. Decline rather than surface a misleading
+    # number (regression: INTC emitted a completed fair value of -$2.59).
+    if fair_value is not None and fair_value <= 0:
+        return {
+            "ticker": ticker, "company_name": company_name, "current_price": current_price,
+            "last_evaluated": None, "stock_type": stock_type,
+            "fair_value": None, "price_vs_fair_value_pct": None,
+            "fair_value_breakdown": {},
+            "status": "failed",
+            "errors": ["composite fair value non-positive — trailing financials "
+                       "don't support a reliable valuation"],
+        }
 
     pct = None
     if fair_value is not None and current_price and current_price > 0:

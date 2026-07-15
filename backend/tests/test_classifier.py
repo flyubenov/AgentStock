@@ -54,13 +54,14 @@ def test_growth():
     assert classify(fin)["stock_type"] == "GROWTH"
 
 
-def test_trillion_dollar_grower_is_large_cap():
-    # A $1T+ fast grower is a LARGE_CAP, not GROWTH (regression: META/MSFT/GOOGL
-    # were mislabeled GROWTH; the GROWTH rule now has a mega-cap ceiling).
+def test_trillion_dollar_grower_is_mega_cap():
+    # A $1T+ fast grower is a MEGA_CAP, not GROWTH (regression: META/MSFT/GOOGL
+    # were mislabeled GROWTH; the GROWTH rule has a mega-cap ceiling). The >$1T
+    # size default is its own MEGA_CAP tier, distinct from the $100B-$1T LARGE_CAP.
     fin = {"sector": "Technology", "revenue_growth": 0.15, "eps_ttm": 20.0,
            "ebitda_ttm": 100_000_000_000, "dividend_yield": 0.0,
            "market_cap": 1_400_000_000_000}
-    assert classify(fin)["stock_type"] == "LARGE_CAP"
+    assert classify(fin)["stock_type"] == "MEGA_CAP"
 
 
 def test_sub_trillion_grower_stays_growth():
@@ -103,6 +104,27 @@ def test_mid_cap_weights_shape():
     assert res["method_weights"]["dcf"]["weight"] == 0.45
     assert res["method_weights"]["ev_sales"]["weight"] == 0.15
     assert res["method_weights"]["sotp"]["weight"] == 0.0
+
+
+def test_mega_cap_weights_shape():
+    # MEGA_CAP (>$1T) leans slightly more on DCF than LARGE_CAP (.55 vs .50) and
+    # trims P/E (.10 vs .15); the EV leg matches LARGE_CAP (.35) and there is no
+    # standalone EV/Sales weight (pick_ev_multiple would fold it into EV/EBITDA
+    # for the healthy-margin names this tier holds).
+    res = classify({"sector": "Technology", "eps_ttm": 5.0,
+                    "market_cap": 2_000_000_000_000})
+    assert res["stock_type"] == "MEGA_CAP"
+    assert res["method_weights"]["dcf"]["weight"] == 0.55
+    assert res["method_weights"]["ev_ebitda"]["weight"] == 0.35
+    assert res["method_weights"]["pe"]["weight"] == 0.10
+    assert res["method_weights"]["ev_sales"]["weight"] == 0.0
+
+
+def test_large_cap_stays_below_trillion():
+    # The $100B-$1T band remains LARGE_CAP; only >$1T crosses into MEGA_CAP.
+    fin = {"sector": "Technology", "revenue_growth": 0.05, "eps_ttm": 5.0,
+           "dividend_yield": 0.005, "market_cap": 900_000_000_000}
+    assert classify(fin)["stock_type"] == "LARGE_CAP"
 
 
 def test_method_weights_shape():
@@ -184,10 +206,10 @@ def test_payment_network_reclassified_out_of_financial():
     assert classify(_payment_network_fin())["stock_type"] == "GROWTH"
 
 
-def test_payment_network_above_trillion_is_large_cap():
-    # Documents the GROWTH vs LARGE_CAP boundary: a >$1T network fails the GROWTH
-    # size gate and lands in the LARGE_CAP size default.
-    assert classify(_payment_network_fin(market_cap=1_200_000_000_000))["stock_type"] == "LARGE_CAP"
+def test_payment_network_above_trillion_is_mega_cap():
+    # Documents the GROWTH vs MEGA_CAP boundary: a >$1T network fails the GROWTH
+    # size gate and lands in the MEGA_CAP size default (>$1T tier).
+    assert classify(_payment_network_fin(market_cap=1_200_000_000_000))["stock_type"] == "MEGA_CAP"
 
 
 def test_network_lender_hybrid_stays_financial():

@@ -90,7 +90,8 @@ def test_pick_ev_no_fold_when_only_one_weighted():
 
 
 def test_evaluate_large_cap_blend():
-    fin = _large_cap_fin()
+    # A $100B-$1T name is LARGE_CAP (the >$1T mega tier is covered separately).
+    fin = _large_cap_fin(market_cap=500_000_000_000)
     result = engine.evaluate(fin)
     assert result["status"] == "completed"
     assert result["stock_type"] == "LARGE_CAP"
@@ -105,6 +106,22 @@ def test_evaluate_large_cap_blend():
     bd = result["fair_value_breakdown"]
     assert "ev_sales" not in bd
     assert "ev_ebitda" in bd
+
+
+def test_evaluate_mega_cap_blend():
+    # The default fixture is a $3T name -> MEGA_CAP: same forward-tier mechanics as
+    # LARGE_CAP but leaning slightly more on DCF and less on P/E. Like LARGE_CAP it
+    # carries no EV/Sales leg (pick_ev_multiple folds it into EV/EBITDA at healthy margin).
+    result = engine.evaluate(_large_cap_fin())
+    assert result["status"] == "completed"
+    assert result["stock_type"] == "MEGA_CAP"
+    assert result["fair_value"] is not None and result["fair_value"] > 0
+    bd = result["fair_value_breakdown"]
+    assert "ev_sales" not in bd
+    assert "ev_ebitda" in bd
+    # P/E carries less weight here than under LARGE_CAP (.10 vs .15 pre-renormalization).
+    large = engine.evaluate(_large_cap_fin(market_cap=500_000_000_000))
+    assert bd["pe"]["weight"] < large["fair_value_breakdown"]["pe"]["weight"]
 
 
 def test_evaluate_mid_cap_blend():
@@ -133,6 +150,24 @@ def test_evaluate_insufficient_data_is_failed():
     result = engine.evaluate(fin)
     assert result["status"] == "failed"
     assert "insufficient data for any model" in result["errors"]
+
+
+def test_evaluate_declines_when_composite_nonpositive():
+    # A moderate cash-burner (FCF/revenue above the -25% pre-profit decline floor, so
+    # the guard does not fire) can still drive a negative composite through its negative
+    # DCF leg. A negative fair value is not a valuation — decline rather than surface it.
+    # Regression: INTC emitted a completed fair value of -$2.59.
+    fin = {
+        "ticker": "NEG", "company_name": "Negative Co", "current_price": 20.0,
+        "sector": "Technology", "market_cap": 50_000_000_000,
+        "shares_outstanding": 100_000_000, "revenue_ttm": 1_000_000_000,
+        "fcf_ttm": -10_000_000,          # -1% of revenue: above the -25% decline floor
+        "ebitda_ttm": None, "eps_ttm": -1.0, "revenue_growth": 0.05, "net_debt": 0,
+    }
+    result = engine.evaluate(fin)
+    assert result["fair_value"] is None
+    assert result["status"] == "failed"
+    assert result["price_vs_fair_value_pct"] is None
 
 
 def test_evaluate_sotp_flagged_approx():
@@ -238,13 +273,15 @@ def test_evaluate_pe_kept_when_earnings_healthy():
 
 
 def test_evaluate_forward_tier_keeps_pe_when_distorted():
-    # A forward tier (LARGE_CAP) with distorted GAAP earnings keeps its forward-P/E
-    # leg: forward P/E is robust to a one-off trailing charge. Regression: ETN,
-    # whose forward-P/E recovery leg was being thrown away.
+    # A forward tier (here MEGA_CAP: the $3T fixture with 16.8% growth clears the
+    # GROWTH mega-cap ceiling into the size default) with distorted GAAP earnings keeps
+    # its forward-P/E leg: forward P/E is robust to a one-off trailing charge. Regression:
+    # ETN, whose forward-P/E recovery leg was being thrown away.
     fin = _large_cap_fin(earnings_growth=-0.094, revenue_growth=0.168,
                          forward_pe=26.0, trailing_pe=40.0)
     result = engine.evaluate(fin)
-    assert result["stock_type"] == "LARGE_CAP"
+    assert result["stock_type"] == "MEGA_CAP"
+    assert result["stock_type"] in engine.FORWARD_TIERS
     assert "pe" in result["fair_value_breakdown"]
 
 
@@ -302,7 +339,8 @@ def test_evaluate_large_cap_uses_forward_pe():
     # LARGE_CAP is now a forward tier: the P/E leg uses forward P/E (PEG-capped),
     # not the mature trailing cap, when a forward P/E is present.
     from valuation import models as m
-    fin = _large_cap_fin(forward_pe=40.0, trailing_pe=35.0)  # eg 0.08 -> PEG cap 16x
+    fin = _large_cap_fin(forward_pe=40.0, trailing_pe=35.0,  # eg 0.08 -> PEG cap 16x
+                         market_cap=500_000_000_000)
     result = engine.evaluate(fin)
     assert result["stock_type"] == "LARGE_CAP"
     expected = m.calc_pe(fin, forward=True)["fair_value"]
@@ -314,7 +352,7 @@ def test_evaluate_forward_tier_uses_historical_ev_ebitda():
     # When a historical median multiple is supplied, a forward tier values
     # EV/EBITDA off it (uncompressed) rather than the current trailing multiple.
     from valuation import models as m
-    fin = _large_cap_fin(ev_ebitda=40.0, ev_ebitda_hist=12.0)
+    fin = _large_cap_fin(ev_ebitda=40.0, ev_ebitda_hist=12.0, market_cap=500_000_000_000)
     result = engine.evaluate(fin)
     assert result["stock_type"] == "LARGE_CAP"
     growth = engine.build_scenarios(fin)
@@ -328,7 +366,8 @@ def test_evaluate_forward_tier_uses_historical_ev_ebitda_base():
     # not info['ebitda']. Mixing the two (base 14B, multiple from ~30B) halved the leg.
     from valuation import models as m
     fin = _large_cap_fin(ebitda_ttm=14_000_000_000, ev_ebitda=22.0,
-                         ev_ebitda_hist=10.0, ev_ebitda_hist_base=30_000_000_000)
+                         ev_ebitda_hist=10.0, ev_ebitda_hist_base=30_000_000_000,
+                         market_cap=500_000_000_000)
     result = engine.evaluate(fin)
     assert result["stock_type"] == "LARGE_CAP"
     growth = engine.build_scenarios(fin)
