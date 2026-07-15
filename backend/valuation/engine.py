@@ -49,6 +49,22 @@ def _growth_cap(g: float) -> float:
                GROWTH_CAP_BASE + GROWTH_CAP_SLOPE * max(0.0, g - GROWTH_CAP_BASE))
 
 
+def _cap_eligible(fin: dict) -> bool:
+    """The elevated growth cap applies only to names demonstrating economics:
+    FCF-positive, or operationally cash-generative (EBITDA > 0 and OCF > 0). This
+    reuses the capex-reroute cash-generation signal, so capex-heavy reinvestors
+    (negative FCF, positive EBITDA/OCF — e.g. IREN) still qualify. OCF falls back
+    to the info figure when the statement value is absent."""
+    fcf = fin.get("fcf_ttm")
+    if fcf is not None and fcf > 0:
+        return True
+    ebitda = fin.get("ebitda_ttm") or 0
+    ocf = fin.get("ocf_ttm")
+    if ocf is None:
+        ocf = fin.get("operating_cashflow")
+    return ebitda > 0 and ocf is not None and ocf > 0
+
+
 def _earnings_distorted(fin: dict) -> bool:
     """GAAP earnings treated as distorted: negative earnings growth while
     revenue is still growing (acquisition amortization / one-offs, e.g. ABBV)."""

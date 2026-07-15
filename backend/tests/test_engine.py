@@ -382,3 +382,29 @@ def test_growth_cap_saturates_at_ceiling():
     assert engine._growth_cap(0.60) == pytest.approx(0.25)
     assert engine._growth_cap(0.70) == pytest.approx(0.25)
     assert engine._growth_cap(1.68) == pytest.approx(0.25)   # IREN-shape backstop
+
+
+def test_cap_eligible_fcf_positive():
+    assert engine._cap_eligible({"fcf_ttm": 100.0}) is True
+
+
+def test_cap_eligible_burner_excluded():
+    # FCF < 0 and OCF < 0 -> genuine cash burn, not eligible
+    assert engine._cap_eligible(
+        {"fcf_ttm": -50.0, "ebitda_ttm": -10.0, "ocf_ttm": -20.0}) is False
+
+
+def test_cap_eligible_capex_reroute_shape():
+    # FCF < 0 but EBITDA > 0 and OCF > 0 (IREN-like) -> eligible via the OCF branch
+    assert engine._cap_eligible(
+        {"fcf_ttm": -50.0, "ebitda_ttm": 100.0, "ocf_ttm": 80.0}) is True
+
+
+def test_cap_eligible_ocf_info_fallback():
+    # ocf_ttm absent -> falls back to operating_cashflow (info)
+    assert engine._cap_eligible(
+        {"fcf_ttm": -50.0, "ebitda_ttm": 100.0, "operating_cashflow": 80.0}) is True
+
+
+def test_cap_eligible_no_cashflow_data_not_eligible():
+    assert engine._cap_eligible({"earnings_growth": 0.5}) is False
