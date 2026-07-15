@@ -209,13 +209,28 @@ def evaluate(fin: dict) -> dict:
     # The DDM perpetuity keeps distorted names on the sustainable ceiling.
     ddm_growth = build_scenarios(fin, distorted_cap=SUSTAINABLE_CEIL)
 
+    # Forward-tier severe earnings trough (a just-closed transformative acquisition, e.g.
+    # SNPS post-Ansys): the trailing-FCF DCF base carries the full deal cost but only a
+    # stub of the acquired earnings, understating the combined company. Rebase the DCF
+    # onto forward run-rate owner earnings, capped at the forward-P/E leg so the rebased
+    # DCF can't run above that trustworthy forward anchor. Only forward tiers, which
+    # already value the P/E leg off the forward multiple, qualify.
+    dcf_base_override: float | None = None
+    dcf_value_cap: float | None = None
+    if is_forward_tier and weights.get("dcf", 0) > 0:
+        rebased = m.rebased_dcf_base(fin)
+        if rebased is not None:
+            pe_cap = m.calc_pe(fin, forward=True).get("fair_value")
+            if pe_cap is not None:
+                dcf_base_override, dcf_value_cap = rebased, pe_cap
+
     results: dict[str, dict] = {}
     for mid in m.ALL_METHODS:
         weight = weights.get(mid, 0.0)
         if weight <= 0:
             continue
         if mid == "dcf":
-            r = m.calc_dcf(fin, growth)
+            r = m.calc_dcf(fin, growth, base_override=dcf_base_override, value_cap=dcf_value_cap)
         elif mid == "ev_ebitda":
             # Forward tiers anchor to the historical-median multiple when available
             # (no compression). Without it, GROWTH keeps its full multiple

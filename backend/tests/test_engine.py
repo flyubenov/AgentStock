@@ -631,3 +631,55 @@ def test_evaluate_distorted_roe_bank_pb_leg_is_guarded():
     unguarded_pb = (0.45 - g) / (m.FINANCIAL_COE - g)
     assert guarded == pytest.approx(round(bvps * capped_pb * m.MOS, 2))
     assert guarded < round(bvps * unguarded_pb * m.MOS, 2)
+
+
+def _snps_fin(**over):
+    # SNPS-shaped (Synopsys mid-2025, just after the ~$35B Ansys deal closed): forward
+    # EPS ($17.26) is ~3.9x trailing ($4.39) because trailing FCF/earnings carry the
+    # full deal cost but only a stub of Ansys's earnings. Classifies GROWTH (forward tier).
+    fin = {
+        "ticker": "SNPS", "company_name": "Synopsys, Inc.", "current_price": 425.27,
+        "sector": "Technology", "industry": "Software - Infrastructure",
+        "long_business_summary": "",
+        "market_cap": 81_400_000_000, "shares_outstanding": 191_500_000,
+        "fcf_ttm": 1_349_000_000, "operating_cashflow": 1_500_000_000,
+        "net_debt": 8_358_000_000, "ebitda_ttm": 1_696_000_000,
+        "revenue_ttm": 6_700_000_000,
+        "eps_ttm": 4.39, "forward_eps": 17.26, "book_value_per_share": 40.0,
+        "dividend_rate": 0.0, "dividend_yield": 0.0, "payout_ratio": 0.0,
+        "return_on_equity": 0.10, "trailing_pe": 96.87, "forward_pe": 24.64,
+        "revenue_growth": 0.419, "earnings_growth": -0.30,
+        "ev_ebitda": 40.0, "ev_sales": 10.0,
+        "interest_expense": 300_000_000, "effective_tax_rate": 0.15, "cost_of_equity": 0.10,
+    }
+    fin.update(over)
+    return fin
+
+
+def test_evaluate_dominant_acquisition_rebases_and_caps_dcf():
+    # A severe post-acquisition earnings trough: the trailing-FCF DCF ($181) is the low
+    # outlier. Rebase it onto forward run-rate owner earnings, capped at the forward-P/E
+    # leg so the rebased DCF can't run above that trustworthy forward anchor.
+    trough = _snps_fin()
+    r = engine.evaluate(trough)
+    b = r["fair_value_breakdown"]
+    assert r["stock_type"] == "GROWTH"
+    # rebased DCF lands exactly at the forward-P/E leg (cap binds — the raw rebase ~$500
+    # exceeds the ~$383 anchor).
+    assert b["dcf"]["fair_value"] == pytest.approx(b["pe"]["fair_value"], abs=0.01)
+    # the rebase lifted the DCF leg well above what the trailing-FCF base would give.
+    unrebased = m.calc_dcf(trough, engine.build_scenarios(trough))["fair_value"]
+    assert b["dcf"]["fair_value"] > unrebased
+    # and it lifts the whole composite out of the artificially-low trailing read.
+    assert r["fair_value"] > engine.evaluate(_snps_fin(forward_eps=1.0))["fair_value"]
+
+
+def test_evaluate_no_rebase_without_trough():
+    # A forward-tier name whose forward EPS is close to trailing (no trough) keeps the
+    # trailing-FCF DCF base — the rebase must not fire on ordinary growth names.
+    control = _snps_fin(forward_eps=4.8, trailing_pe=25.0, forward_pe=24.0)
+    r = engine.evaluate(control)
+    b = r["fair_value_breakdown"]
+    # DCF stays on the trailing-FCF base (rebase did not fire) -> equals the unrebased leg.
+    unrebased = m.calc_dcf(control, engine.build_scenarios(control))["fair_value"]
+    assert b["dcf"]["fair_value"] == pytest.approx(round(unrebased, 2))

@@ -46,6 +46,16 @@ MEGA_CAP_GROWTH_RELIEF = 0.40
 # (e.g. acquisition amortization at AVGO post-VMware) -> value the forward P/E
 # leg off forward EPS instead of the depressed trailing figure.
 DEPRESSED_PE_RATIO = 1.5
+# Forward EPS this many times trailing EPS flags a SEVERE earnings trough — the
+# signature of a just-closed transformative acquisition whose trailing FCF carries the
+# full deal cost but only a stub of the acquired earnings (e.g. SNPS post-Ansys, forward
+# EPS ~3.9x trailing). The trailing-FCF DCF base is then unrepresentative of the combined
+# company, so the DCF is rebased onto forward run-rate owner earnings. Deliberately much
+# stronger than DEPRESSED_PE_RATIO (which only swaps the P/E leg's EPS): rebasing the DCF
+# base is far more consequential. Set high enough to exclude ONGOING acquisition
+# amortization / SBC add-backs (CDNS/AVGO ~2.2-3.2x, where trailing FCF is representative)
+# and fire only on a partial-consolidation collapse where FCF itself is depressed.
+TROUGH_REBASE_RATIO = 2.5
 
 ALL_METHODS = ["dcf", "fcfe", "ev_ebitda", "pe", "ev_sales", "ddm", "pb", "rim", "sotp", "nav"]
 SCENARIO_MODELS = {"dcf", "fcfe", "ev_ebitda", "ev_sales", "ddm", "rim"}
@@ -129,14 +139,49 @@ def _scenario_ev_multiple(base: float, growth: float, multiple: float, net_debt:
 
 
 # -- DCF (FCFF) ----------------------------------------------------------------
-def calc_dcf(fin: dict, growth: dict) -> dict:
-    base = fin.get("fcf_ttm")
+def rebased_dcf_base(fin: dict) -> float | None:
+    """Forward run-rate owner-earnings base (forward EPS x shares) for the DCF when a
+    name is in a SEVERE earnings trough — forward EPS >= TROUGH_REBASE_RATIO x trailing
+    EPS (both positive). This is the just-closed transformative-acquisition signature
+    (e.g. SNPS post-Ansys): trailing FCF carries the full deal cost but only a stub of the
+    acquired earnings, so it understates the combined company. For these mature franchises
+    FCF ~ owner earnings, so forward EPS x shares (the analyst combined run-rate) is the
+    representative base. Only-help: returns the base only when it exceeds trailing FCF,
+    else None (the caller keeps the trailing-FCF base)."""
+    feps, teps = fin.get("forward_eps"), fin.get("eps_ttm")
+    shares, fcf = fin.get("shares_outstanding"), fin.get("fcf_ttm")
+    revenue = fin.get("revenue_ttm")
+    if not feps or not teps or teps <= 0 or not shares:
+        return None
+    if feps < TROUGH_REBASE_RATIO * teps:
+        return None
+    base = feps * shares
+    # Economic sanity: forward run-rate NET earnings cannot exceed revenue (a >100% net
+    # margin is impossible). This rejects a glitched forward-EPS feed — e.g. a split-
+    # mangled value (AVGO's implied ~$92B > ~$75B revenue) — before it can inflate the
+    # base. A representative-FCF name mislabelled by the ratio alone is caught here.
+    if revenue is not None and revenue > 0 and base > revenue:
+        return None
+    if fcf is not None and base <= fcf:
+        return None
+    return base
+
+
+def calc_dcf(fin: dict, growth: dict, base_override: float | None = None,
+            value_cap: float | None = None) -> dict:
+    """FCFF DCF. base_override replaces the trailing-FCF base (used to rebase onto forward
+    run-rate owner earnings for a severe post-acquisition trough); value_cap bounds each
+    per-share scenario (used to cap the rebased leg at the trustworthy forward-P/E anchor
+    so it can't run above every other signal)."""
+    base = base_override if base_override is not None else fin.get("fcf_ttm")
     shares = fin.get("shares_outstanding")
     if base is None or not shares:
         return _null_result(True)
     net_debt = fin.get("net_debt") or 0
     hold = _fade_hold_years(fin.get("market_cap"), fin.get("revenue_growth"))
     scenarios = {k: _scenario_dcf_equity(base, growth[k], net_debt, shares, hold) for k in SCENARIO_KEYS}
+    if value_cap is not None:
+        scenarios = {k: (min(v, value_cap) if v is not None else None) for k, v in scenarios.items()}
     return {"scenarios": scenarios, "fair_value": _avg(scenarios), "weight": 0.0, "has_scenarios": True}
 
 
