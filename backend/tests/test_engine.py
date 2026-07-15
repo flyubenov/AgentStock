@@ -1,5 +1,6 @@
 import pytest
 from valuation import engine
+from valuation import models as m
 
 
 def _large_cap_fin(**over):
@@ -537,3 +538,69 @@ def test_evaluate_payment_network_avoids_book_value_methods():
     assert d["stock_type"] == "GROWTH"
     assert "pb" not in d["fair_value_breakdown"]
     assert "rim" not in d["fair_value_breakdown"]
+
+
+# --- FINANCIAL cost-of-equity gate -------------------------------------------
+def _bank_fin(**over):
+    fin = {"ticker": "BNK", "company_name": "Test Bank",
+           "sector": "Financial Services", "industry": "Banks - Diversified",
+           "current_price": 100.0, "book_value_per_share": 100.0,
+           "return_on_equity": 0.15, "eps_ttm": 15.0, "trailing_pe": 10.0}
+    fin.update(over)
+    return fin
+
+
+def _dividend_fin(**over):
+    fin = {"ticker": "DIV", "company_name": "Div Co",
+           "sector": "Consumer Defensive", "industry": "Beverages - Non-Alcoholic",
+           "current_price": 50.0, "book_value_per_share": 10.0,
+           "return_on_equity": 0.30, "eps_ttm": 2.5, "trailing_pe": 20.0,
+           "dividend_rate": 1.5, "dividend_yield": 0.03, "payout_ratio": 0.6,
+           "fcf_ttm": 3.0e9, "shares_outstanding": 1e9, "net_debt": 0}
+    fin.update(over)
+    return fin
+
+
+def test_evaluate_financial_discounts_book_legs_at_financial_coe():
+    fin = _bank_fin()
+    growth = engine.build_scenarios(fin)
+    exp_pb = m.calc_pb({**fin, "cost_of_equity": m.FINANCIAL_COE})["fair_value"]
+    exp_rim = m.calc_rim({**fin, "cost_of_equity": m.FINANCIAL_COE}, growth)["fair_value"]
+    out = engine.evaluate(fin)
+    assert out["stock_type"] == "FINANCIAL"
+    bd = out["fair_value_breakdown"]
+    assert bd["pb"]["fair_value"] == pytest.approx(round(exp_pb, 2))
+    assert bd["rim"]["fair_value"] == pytest.approx(round(exp_rim, 2))
+
+
+def test_evaluate_financial_lifts_book_legs_vs_flat_coe():
+    # ROE 0.15 > COE -> the lower FINANCIAL_COE raises both book legs vs the flat 0.10.
+    fin = _bank_fin()
+    growth = engine.build_scenarios(fin)
+    base_pb = m.calc_pb({**fin, "cost_of_equity": m.DISCOUNT_RATE})["fair_value"]
+    base_rim = m.calc_rim({**fin, "cost_of_equity": m.DISCOUNT_RATE}, growth)["fair_value"]
+    bd = engine.evaluate(fin)["fair_value_breakdown"]
+    assert bd["pb"]["fair_value"] > round(base_pb, 2)
+    assert bd["rim"]["fair_value"] > round(base_rim, 2)
+
+
+def test_evaluate_does_not_mutate_caller_fin():
+    fin = _bank_fin()
+    engine.evaluate(fin)
+    assert fin.get("cost_of_equity") is None
+
+
+def test_evaluate_respects_preset_cost_of_equity():
+    fin = _bank_fin(cost_of_equity=0.09)
+    exp_pb = m.calc_pb({**fin})["fair_value"]   # uses the pre-set 0.09, not 0.085
+    bd = engine.evaluate(fin)["fair_value_breakdown"]
+    assert bd["pb"]["fair_value"] == pytest.approx(round(exp_pb, 2))
+
+
+def test_evaluate_non_financial_pb_keeps_flat_coe():
+    # A DIVIDEND name has a P/B leg (0.10 weight) but must NOT get FINANCIAL_COE.
+    fin = _dividend_fin()
+    out = engine.evaluate(fin)
+    assert out["stock_type"] == "DIVIDEND"
+    exp_pb = m.calc_pb({**fin})["fair_value"]   # default DISCOUNT_RATE
+    assert out["fair_value_breakdown"]["pb"]["fair_value"] == pytest.approx(round(exp_pb, 2))
