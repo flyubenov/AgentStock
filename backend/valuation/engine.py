@@ -17,6 +17,14 @@ FCF_MARGIN_FLOOR = -0.25
 # the residual. Distinct from FCF_MARGIN_FLOOR, which declines deeply-negative FCF.
 FCF_EBITDA_FLOOR = 0.15
 
+# Revenue-coupled growth cap: hyper-growers earn a modest, bounded increment of
+# near-term growth credit above the flat base. The ramp is deliberately shallow
+# (+1pp of cap per 8pp of growth) and the 0.25 ceiling — reached at g=0.60 — is the
+# ultimate backstop against a noisy-high growth reading.
+GROWTH_CAP_BASE = 0.20
+GROWTH_CAP_CEIL = 0.25
+GROWTH_CAP_SLOPE = 0.125
+
 # Operating-compounder tiers: real earnings AND real EBITDA, so they take the
 # "balance past and future" basis — historical-median EV/EBITDA + forward P/E.
 FORWARD_TIERS = {"LARGE_CAP", "MID_CAP", "GROWTH"}
@@ -31,6 +39,30 @@ _SCENARIO_FN = {
     "ev_sales": m.calc_ev_sales,
     "rim": m.calc_rim,
 }
+
+
+def _growth_cap(g: float) -> float:
+    """Near-term growth cap coupled to revenue growth: flat GROWTH_CAP_BASE until
+    growth passes GROWTH_CAP_BASE, then a gentle linear ramp to GROWTH_CAP_CEIL
+    (reached at g=0.60). The ceiling bounds a noisy-high growth reading."""
+    return min(GROWTH_CAP_CEIL,
+               GROWTH_CAP_BASE + GROWTH_CAP_SLOPE * max(0.0, g - GROWTH_CAP_BASE))
+
+
+def _cap_eligible(fin: dict) -> bool:
+    """The elevated growth cap applies only to names demonstrating economics:
+    FCF-positive, or operationally cash-generative (EBITDA > 0 and OCF > 0). This
+    reuses the capex-reroute cash-generation signal, so capex-heavy reinvestors
+    (negative FCF, positive EBITDA/OCF — e.g. IREN) still qualify. OCF falls back
+    to the info figure when the statement value is absent."""
+    fcf = fin.get("fcf_ttm")
+    if fcf is not None and fcf > 0:
+        return True
+    ebitda = fin.get("ebitda_ttm") or 0
+    ocf = fin.get("ocf_ttm")
+    if ocf is None:
+        ocf = fin.get("operating_cashflow")
+    return ebitda > 0 and ocf is not None and ocf > 0
 
 
 def _earnings_distorted(fin: dict) -> bool:
@@ -53,15 +85,26 @@ def build_scenarios(fin: dict, distorted_cap: float = 0.20) -> dict:
     distorted_cap bounds the revenue-sourced rate. The default (0.20, the normal
     ceiling) is for the bounded-horizon legs (DCF/EV/EBITDA/PE), which can carry
     the real rate. The perpetuity-based DDM passes distorted_cap=SUSTAINABLE_CEIL
-    so Gordon growth can't overshoot the discount rate."""
+    so Gordon growth can't overshoot the discount rate.
+
+    The near-term cap is revenue-coupled: an eligible (cash-generative) hyper-grower
+    earns up to GROWTH_CAP_CEIL (0.25), sourced statement-YoY-first. The elevated cap
+    rides only the normal bounded-horizon path (distorted_cap >= GROWTH_CAP_BASE);
+    the DDM path keeps the flat base."""
+    cap = GROWTH_CAP_BASE
+    if distorted_cap >= GROWTH_CAP_BASE and _cap_eligible(fin):
+        g = fin.get("revenue_growth_stmt")
+        if g is None:
+            g = fin.get("revenue_growth") or 0.0
+        cap = _growth_cap(g)
     if _earnings_distorted(fin):
         raw = min(fin.get("revenue_growth") or 0, distorted_cap)
     else:
         raw = (fin.get("earnings_growth") or fin.get("revenue_growth")
                or fin.get("revenue_growth_stmt") or 0.07)
-    base = max(0.02, min(float(raw), 0.20))
+    base = max(0.02, min(float(raw), cap))
     return {
-        "optimistic": min(base + 0.05, 0.20),
+        "optimistic": min(base + 0.05, cap),
         "realistic": base,
         "pessimistic": max(base - 0.04, 0.02),
     }

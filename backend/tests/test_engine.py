@@ -365,3 +365,122 @@ def test_build_scenarios_statement_growth_ignored_when_info_valid():
     s = engine.build_scenarios({"revenue_growth": 0.05, "earnings_growth": None,
                                 "revenue_growth_stmt": 1.677})
     assert s["realistic"] == pytest.approx(0.05)
+
+
+def test_growth_cap_below_threshold_is_base():
+    assert engine._growth_cap(0.10) == pytest.approx(0.20)
+    assert engine._growth_cap(0.20) == pytest.approx(0.20)
+
+
+def test_growth_cap_ramps_linearly():
+    assert engine._growth_cap(0.30) == pytest.approx(0.2125)
+    assert engine._growth_cap(0.40) == pytest.approx(0.225)
+    assert engine._growth_cap(0.50) == pytest.approx(0.2375)
+
+
+def test_growth_cap_saturates_at_ceiling():
+    assert engine._growth_cap(0.60) == pytest.approx(0.25)
+    assert engine._growth_cap(0.70) == pytest.approx(0.25)
+    assert engine._growth_cap(1.68) == pytest.approx(0.25)   # IREN-shape backstop
+
+
+def test_cap_eligible_fcf_positive():
+    assert engine._cap_eligible({"fcf_ttm": 100.0}) is True
+
+
+def test_cap_eligible_burner_excluded():
+    # FCF < 0 and OCF < 0 -> genuine cash burn, not eligible
+    assert engine._cap_eligible(
+        {"fcf_ttm": -50.0, "ebitda_ttm": -10.0, "ocf_ttm": -20.0}) is False
+
+
+def test_cap_eligible_capex_reroute_shape():
+    # FCF < 0 but EBITDA > 0 and OCF > 0 (IREN-like) -> eligible via the OCF branch
+    assert engine._cap_eligible(
+        {"fcf_ttm": -50.0, "ebitda_ttm": 100.0, "ocf_ttm": 80.0}) is True
+
+
+def test_cap_eligible_ocf_info_fallback():
+    # ocf_ttm absent -> falls back to operating_cashflow (info)
+    assert engine._cap_eligible(
+        {"fcf_ttm": -50.0, "ebitda_ttm": 100.0, "operating_cashflow": 80.0}) is True
+
+
+def test_cap_eligible_no_cashflow_data_not_eligible():
+    assert engine._cap_eligible({"earnings_growth": 0.5}) is False
+
+
+def _hypergrower_fin(**over):
+    fin = {"fcf_ttm": 3.9e9, "ebitda_ttm": 4.8e9, "ocf_ttm": 4.0e9,
+           "revenue_growth_stmt": 0.70, "revenue_growth": 0.59,
+           "earnings_growth": 1.13}
+    fin.update(over)
+    return fin
+
+
+def test_build_scenarios_elevated_cap_for_eligible_hypergrower():
+    # statement growth 0.70 -> cap saturates at the 0.25 ceiling
+    s = engine.build_scenarios(_hypergrower_fin())
+    assert s["realistic"] == pytest.approx(0.25)
+    assert s["optimistic"] == pytest.approx(0.25)     # capped at the elevated ceiling
+
+
+def test_build_scenarios_statement_growth_preferred_over_info():
+    # info 0.30 would give 0.2125; statement 0.70 wins -> 0.25
+    s = engine.build_scenarios(_hypergrower_fin(revenue_growth_stmt=0.70, revenue_growth=0.30))
+    assert s["realistic"] == pytest.approx(0.25)
+
+
+def test_build_scenarios_info_growth_when_stmt_absent():
+    # no statement growth -> info 0.40 -> _growth_cap(0.40) = 0.225
+    s = engine.build_scenarios(
+        _hypergrower_fin(revenue_growth_stmt=None, revenue_growth=0.40, earnings_growth=1.0))
+    assert s["realistic"] == pytest.approx(0.225)
+
+
+def test_build_scenarios_ceiling_backstop_on_absurd_growth():
+    s = engine.build_scenarios(_hypergrower_fin(revenue_growth_stmt=3.0))
+    assert s["realistic"] == pytest.approx(0.25)      # 300% growth still capped
+
+
+def test_build_scenarios_ineligible_burner_stays_base():
+    # FCF < 0 and OCF < 0 -> not eligible -> cap stays 0.20 despite 70% growth
+    s = engine.build_scenarios(
+        _hypergrower_fin(fcf_ttm=-1e8, ebitda_ttm=-1e7, ocf_ttm=-2e7, revenue_growth_stmt=0.70))
+    assert s["realistic"] == pytest.approx(0.20)
+
+
+def test_build_scenarios_ddm_path_not_elevated_for_hypergrower():
+    # DDM copy (distorted_cap=SUSTAINABLE_CEIL) must NOT receive the elevated cap
+    s = engine.build_scenarios(_hypergrower_fin(), distorted_cap=engine.SUSTAINABLE_CEIL)
+    assert s["realistic"] <= 0.20
+
+
+def test_build_scenarios_distorted_earnings_not_elevated():
+    # eg < 0, rg > 0 -> distorted: raw pre-capped at distorted_cap (0.20), so even an
+    # eligible hyper-grower does not get the elevated cap
+    s = engine.build_scenarios(
+        _hypergrower_fin(earnings_growth=-0.09, revenue_growth=0.70, revenue_growth_stmt=0.70))
+    assert s["realistic"] == pytest.approx(0.20)
+
+
+def _growth_evalfin(**over):
+    fin = {"ticker": "TST", "company_name": "Test", "current_price": 100.0,
+           "market_cap": 150e9, "shares_outstanding": 3e8, "revenue_ttm": 6e9,
+           "ebitda_ttm": 4.8e9, "ev_ebitda": 25.0, "ev_sales": 10.0,
+           "fcf_ttm": 3.9e9, "ocf_ttm": 4.0e9, "net_debt": 1e9, "eps_ttm": 11.0,
+           "trailing_pe": 39.0, "forward_pe": 20.0, "forward_eps": 21.0,
+           "earnings_growth": 1.0, "dividend_yield": 0.0,
+           "sector": "Communication Services", "industry": "Advertising Agencies",
+           "return_on_equity": 0.3, "book_value_per_share": 10.0}
+    fin.update(over)
+    return fin
+
+
+def test_evaluate_hypergrower_fv_exceeds_slow_growth_twin():
+    fast = engine.evaluate(_growth_evalfin(revenue_growth=0.59, revenue_growth_stmt=0.70))
+    slow = engine.evaluate(_growth_evalfin(revenue_growth=0.11, revenue_growth_stmt=0.11))
+    assert fast["stock_type"] == "GROWTH"
+    assert slow["stock_type"] == "GROWTH"
+    # Same everything except the cap (0.25 vs 0.20) -> fast fair value is strictly higher
+    assert fast["fair_value"] > slow["fair_value"]
