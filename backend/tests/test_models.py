@@ -123,6 +123,77 @@ def test_dcf_scenarios_ordered_for_positive_inputs():
     assert s["optimistic"] > s["realistic"] > s["pessimistic"] > 0
 
 
+# -- DCF forward run-rate rebase (severe post-acquisition earnings trough) ------
+def test_rebased_dcf_base_fires_on_deep_trough():
+    # Forward EPS ~3.9x trailing (SNPS post-Ansys signature): trailing FCF is a trough,
+    # so the base is the forward run-rate owner earnings (forward EPS x shares).
+    fin = {"forward_eps": 17.26, "eps_ttm": 4.39, "shares_outstanding": 191_500_000,
+           "fcf_ttm": 1_349_000_000}
+    assert m.rebased_dcf_base(fin) == pytest.approx(17.26 * 191_500_000)
+
+
+def test_rebased_dcf_base_skips_shallow_trough():
+    # Forward EPS only ~1.3x trailing -> normal forward growth, not a trough.
+    fin = {"forward_eps": 5.7, "eps_ttm": 4.39, "shares_outstanding": 191_500_000,
+           "fcf_ttm": 1_349_000_000}
+    assert m.rebased_dcf_base(fin) is None
+
+
+def test_rebased_dcf_base_skips_ongoing_amortization_trough():
+    # CDNS-like: forward EPS ~2.2x trailing from ONGOING acquisition amortization / SBC
+    # add-backs, but trailing FCF is representative (no just-closed mega-deal). Below the
+    # severe-trough ratio (2.5) -> no rebase; the DCF keeps its trailing-FCF base. Only a
+    # partial-consolidation collapse (SNPS ~3.9x) clears the bar.
+    fin = {"forward_eps": 9.66, "eps_ttm": 4.39, "shares_outstanding": 272_000_000,
+           "fcf_ttm": 1_590_000_000, "revenue_ttm": 5_530_000_000}   # ratio 2.2
+    assert m.rebased_dcf_base(fin) is None
+
+
+def test_rebased_dcf_base_only_helps():
+    # Deep-trough ratio, but the forward run-rate base is below trailing FCF -> keep
+    # trailing FCF (the rebase can only ever lift the base, never lower it).
+    fin = {"forward_eps": 17.26, "eps_ttm": 4.39, "shares_outstanding": 191_500_000,
+           "fcf_ttm": 5_000_000_000}
+    assert m.rebased_dcf_base(fin) is None
+
+
+def test_rebased_dcf_base_needs_positive_data():
+    assert m.rebased_dcf_base({"forward_eps": 17.0, "eps_ttm": 0,
+                               "shares_outstanding": 1e6, "fcf_ttm": 1e6}) is None
+    assert m.rebased_dcf_base({"forward_eps": None, "eps_ttm": 4.0,
+                               "shares_outstanding": 1e6, "fcf_ttm": 1e6}) is None
+
+
+def test_rebased_dcf_base_rejects_impossible_net_margin():
+    # AVGO-like glitched forward-EPS feed: forward run-rate earnings exceed revenue (a
+    # >100% net margin is impossible), so the forward figure is unreliable -> no rebase
+    # (the DCF keeps its representative trailing-FCF base).
+    fin = {"forward_eps": 19.65, "eps_ttm": 4.5, "shares_outstanding": 4_700_000_000,
+           "fcf_ttm": 26_900_000_000, "revenue_ttm": 60_000_000_000}  # run-rate 92.4B > 60B
+    assert m.rebased_dcf_base(fin) is None
+    # Same deep trough but a sane forward margin (run-rate < revenue) -> rebase fires.
+    ok = {"forward_eps": 17.26, "eps_ttm": 4.39, "shares_outstanding": 191_500_000,
+          "fcf_ttm": 1_349_000_000, "revenue_ttm": 8_680_000_000}
+    assert m.rebased_dcf_base(ok) == pytest.approx(17.26 * 191_500_000)
+
+
+def test_dcf_base_override_replaces_fcf_base():
+    fin = {"fcf_ttm": 1_000_000, "net_debt": 0, "shares_outstanding": 100_000}
+    base_leg = m.calc_dcf(fin, GROWTH)["fair_value"]
+    over_leg = m.calc_dcf(fin, GROWTH, base_override=3_000_000)["fair_value"]
+    assert over_leg == pytest.approx(3 * base_leg)   # net_debt 0 -> exactly linear in base
+
+
+def test_dcf_value_cap_limits_each_scenario():
+    fin = {"fcf_ttm": 1_000_000, "net_debt": 0, "shares_outstanding": 100_000}
+    uncapped = m.calc_dcf(fin, GROWTH)["scenarios"]
+    cap = (uncapped["realistic"] + uncapped["pessimistic"]) / 2   # between pess and real
+    capped = m.calc_dcf(fin, GROWTH, value_cap=cap)["scenarios"]
+    assert capped["optimistic"] == pytest.approx(cap)                    # was above -> capped
+    assert capped["realistic"] == pytest.approx(cap)                     # was above -> capped
+    assert capped["pessimistic"] == pytest.approx(uncapped["pessimistic"])  # below -> untouched
+
+
 # -- size-coupled growth fade --------------------------------------------------
 def test_fade_hold_years_bands():
     assert m._fade_hold_years(2_000_000_000_000) == m.FADE_HOLD_MEGA   # >= $1T
