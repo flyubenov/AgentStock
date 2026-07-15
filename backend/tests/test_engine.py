@@ -152,6 +152,24 @@ def test_evaluate_insufficient_data_is_failed():
     assert "insufficient data for any model" in result["errors"]
 
 
+def test_evaluate_declines_when_composite_nonpositive():
+    # A moderate cash-burner (FCF/revenue above the -25% pre-profit decline floor, so
+    # the guard does not fire) can still drive a negative composite through its negative
+    # DCF leg. A negative fair value is not a valuation — decline rather than surface it.
+    # Regression: INTC emitted a completed fair value of -$2.59.
+    fin = {
+        "ticker": "NEG", "company_name": "Negative Co", "current_price": 20.0,
+        "sector": "Technology", "market_cap": 50_000_000_000,
+        "shares_outstanding": 100_000_000, "revenue_ttm": 1_000_000_000,
+        "fcf_ttm": -10_000_000,          # -1% of revenue: above the -25% decline floor
+        "ebitda_ttm": None, "eps_ttm": -1.0, "revenue_growth": 0.05, "net_debt": 0,
+    }
+    result = engine.evaluate(fin)
+    assert result["fair_value"] is None
+    assert result["status"] == "failed"
+    assert result["price_vs_fair_value_pct"] is None
+
+
 def test_evaluate_sotp_flagged_approx():
     # Conglomerate weights sotp + nav + ev_ebitda
     fin = _large_cap_fin(industry="Conglomerates", book_value_per_share=20.0)
