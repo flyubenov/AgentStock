@@ -484,3 +484,17 @@ def test_evaluate_hypergrower_fv_exceeds_slow_growth_twin():
     assert slow["stock_type"] == "GROWTH"
     # Same everything except the cap (0.25 vs 0.20) -> fast fair value is strictly higher
     assert fast["fair_value"] > slow["fair_value"]
+
+
+def test_evaluate_payment_network_avoids_book_value_methods():
+    # A Visa-shaped payment network must not be valued on P/B + RIM (book value is
+    # trivial vs earning power). It routes to GROWTH and uses DCF/EV/PE legs instead.
+    fin = _growth_evalfin(
+        sector="Financial Services", industry="Credit Services",
+        long_business_summary=("operates a transaction processing network that enables "
+                               "settlement of payment transactions"),
+        revenue_growth=0.171, revenue_growth_stmt=0.11)
+    d = engine.evaluate(fin)
+    assert d["stock_type"] == "GROWTH"
+    assert "pb" not in d["fair_value_breakdown"]
+    assert "rim" not in d["fair_value_breakdown"]
