@@ -24,6 +24,22 @@ GROWTH_CAP_BASE = 0.20
 GROWTH_CAP_CEIL = 0.25
 GROWTH_CAP_SLOPE = 0.125
 
+# EARLY_GROWTH runs its own ceiling on the SAME shallow ramp. The tier is defined by
+# unprofitability, so _cap_eligible ("names demonstrating economics": FCF > 0, or
+# EBITDA > 0 and OCF > 0) can never fire for a cash burner and the tier fell through to
+# the flat base — pinning a 684% grower (NBIS) and a 36% grower (TEM) at the identical
+# 0.20 and making "massively overvalued" a foregone conclusion. For this tier revenue
+# growth IS the demonstrated economics, so the ramp is what gates the credit: the slope
+# is unchanged, so 36% growth still earns only 2pp (TEM -> 0.22) and only a >220% grower
+# reaches the ceiling. Verified against statements, not just info: NBIS's 684% reconciles
+# with its Q1 YoY (+683.9%) and annual (+479%), and is accelerating.
+EG_CAP_CEIL = 0.45
+# ...but a hyper-growth *rate* off a tiny revenue base is arithmetic, not a business
+# ($1M -> $5M = 400%). Demand demonstrated scale before granting the elevated ceiling,
+# mirroring the screener's RULE_OF_40_GROWTH_CAP guard against a tiny-base rate
+# dominating. Below the floor the tier keeps the flat GROWTH_CAP_BASE.
+EG_REVENUE_FLOOR = 500_000_000
+
 # Operating-compounder tiers: real earnings AND real EBITDA, so they take the
 # "balance past and future" basis — historical-median EV/EBITDA + forward P/E.
 FORWARD_TIERS = {"MEGA_CAP", "LARGE_CAP", "MID_CAP", "GROWTH"}
@@ -40,12 +56,22 @@ _SCENARIO_FN = {
 }
 
 
-def _growth_cap(g: float) -> float:
+def _growth_cap(g: float, ceil: float = GROWTH_CAP_CEIL) -> float:
     """Near-term growth cap coupled to revenue growth: flat GROWTH_CAP_BASE until
-    growth passes GROWTH_CAP_BASE, then a gentle linear ramp to GROWTH_CAP_CEIL
-    (reached at g=0.60). The ceiling bounds a noisy-high growth reading."""
-    return min(GROWTH_CAP_CEIL,
+    growth passes GROWTH_CAP_BASE, then a gentle linear ramp to `ceil` (the default
+    GROWTH_CAP_CEIL is reached at g=0.60; EG_CAP_CEIL at g=2.20). The ceiling bounds a
+    noisy-high growth reading."""
+    return min(ceil,
                GROWTH_CAP_BASE + GROWTH_CAP_SLOPE * max(0.0, g - GROWTH_CAP_BASE))
+
+
+def _eg_cap_eligible(fin: dict) -> bool:
+    """EARLY_GROWTH earns the elevated ceiling on demonstrated SCALE — the cash-flow
+    test in _cap_eligible is structurally unpassable for this tier, so revenue stands in
+    as the evidence that the growth rate describes a business rather than a small
+    denominator."""
+    revenue = fin.get("revenue_ttm")
+    return revenue is not None and revenue >= EG_REVENUE_FLOOR
 
 
 def _cap_eligible(fin: dict) -> bool:
@@ -72,7 +98,8 @@ def _earnings_distorted(fin: dict) -> bool:
     return eg is not None and eg < 0 and rg > 0
 
 
-def build_scenarios(fin: dict, distorted_cap: float = 0.20) -> dict:
+def build_scenarios(fin: dict, distorted_cap: float = 0.20,
+                    stock_type: str | None = None) -> dict:
     """Per-stock capped growth scenarios (spec decision #1).
 
     When GAAP earnings growth is negative while revenue is still growing, the
@@ -89,13 +116,21 @@ def build_scenarios(fin: dict, distorted_cap: float = 0.20) -> dict:
     The near-term cap is revenue-coupled: an eligible (cash-generative) hyper-grower
     earns up to GROWTH_CAP_CEIL (0.25), sourced statement-YoY-first. The elevated cap
     rides only the normal bounded-horizon path (distorted_cap >= GROWTH_CAP_BASE);
-    the DDM path keeps the flat base."""
+    the DDM path keeps the flat base.
+
+    stock_type == "EARLY_GROWTH" swaps in that tier's own ceiling (EG_CAP_CEIL) on the
+    same ramp, gated on revenue scale rather than the cash generation the tier can never
+    show — see EG_CAP_CEIL / _eg_cap_eligible."""
     cap = GROWTH_CAP_BASE
-    if distorted_cap >= GROWTH_CAP_BASE and _cap_eligible(fin):
+    if distorted_cap >= GROWTH_CAP_BASE:
         g = fin.get("revenue_growth_stmt")
         if g is None:
             g = fin.get("revenue_growth") or 0.0
-        cap = _growth_cap(g)
+        if stock_type == "EARLY_GROWTH":
+            if _eg_cap_eligible(fin):
+                cap = _growth_cap(g, EG_CAP_CEIL)
+        elif _cap_eligible(fin):
+            cap = _growth_cap(g)
     if _earnings_distorted(fin):
         raw = min(fin.get("revenue_growth") or 0, distorted_cap)
     else:
@@ -215,7 +250,7 @@ def evaluate(fin: dict) -> dict:
         weights = dict(weights)
         weights["pe"] = 0.0
 
-    growth = build_scenarios(fin)
+    growth = build_scenarios(fin, stock_type=stock_type)
     # The DDM perpetuity keeps distorted names on the sustainable ceiling.
     ddm_growth = build_scenarios(fin, distorted_cap=SUSTAINABLE_CEIL)
 
