@@ -30,10 +30,21 @@ GROWTH_CAP_SLOPE = 0.125
 # the flat base — pinning a 684% grower (NBIS) and a 36% grower (TEM) at the identical
 # 0.20 and making "massively overvalued" a foregone conclusion. For this tier revenue
 # growth IS the demonstrated economics, so the ramp is what gates the credit: the slope
-# is unchanged, so 36% growth still earns only 2pp (TEM -> 0.22) and only a >220% grower
+# is unchanged, so 36% growth still earns only 2pp (TEM -> 0.22) and only a >140% grower
 # reaches the ceiling. Verified against statements, not just info: NBIS's 684% reconciles
 # with its Q1 YoY (+683.9%) and annual (+479%), and is accelerating.
-EG_CAP_CEIL = 0.45
+#
+# 0.35 sits inside the STABLE zone. Swept against the (corrected) run-rate base, the whole
+# 0.35-0.40 band leaves NBIS robustly overvalued (-46% to -23%) and moves it only ~$4 per
+# 0.01 of ceiling — the verdict does not depend on the exact value. FV crosses price at
+# 0.4361, so an earlier 0.45 sat just PAST the crossover, balanced on a knife edge where a
+# 0.01 nudge flipped buy/sell, and above it the curve turns sharply convex. 0.45 was also
+# calibrated against the stale TTM base, i.e. the cap was silently doing double duty
+# compensating for a base that lagged 83%; once run_rate_revenue fixed the base that job
+# disappeared and the ceiling came back down with it. Only names growing >140% ever reach
+# this ceiling (TEM sits at 0.22 regardless), so it is set on a thin sample — prefer a
+# round, defensible assumption over a value reverse-engineered from one company's output.
+EG_CAP_CEIL = 0.35
 # ...but a hyper-growth *rate* off a tiny revenue base is arithmetic, not a business
 # ($1M -> $5M = 400%). Demand demonstrated scale before granting the elevated ceiling,
 # mirroring the screener's RULE_OF_40_GROWTH_CAP guard against a tiny-base rate
@@ -59,7 +70,7 @@ _SCENARIO_FN = {
 def _growth_cap(g: float, ceil: float = GROWTH_CAP_CEIL) -> float:
     """Near-term growth cap coupled to revenue growth: flat GROWTH_CAP_BASE until
     growth passes GROWTH_CAP_BASE, then a gentle linear ramp to `ceil` (the default
-    GROWTH_CAP_CEIL is reached at g=0.60; EG_CAP_CEIL at g=2.20). The ceiling bounds a
+    GROWTH_CAP_CEIL is reached at g=0.60; EG_CAP_CEIL at g=1.40). The ceiling bounds a
     noisy-high growth reading."""
     return min(ceil,
                GROWTH_CAP_BASE + GROWTH_CAP_SLOPE * max(0.0, g - GROWTH_CAP_BASE))

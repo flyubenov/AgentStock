@@ -761,8 +761,8 @@ def test_early_growth_cap_ramps_with_growth_to_its_own_ceiling():
     # and only a hyper-grower reaches the ceiling — the credit is coupled to the growth,
     # not granted by the tier.
     assert engine._growth_cap(0.361, engine.EG_CAP_CEIL) == pytest.approx(0.220, abs=1e-3)  # TEM
-    assert engine._growth_cap(6.839, engine.EG_CAP_CEIL) == pytest.approx(0.45)   # NBIS
-    assert engine._growth_cap(2.20, engine.EG_CAP_CEIL) == pytest.approx(0.45)    # saturates at 220%
+    assert engine._growth_cap(6.839, engine.EG_CAP_CEIL) == pytest.approx(0.35)   # NBIS
+    assert engine._growth_cap(1.40, engine.EG_CAP_CEIL) == pytest.approx(0.35)    # saturates at 140%
     # unchanged for every other tier: same slope, original ceiling
     assert engine._growth_cap(6.839) == pytest.approx(0.25)
 
@@ -770,7 +770,7 @@ def test_early_growth_cap_ramps_with_growth_to_its_own_ceiling():
 def test_early_growth_hyper_grower_earns_elevated_cap():
     s = engine.build_scenarios(_early_growth_fin(revenue_growth=6.839),
                                stock_type="EARLY_GROWTH")
-    assert s["realistic"] == pytest.approx(0.45)
+    assert s["realistic"] == pytest.approx(0.35)
 
 
 def test_early_growth_moderate_grower_barely_moves():
