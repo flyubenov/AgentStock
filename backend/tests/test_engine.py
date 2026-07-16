@@ -154,18 +154,29 @@ def test_evaluate_insufficient_data_is_failed():
 
 
 def test_evaluate_declines_when_composite_nonpositive():
-    # A moderate cash-burner (FCF/revenue above the -25% pre-profit decline floor, so
-    # the guard does not fire) can still drive a negative composite through its negative
-    # DCF leg. A negative fair value is not a valuation — decline rather than surface it.
+    # A negative composite is not a valuation — decline rather than surface it.
     # Regression: INTC emitted a completed fair value of -$2.59.
-    fin = {
-        "ticker": "NEG", "company_name": "Negative Co", "current_price": 20.0,
-        "sector": "Technology", "market_cap": 50_000_000_000,
-        "shares_outstanding": 100_000_000, "revenue_ttm": 1_000_000_000,
-        "fcf_ttm": -10_000_000,          # -1% of revenue: above the -25% decline floor
-        "ebitda_ttm": None, "eps_ttm": -1.0, "revenue_growth": 0.05, "net_debt": 0,
-    }
+    #
+    # This must exercise the CLAMP, not the pre-profit guard. The original fixture was a
+    # cash-burner that reached the clamp only because the guard's -25% FCF-margin floor
+    # let it through; once the guard became sign-based it swallowed that fixture and this
+    # test passed via PRE_PROFIT, testing nothing. A FINANCIAL carries dcf weight 0 so
+    # the guard can never fire, and FCF is positive here regardless — the negative book
+    # value drives the P/B + RIM legs (0.35/0.45 of the tier) negative on its own.
+    # The stock_type/error assertions pin which path declined, so this can't rot silently.
+    fin = _large_cap_fin(
+        ticker="NEG", company_name="Negative Bank", current_price=20.0,
+        sector="Financial Services", industry="Banks - Diversified",
+        long_business_summary="The bank accepts deposits and originates loans.",
+        market_cap=50_000_000_000, shares_outstanding=100_000_000,
+        revenue_ttm=1_000_000_000, fcf_ttm=50_000_000,   # positive: guard cannot fire
+        ebitda_ttm=200_000_000, eps_ttm=-1.0, book_value_per_share=-5.0,
+        return_on_equity=-0.2, revenue_growth=0.05, net_debt=0,
+        dividend_rate=0, dividend_yield=0, payout_ratio=0,
+    )
     result = engine.evaluate(fin)
+    assert result["stock_type"] == "FINANCIAL"        # not PRE_PROFIT: the clamp declined it
+    assert "composite fair value non-positive" in result["errors"][0]
     assert result["fair_value"] is None
     assert result["status"] == "failed"
     assert result["price_vs_fair_value_pct"] is None
@@ -683,3 +694,113 @@ def test_evaluate_no_rebase_without_trough():
     # DCF stays on the trailing-FCF base (rebase did not fire) -> equals the unrebased leg.
     unrebased = m.calc_dcf(control, engine.build_scenarios(control))["fair_value"]
     assert b["dcf"]["fair_value"] == pytest.approx(round(unrebased, 2))
+
+
+def test_pre_profit_guard_is_sign_based_not_magnitude_based():
+    # A -5% FCF margin sits above the old -25% decline floor, so the guard used to skip
+    # and let a DCF built on NEGATIVE free cash flow into the blend. A DCF of negative
+    # cash flows is negative by construction regardless of burn depth -> the guard must
+    # trigger on the sign, not the magnitude. OCF < 0 and EBITDA <= 0 -> genuine burn.
+    fin = _large_cap_fin(market_cap=16_000_000_000, fcf_ttm=-38_000_000,
+                         revenue_ttm=757_000_000, operating_cashflow=-20_000_000,
+                         ebitda_ttm=-10_000_000)
+    result = engine.evaluate(fin)
+    assert result["status"] == "failed"
+    assert result["stock_type"] == "PRE_PROFIT"
+    assert result["fair_value"] is None
+
+
+def test_early_growth_drops_dcf_leg_when_fcf_negative():
+    # TEM pattern: EARLY_GROWTH is *defined* by unprofitability (revenue growth > 20%
+    # AND eps/ebitda <= 0), yet carried a 0.35 DCF weight that is guaranteed negative
+    # for every name in the tier — dragging the composite below zero and declining a
+    # name the tier's own EV/Sales leg can value. Drop the DCF, keep the valuation.
+    fin = _large_cap_fin(market_cap=9_470_000_000, shares_outstanding=174_500_000,
+                         current_price=52.78, revenue_ttm=1_364_000_000,
+                         fcf_ttm=-245_000_000, operating_cashflow=-218_000_000,
+                         ebitda_ttm=-185_000_000, eps_ttm=-1.72, forward_eps=-0.08,
+                         net_debt=679_000_000, revenue_growth=0.361, ev_sales=6.94)
+    result = engine.evaluate(fin)
+    assert result["stock_type"] == "EARLY_GROWTH"
+    assert result["status"] == "completed"
+    assert "dcf" not in result["fair_value_breakdown"]
+    assert "ev_sales" in result["fair_value_breakdown"]
+    assert result["fair_value"] > 0
+
+
+def test_early_growth_keeps_dcf_leg_when_fcf_positive():
+    # Regression: an EARLY_GROWTH name that is FCF-positive (eps still <= 0) keeps its
+    # DCF — the drop is conditional on the burn, not on the tier.
+    fin = _large_cap_fin(market_cap=9_470_000_000, shares_outstanding=174_500_000,
+                         current_price=52.78, revenue_ttm=1_364_000_000,
+                         fcf_ttm=200_000_000, operating_cashflow=220_000_000,
+                         ebitda_ttm=180_000_000, eps_ttm=-1.72,
+                         net_debt=679_000_000, revenue_growth=0.361, ev_sales=6.94)
+    result = engine.evaluate(fin)
+    assert result["stock_type"] == "EARLY_GROWTH"
+    assert "dcf" in result["fair_value_breakdown"]
+
+
+def _early_growth_fin(**over):
+    """TEM/NBIS-shaped: revenue growth > 20% with eps/ebitda <= 0 -> EARLY_GROWTH.
+    earnings_growth is None (a loss-maker has no meaningful earnings-growth reading), so
+    build_scenarios sources the rate from revenue growth — the path the cap acts on."""
+    fin = _large_cap_fin(market_cap=9_470_000_000, shares_outstanding=174_500_000,
+                         current_price=52.78, revenue_ttm=1_364_000_000,
+                         fcf_ttm=-245_000_000, operating_cashflow=-218_000_000,
+                         ebitda_ttm=-185_000_000, eps_ttm=-1.72, forward_eps=-0.08,
+                         net_debt=679_000_000, revenue_growth=0.361, ev_sales=6.94,
+                         earnings_growth=None)
+    fin.update(over)
+    return fin
+
+
+def test_early_growth_cap_ramps_with_growth_to_its_own_ceiling():
+    # EARLY_GROWTH earns a tier-scoped, growth-coupled cap. The ramp keeps the existing
+    # shallow slope (+1pp of cap per 8pp of growth), so a moderate grower barely moves
+    # and only a hyper-grower reaches the ceiling — the credit is coupled to the growth,
+    # not granted by the tier.
+    assert engine._growth_cap(0.361, engine.EG_CAP_CEIL) == pytest.approx(0.220, abs=1e-3)  # TEM
+    assert engine._growth_cap(6.839, engine.EG_CAP_CEIL) == pytest.approx(0.45)   # NBIS
+    assert engine._growth_cap(2.20, engine.EG_CAP_CEIL) == pytest.approx(0.45)    # saturates at 220%
+    # unchanged for every other tier: same slope, original ceiling
+    assert engine._growth_cap(6.839) == pytest.approx(0.25)
+
+
+def test_early_growth_hyper_grower_earns_elevated_cap():
+    s = engine.build_scenarios(_early_growth_fin(revenue_growth=6.839),
+                               stock_type="EARLY_GROWTH")
+    assert s["realistic"] == pytest.approx(0.45)
+
+
+def test_early_growth_moderate_grower_barely_moves():
+    # TEM at 36% growth earns only 2pp above base — the shallow slope self-discriminates.
+    s = engine.build_scenarios(_early_growth_fin(revenue_growth=0.361),
+                               stock_type="EARLY_GROWTH")
+    assert s["realistic"] == pytest.approx(0.220, abs=1e-3)
+
+
+def test_early_growth_small_revenue_base_is_denied_the_elevated_cap():
+    # A tiny-revenue name prints hyper-growth on arithmetic ($1M -> $5M = 400%). Without
+    # demonstrated scale it stays on the flat base — mirroring the screener's
+    # RULE_OF_40_GROWTH_CAP guard against a tiny-base rate dominating.
+    s = engine.build_scenarios(_early_growth_fin(revenue_growth=4.0,
+                                                 revenue_ttm=5_000_000),
+                               stock_type="EARLY_GROWTH")
+    assert s["realistic"] == pytest.approx(0.20)
+
+
+def test_elevated_early_growth_cap_does_not_leak_to_other_tiers():
+    # A cash-generative hyper-grower outside EARLY_GROWTH keeps the 0.25 ceiling.
+    fin = _large_cap_fin(revenue_growth=6.839, earnings_growth=None)
+    assert engine.build_scenarios(fin, stock_type="GROWTH")["realistic"] == pytest.approx(0.25)
+    assert engine.build_scenarios(fin)["realistic"] == pytest.approx(0.25)
+
+
+def test_early_growth_cap_does_not_reach_the_ddm_perpetuity():
+    # The DDM passes distorted_cap=SUSTAINABLE_CEIL; Gordon growth must never take the
+    # elevated cap or it would overshoot the discount rate.
+    s = engine.build_scenarios(_early_growth_fin(revenue_growth=6.839, earnings_growth=-0.1),
+                               distorted_cap=engine.SUSTAINABLE_CEIL,
+                               stock_type="EARLY_GROWTH")
+    assert s["realistic"] <= engine.SUSTAINABLE_CEIL

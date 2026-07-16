@@ -236,8 +236,16 @@ def _acq_leverage_distorted(m: ScreenerMetrics) -> bool:
 def _section_iii(m: ScreenerMetrics, profile: str, heavy_capex: bool = False,
                  exclude_acq_leverage: bool = False) -> float | None:
     p = PROFILES[profile]
-    nde = leverage_score(m.net_debt_ebitda, p["P"])
-    ndf = leverage_score(m.net_debt_fcf, p["Q"])
+    # leverage_score reads a non-positive ratio as net cash (10/10). That inference only
+    # holds when the *numerator* is negative. A negative ratio produced by a negative
+    # *denominator* means the opposite: real debt with no EBITDA / FCF to service it
+    # (TEM: +$635M net debt over -$185M EBITDA = -3.43, scored 10/10). The ratio carries
+    # no leverage information there, so leave it unscored. A None denominator is
+    # unknown, not negative — keep the existing behaviour.
+    nde = (leverage_score(m.net_debt_ebitda, p["P"])
+           if (m.ebitda is None or m.ebitda > 0) else None)
+    ndf = (leverage_score(m.net_debt_fcf, p["Q"])
+           if (m.fcf is None or m.fcf > 0) else None)
     ocf = score_high(m.ocf_capex, OCF_CAPEX_BANDS, 0)
     if exclude_acq_leverage:
         # A dominant fresh acquisition's full debt measured against pre-consolidation

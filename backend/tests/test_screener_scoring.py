@@ -672,3 +672,42 @@ def test_dominant_acquisition_breakdown_and_lift():
     assert bd["pre_profit"] is None       # profitable -> not a pre-profit burn
     assert q_d > q_c                       # the exclusion lifts the score
     assert q_d == pytest.approx(7.8, abs=0.3)
+
+
+def _tem_metrics(**over):
+    """TEM-shaped: real debt (+$635M net) but negative EBITDA and negative FCF, so the
+    leverage ratios come out negative for the *opposite* reason to net cash."""
+    base = dict(revenue_cagr_3y=58.3, fcf_margin=-19.3, op_margin=-19.9,
+                op_margin_trajectory=62.9, gross_margin=63.4,
+                roic_ttm=-10.5, roic_5y_avg=-59.4, wacc=13.3, roic_wacc_spread=-23.8,
+                net_debt_ebitda=-3.43, net_debt_fcf=-2.59, ocf_capex=-8.0,
+                shares_cagr_3y=40.1, sbc_pct_rev=9.8, earnings_quality=None,
+                insider_ownership=37.1, shareholder_yield=0.03,
+                net_income=-245_028_000, fcf=-245_355_000, ebitda=-185_246_000,
+                total_cash=639_072_000, net_debt=634_716_000,
+                revenue_growth_yoy=83.4, sector="Healthcare")
+    base.update(over)
+    return ScreenerMetrics(**base)
+
+
+def test_negative_leverage_ratio_from_negative_denominator_is_not_scored_as_net_cash():
+    # Net debt is POSITIVE (+$635M) — the ratio is negative only because EBITDA/FCF are
+    # negative. That is the worst balance sheet, not a pristine one, so the ratios must
+    # be excluded rather than scored 10/10 (leverage_score's `r <= 0 -> 10` net-cash rule).
+    s = section_scores(_tem_metrics(), "BALANCED")
+    assert s["III"] == pytest.approx(0.0, abs=0.01)   # only OCF/CapEx (-8.0 -> 0) survives
+
+
+def test_genuine_net_cash_still_scores_ten():
+    # Regression: negative ratio with a POSITIVE denominator is real net cash -> 10.
+    s = section_scores(_tem_metrics(net_debt=-500_000_000, net_debt_ebitda=-2.0,
+                                    net_debt_fcf=-1.5, ebitda=250_000_000,
+                                    fcf=300_000_000, ocf_capex=5.0), "BALANCED")
+    assert s["III"] == pytest.approx(10.0, abs=0.01)
+
+
+def test_tem_shaped_score_drops_once_leverage_is_sign_guarded():
+    q, sections, profile, bd = score(_tem_metrics(), "Healthcare")
+    assert profile == "BALANCED"
+    assert bd["pre_profit"]["applied"] is True
+    assert q == pytest.approx(5.3, abs=0.15)   # was 6.1 with the inverted leverage 10/10s

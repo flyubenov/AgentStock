@@ -208,3 +208,22 @@ def test_revenue_growth_yoy_none_with_one_point():
     inp.income.rows["Total Revenue"] = [1000.0]  # only one year available
     m = compute_metrics(inp)
     assert m.revenue_growth_yoy is None
+
+
+def test_earnings_quality_undefined_when_net_income_negative():
+    # OCF / NI is meaningless for a loss-maker: two negatives divide into a flattering
+    # positive (TEM: OCF -218M / NI -245M = +0.89, which scored 6/10 as "healthy
+    # accrual quality"), and an OCF-positive loss-maker — genuinely the *better*
+    # case — divides into a negative that scores as the worst. Undefined, not scored.
+    from screener.metrics import compute_metrics
+    inp = _mk_inputs()
+    inp.income.rows["Net Income"] = [-245.0, 150.0, 130.0, 100.0]
+    inp.cashflow.rows["Operating Cash Flow"] = [-218.0, 180.0, 160.0, 140.0]
+    m = compute_metrics(inp)
+    assert m.earnings_quality is None
+
+
+def test_earnings_quality_still_computed_when_net_income_positive():
+    from screener.metrics import compute_metrics
+    m = compute_metrics(_mk_inputs())
+    assert m.earnings_quality == pytest.approx(200.0 / 160.0, abs=1e-3)

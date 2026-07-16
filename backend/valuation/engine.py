@@ -10,11 +10,10 @@ from models import TickerResult
 
 EBITDA_MARGIN_FLOOR = 0.08
 SUSTAINABLE_CEIL = 0.039
-FCF_MARGIN_FLOOR = -0.25
 # Below this FCF/EBITDA conversion, positive trailing FCF is treated as
 # unrepresentative of earning power (capex is eating it — e.g. AMZN's AWS/AI
 # build-out), so the DCF is rerouted onto EV/EBITDA + P/E rather than anchored to
-# the residual. Distinct from FCF_MARGIN_FLOOR, which declines deeply-negative FCF.
+# the residual. Distinct from the pre-profit guard, which handles negative FCF.
 FCF_EBITDA_FLOOR = 0.15
 
 # Revenue-coupled growth cap: hyper-growers earn a modest, bounded increment of
@@ -24,6 +23,22 @@ FCF_EBITDA_FLOOR = 0.15
 GROWTH_CAP_BASE = 0.20
 GROWTH_CAP_CEIL = 0.25
 GROWTH_CAP_SLOPE = 0.125
+
+# EARLY_GROWTH runs its own ceiling on the SAME shallow ramp. The tier is defined by
+# unprofitability, so _cap_eligible ("names demonstrating economics": FCF > 0, or
+# EBITDA > 0 and OCF > 0) can never fire for a cash burner and the tier fell through to
+# the flat base — pinning a 684% grower (NBIS) and a 36% grower (TEM) at the identical
+# 0.20 and making "massively overvalued" a foregone conclusion. For this tier revenue
+# growth IS the demonstrated economics, so the ramp is what gates the credit: the slope
+# is unchanged, so 36% growth still earns only 2pp (TEM -> 0.22) and only a >220% grower
+# reaches the ceiling. Verified against statements, not just info: NBIS's 684% reconciles
+# with its Q1 YoY (+683.9%) and annual (+479%), and is accelerating.
+EG_CAP_CEIL = 0.45
+# ...but a hyper-growth *rate* off a tiny revenue base is arithmetic, not a business
+# ($1M -> $5M = 400%). Demand demonstrated scale before granting the elevated ceiling,
+# mirroring the screener's RULE_OF_40_GROWTH_CAP guard against a tiny-base rate
+# dominating. Below the floor the tier keeps the flat GROWTH_CAP_BASE.
+EG_REVENUE_FLOOR = 500_000_000
 
 # Operating-compounder tiers: real earnings AND real EBITDA, so they take the
 # "balance past and future" basis — historical-median EV/EBITDA + forward P/E.
@@ -41,12 +56,22 @@ _SCENARIO_FN = {
 }
 
 
-def _growth_cap(g: float) -> float:
+def _growth_cap(g: float, ceil: float = GROWTH_CAP_CEIL) -> float:
     """Near-term growth cap coupled to revenue growth: flat GROWTH_CAP_BASE until
-    growth passes GROWTH_CAP_BASE, then a gentle linear ramp to GROWTH_CAP_CEIL
-    (reached at g=0.60). The ceiling bounds a noisy-high growth reading."""
-    return min(GROWTH_CAP_CEIL,
+    growth passes GROWTH_CAP_BASE, then a gentle linear ramp to `ceil` (the default
+    GROWTH_CAP_CEIL is reached at g=0.60; EG_CAP_CEIL at g=2.20). The ceiling bounds a
+    noisy-high growth reading."""
+    return min(ceil,
                GROWTH_CAP_BASE + GROWTH_CAP_SLOPE * max(0.0, g - GROWTH_CAP_BASE))
+
+
+def _eg_cap_eligible(fin: dict) -> bool:
+    """EARLY_GROWTH earns the elevated ceiling on demonstrated SCALE — the cash-flow
+    test in _cap_eligible is structurally unpassable for this tier, so revenue stands in
+    as the evidence that the growth rate describes a business rather than a small
+    denominator."""
+    revenue = fin.get("revenue_ttm")
+    return revenue is not None and revenue >= EG_REVENUE_FLOOR
 
 
 def _cap_eligible(fin: dict) -> bool:
@@ -73,7 +98,8 @@ def _earnings_distorted(fin: dict) -> bool:
     return eg is not None and eg < 0 and rg > 0
 
 
-def build_scenarios(fin: dict, distorted_cap: float = 0.20) -> dict:
+def build_scenarios(fin: dict, distorted_cap: float = 0.20,
+                    stock_type: str | None = None) -> dict:
     """Per-stock capped growth scenarios (spec decision #1).
 
     When GAAP earnings growth is negative while revenue is still growing, the
@@ -90,13 +116,21 @@ def build_scenarios(fin: dict, distorted_cap: float = 0.20) -> dict:
     The near-term cap is revenue-coupled: an eligible (cash-generative) hyper-grower
     earns up to GROWTH_CAP_CEIL (0.25), sourced statement-YoY-first. The elevated cap
     rides only the normal bounded-horizon path (distorted_cap >= GROWTH_CAP_BASE);
-    the DDM path keeps the flat base."""
+    the DDM path keeps the flat base.
+
+    stock_type == "EARLY_GROWTH" swaps in that tier's own ceiling (EG_CAP_CEIL) on the
+    same ramp, gated on revenue scale rather than the cash generation the tier can never
+    show — see EG_CAP_CEIL / _eg_cap_eligible."""
     cap = GROWTH_CAP_BASE
-    if distorted_cap >= GROWTH_CAP_BASE and _cap_eligible(fin):
+    if distorted_cap >= GROWTH_CAP_BASE:
         g = fin.get("revenue_growth_stmt")
         if g is None:
             g = fin.get("revenue_growth") or 0.0
-        cap = _growth_cap(g)
+        if stock_type == "EARLY_GROWTH":
+            if _eg_cap_eligible(fin):
+                cap = _growth_cap(g, EG_CAP_CEIL)
+        elif _cap_eligible(fin):
+            cap = _growth_cap(g)
     if _earnings_distorted(fin):
         raw = min(fin.get("revenue_growth") or 0, distorted_cap)
     else:
@@ -148,17 +182,28 @@ def evaluate(fin: dict) -> dict:
     weights = {mid: classification["method_weights"][mid]["weight"] for mid in m.ALL_METHODS}
     weights = pick_ev_multiple(weights, fin)
 
-    # Pre-profit guard: a DCF-anchored company burning cash on a trailing basis
-    # cannot be valued reliably from trailing financials. Decline rather than
-    # emit a misleading number.
     fcf_ttm = fin.get("fcf_ttm")
-    revenue_ttm = fin.get("revenue_ttm")
     ocf_ttm = fin.get("ocf_ttm")
     if ocf_ttm is None:
         ocf_ttm = fin.get("operating_cashflow")   # info fallback
     ebitda_ttm = fin.get("ebitda_ttm") or 0
-    if (weights.get("dcf", 0) > 0 and fcf_ttm is not None and revenue_ttm
-            and fcf_ttm / revenue_ttm < FCF_MARGIN_FLOOR):
+
+    # EARLY_GROWTH is *defined* by unprofitability (classifier rule 4: revenue growth
+    # > 20% AND eps/ebitda <= 0), so a trailing-FCF DCF is negative by construction for
+    # exactly the names the tier exists to value — dragging the composite below zero and
+    # declining a company its own EV/Sales leg prices fine (TEM: DCF -$47 vs EV/Sales
+    # +$29). Zero the leg and let EV/Sales + SOTP carry the tier (weights renormalize
+    # over the surviving legs below). This also makes the pre-profit guard skip the tier
+    # for the same reason FINANCIAL skips it: a zero DCF weight, nothing left to protect.
+    if stock_type == "EARLY_GROWTH" and fcf_ttm is not None and fcf_ttm <= 0:
+        weights = {**weights, "dcf": 0.0}
+
+    # Pre-profit guard: a DCF-anchored company burning cash on a trailing basis cannot be
+    # valued reliably from trailing financials. The trigger is the SIGN of FCF, not the
+    # depth of the burn: discounting negative cash flows yields a negative value however
+    # shallow the burn, so a magnitude floor only let the near-breakeven names — the ones
+    # closest to viable — through with a meaningless negative leg in the blend.
+    if weights.get("dcf", 0) > 0 and fcf_ttm is not None and fcf_ttm < 0:
         if ebitda_ttm > 0 and ocf_ttm is not None and ocf_ttm > 0:
             # Capex-distorted, negative-FCF variant: operations generate cash (OCF > 0)
             # and EBITDA is valuable, so deeply negative FCF is a capex/investment
@@ -205,7 +250,7 @@ def evaluate(fin: dict) -> dict:
         weights = dict(weights)
         weights["pe"] = 0.0
 
-    growth = build_scenarios(fin)
+    growth = build_scenarios(fin, stock_type=stock_type)
     # The DDM perpetuity keeps distorted names on the sustainable ceiling.
     ddm_growth = build_scenarios(fin, distorted_cap=SUSTAINABLE_CEIL)
 

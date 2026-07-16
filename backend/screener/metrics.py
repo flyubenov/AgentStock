@@ -206,7 +206,12 @@ def compute_metrics(inp: ScreenerInputs) -> ScreenerMetrics:
     if cf is not None:
         ocf = cf.latest("Operating Cash Flow")
         ni = inc.latest("Net Income") if inc else None
-        if ocf is not None and ni and abs(ni) > 1e-6:
+        # OCF / NI only measures accrual quality against *positive* earnings. For a
+        # loss-maker the ratio inverts: two negatives divide into a flattering positive
+        # (TEM: -218M / -245M = +0.89, scored as healthy), while an OCF-positive
+        # loss-maker — the genuinely better case — divides into a negative that scores
+        # worst. Leave it undefined rather than scored backwards.
+        if ocf is not None and ni is not None and ni > 1e-6:
             m.earnings_quality = ocf / ni
     m.insider_ownership = pct(info.get("heldPercentInsiders"))
     mktcap = info.get("marketCap")
