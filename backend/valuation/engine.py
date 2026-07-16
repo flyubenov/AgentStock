@@ -10,11 +10,10 @@ from models import TickerResult
 
 EBITDA_MARGIN_FLOOR = 0.08
 SUSTAINABLE_CEIL = 0.039
-FCF_MARGIN_FLOOR = -0.25
 # Below this FCF/EBITDA conversion, positive trailing FCF is treated as
 # unrepresentative of earning power (capex is eating it — e.g. AMZN's AWS/AI
 # build-out), so the DCF is rerouted onto EV/EBITDA + P/E rather than anchored to
-# the residual. Distinct from FCF_MARGIN_FLOOR, which declines deeply-negative FCF.
+# the residual. Distinct from the pre-profit guard, which handles negative FCF.
 FCF_EBITDA_FLOOR = 0.15
 
 # Revenue-coupled growth cap: hyper-growers earn a modest, bounded increment of
@@ -148,17 +147,28 @@ def evaluate(fin: dict) -> dict:
     weights = {mid: classification["method_weights"][mid]["weight"] for mid in m.ALL_METHODS}
     weights = pick_ev_multiple(weights, fin)
 
-    # Pre-profit guard: a DCF-anchored company burning cash on a trailing basis
-    # cannot be valued reliably from trailing financials. Decline rather than
-    # emit a misleading number.
     fcf_ttm = fin.get("fcf_ttm")
-    revenue_ttm = fin.get("revenue_ttm")
     ocf_ttm = fin.get("ocf_ttm")
     if ocf_ttm is None:
         ocf_ttm = fin.get("operating_cashflow")   # info fallback
     ebitda_ttm = fin.get("ebitda_ttm") or 0
-    if (weights.get("dcf", 0) > 0 and fcf_ttm is not None and revenue_ttm
-            and fcf_ttm / revenue_ttm < FCF_MARGIN_FLOOR):
+
+    # EARLY_GROWTH is *defined* by unprofitability (classifier rule 4: revenue growth
+    # > 20% AND eps/ebitda <= 0), so a trailing-FCF DCF is negative by construction for
+    # exactly the names the tier exists to value — dragging the composite below zero and
+    # declining a company its own EV/Sales leg prices fine (TEM: DCF -$47 vs EV/Sales
+    # +$29). Zero the leg and let EV/Sales + SOTP carry the tier (weights renormalize
+    # over the surviving legs below). This also makes the pre-profit guard skip the tier
+    # for the same reason FINANCIAL skips it: a zero DCF weight, nothing left to protect.
+    if stock_type == "EARLY_GROWTH" and fcf_ttm is not None and fcf_ttm <= 0:
+        weights = {**weights, "dcf": 0.0}
+
+    # Pre-profit guard: a DCF-anchored company burning cash on a trailing basis cannot be
+    # valued reliably from trailing financials. The trigger is the SIGN of FCF, not the
+    # depth of the burn: discounting negative cash flows yields a negative value however
+    # shallow the burn, so a magnitude floor only let the near-breakeven names — the ones
+    # closest to viable — through with a meaningless negative leg in the blend.
+    if weights.get("dcf", 0) > 0 and fcf_ttm is not None and fcf_ttm < 0:
         if ebitda_ttm > 0 and ocf_ttm is not None and ocf_ttm > 0:
             # Capex-distorted, negative-FCF variant: operations generate cash (OCF > 0)
             # and EBITDA is valuable, so deeply negative FCF is a capex/investment
