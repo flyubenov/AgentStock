@@ -13,6 +13,9 @@ frontend/dist/
 .env
 *.env
 
+# Secrets
+backend/credentials/
+
 # IDE
 .vscode/
 .idea/
