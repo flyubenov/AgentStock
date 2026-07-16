@@ -110,13 +110,6 @@ def test_ev_ebitda_multiple_is_capped():
     assert capped == pytest.approx(at_cap)
 
 
-def test_ev_sales_multiple_is_capped():
-    base = {"revenue_ttm": 1_000_000, "net_debt": 0, "shares_outstanding": 100_000}
-    capped = m.calc_ev_sales({**base, "ev_sales": 20.0}, GROWTH)["fair_value"]
-    at_cap = m.calc_ev_sales({**base, "ev_sales": 8.0}, GROWTH)["fair_value"]
-    assert capped == pytest.approx(at_cap)
-
-
 def test_dcf_scenarios_ordered_for_positive_inputs():
     fin = {"fcf_ttm": 1_000_000, "net_debt": 0, "shares_outstanding": 100_000}
     s = m.calc_dcf(fin, GROWTH)["scenarios"]
@@ -496,3 +489,51 @@ def test_ev_ebitda_hist_base_ignored_without_hist_multiple():
                                  compress=False)["fair_value"]
     plain = m.calc_ev_ebitda(fin, GROWTH, compress=False)["fair_value"]
     assert with_base == pytest.approx(plain)
+
+
+# -- current run-rate revenue base --------------------------------------------
+def test_run_rate_revenue_annualizes_latest_quarter_for_hyper_grower():
+    # NBIS: TTM ($873M) is a trailing AVERAGE centred ~6 months back, so it lags the
+    # current run-rate ($399M latest quarter -> $1.596B) by 83% on a name doubling every
+    # two quarters. Projecting growth from TTM starts the model below today's actual.
+    q = (399.0e6, 227.7e6, 146.1e6, 100.7e6, 50.9e6)
+    assert m.run_rate_revenue(q, 873.5e6, 6.839) == pytest.approx(1596.0e6)
+
+
+def test_run_rate_revenue_declines_seasonal_slow_grower():
+    # A retailer's Q4 annualises 60% above TTM, but at 5% YoY growth TTM does NOT lag —
+    # the gap is seasonality, and annualising a seasonal peak would inflate the base.
+    # The growth gate is what separates "TTM is stale" from "Q4 is big".
+    q = (400.0, 200.0, 200.0, 200.0)
+    assert m.run_rate_revenue(q, 1000.0, 0.05) is None
+
+
+def test_run_rate_revenue_is_only_help():
+    # A decelerating name's run-rate falls BELOW TTM; never lower the base.
+    q = (200.0, 300.0, 300.0, 300.0)
+    assert m.run_rate_revenue(q, 1100.0, 0.60) is None
+
+
+def test_run_rate_revenue_needs_complete_inputs():
+    assert m.run_rate_revenue(None, 1000.0, 2.0) is None
+    assert m.run_rate_revenue((), 1000.0, 2.0) is None
+    assert m.run_rate_revenue((None,), 1000.0, 2.0) is None
+    assert m.run_rate_revenue((0.0,), 1000.0, 2.0) is None
+    assert m.run_rate_revenue((100.0,), None, 2.0) is None
+    assert m.run_rate_revenue((100.0,), 1000.0, None) is None
+
+
+def test_calc_ev_sales_projects_from_run_rate_when_present():
+    base = {"revenue_ttm": 1_000_000, "net_debt": 0, "shares_outstanding": 100_000,
+            "ev_sales": 2.0}
+    ttm_based = m.calc_ev_sales(base, GROWTH)["fair_value"]
+    rr_based = m.calc_ev_sales({**base, "revenue_run_rate": 2_000_000}, GROWTH)["fair_value"]
+    # net_debt = 0 -> the leg is linear in the base, so doubling it doubles the value
+    assert rr_based == pytest.approx(ttm_based * 2)
+
+
+def test_calc_ev_sales_falls_back_to_ttm_without_run_rate():
+    base = {"revenue_ttm": 1_000_000, "net_debt": 0, "shares_outstanding": 100_000,
+            "ev_sales": 2.0}
+    assert m.calc_ev_sales({**base, "revenue_run_rate": None}, GROWTH)["fair_value"] == \
+        pytest.approx(m.calc_ev_sales(base, GROWTH)["fair_value"])

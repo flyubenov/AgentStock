@@ -87,6 +87,38 @@ async def fetch_ticker_cashflow(ticker: str) -> dict | None:
     return await run_yf(_fetch_cashflow_sync, ticker.upper())
 
 
+@lru_cache(maxsize=256)
+def _fetch_quarterly_revenue_sync(ticker: str) -> tuple | None:
+    """Latest-first quarterly Total Revenue, for the EV/Sales run-rate base (see
+    models.run_rate_revenue). Returns None (never raises) when unavailable."""
+    for attempt in range(_RATE_LIMIT_RETRIES):
+        try:
+            q = yf.Ticker(ticker).quarterly_income_stmt
+            if q is None or q.empty or "Total Revenue" not in q.index:
+                return None
+            vals = []
+            for col in sorted(q.columns, reverse=True):   # newest quarter first
+                v = q.loc["Total Revenue", col]
+                vals.append(float(v) if v == v else None)  # NaN -> None
+            return tuple(vals) or None
+        except Exception as e:
+            is_rate_limit = (
+                (_YFRateLimitError and isinstance(e, _YFRateLimitError))
+                or "rate" in str(e).lower()
+                or "too many" in str(e).lower()
+            )
+            if is_rate_limit and attempt < _RATE_LIMIT_RETRIES - 1:
+                time.sleep(_RATE_LIMIT_BACKOFF * (attempt + 1))
+                continue
+            return None
+    return None
+
+
+async def fetch_quarterly_revenue(ticker: str) -> tuple | None:
+    """Async wrapper around _fetch_quarterly_revenue_sync (dedicated yfinance pool)."""
+    return await run_yf(_fetch_quarterly_revenue_sync, ticker.upper())
+
+
 def real_fcf(cashflow: dict | None, info_fcf: float | None) -> float | None:
     """Real FCF priority: statement 'Free Cash Flow', else OCF + (negative) capex,
     else the info-dict free cash flow fallback."""

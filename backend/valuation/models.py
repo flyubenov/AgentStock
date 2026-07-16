@@ -5,7 +5,6 @@ TERMINAL_GROWTH = 0.03
 HORIZON = 10
 MOS = 0.90
 EV_EBITDA_CAP = 20.0
-EV_SALES_CAP = 8.0
 MATURE_MULTIPLE_FACTOR = (1 + TERMINAL_GROWTH) / (DISCOUNT_RATE - TERMINAL_GROWTH)  # = 14.714...
 EBITDA_CONV_FLOOR = 0.40
 EBITDA_CONV_CAP = 0.65
@@ -235,13 +234,54 @@ def calc_ev_ebitda(fin: dict, growth: dict, hist_multiple: float | None = None,
 
 
 # -- EV/Sales ------------------------------------------------------------------
+# Below this trailing YoY revenue growth, TTM is treated as a fair proxy for today's
+# revenue and the base is left alone. The gate is what separates "TTM is stale" from
+# "the latest quarter is seasonally big": a retailer's Q4 annualises well above TTM, but
+# at single-digit growth TTM does NOT lag, and annualising a seasonal peak would inflate
+# the base. Only a genuine hyper-grower clears this.
+RUN_RATE_GROWTH_FLOOR = 0.50
+
+
+def run_rate_revenue(quarters, revenue_ttm: float | None,
+                     revenue_growth: float | None) -> float | None:
+    """Today's annualised revenue run-rate (latest quarter x 4), or None to keep TTM.
+
+    TTM is the sum of the last four quarters, so it represents revenue centred ~6 months
+    ago, not today. For a mature name that lag is worth ~2% and is irrelevant; for a
+    hyper-grower it is enormous (NBIS: TTM $873M vs a $1.596B run-rate, 83% low), and the
+    EV/Sales leg then compounds growth from a base already behind today's actual —
+    understating the value on the base as well as the capped rate.
+
+    `quarters` is latest-first quarterly revenue. Two guards: the growth gate above, and
+    only-help — a decelerating name's run-rate falls below TTM and must never lower the
+    base (same only-help contract as rebased_dcf_base).
+
+    This is NOT double-counting against the growth rate: `revenue_growth` is trailing and
+    only selects the base and the cap, while the projection runs FORWARD from t=0. Using a
+    more accurate t=0 is a correction, not extra growth.
+    """
+    if not quarters or revenue_ttm is None or revenue_growth is None:
+        return None
+    if revenue_growth <= RUN_RATE_GROWTH_FLOOR:
+        return None
+    latest = quarters[0]
+    if latest is None or latest <= 0:
+        return None
+    run_rate = latest * 4
+    return run_rate if run_rate > revenue_ttm else None
+
+
 def calc_ev_sales(fin: dict, growth: dict) -> dict:
-    revenue = fin.get("revenue_ttm")
+    # Project from the current run-rate when one was derived (see run_rate_revenue);
+    # otherwise TTM. Explicit None check so a genuine 0 can never fall through to TTM.
+    revenue = fin.get("revenue_run_rate")
+    if revenue is None:
+        revenue = fin.get("revenue_ttm")
     multiple = fin.get("ev_sales")
     shares = fin.get("shares_outstanding")
     if revenue is None or multiple is None or not shares:
         return _null_result(True)
-    multiple = min(multiple, EV_SALES_CAP, MATURE_EV_SALES)
+    multiple = min(multiple, MATURE_EV_SALES)
     net_debt = fin.get("net_debt") or 0
     scenarios = {k: _scenario_ev_multiple(revenue, growth[k], multiple, net_debt, shares) for k in SCENARIO_KEYS}
     return {"scenarios": scenarios, "fair_value": _avg(scenarios), "weight": 0.0, "has_scenarios": True}

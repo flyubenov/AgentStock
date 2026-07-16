@@ -4,7 +4,7 @@ from valuation.classifier import classify
 from valuation import models as m
 from services.yahoo import (
     fetch_ticker_info, extract_financials, fetch_ticker_cashflow, real_fcf,
-    fetch_ev_ebitda_history,
+    fetch_ev_ebitda_history, fetch_quarterly_revenue,
 )
 from models import TickerResult
 
@@ -372,6 +372,20 @@ async def run(ticker: str) -> TickerResult:
         ocf = cashflow.get("operating_cash_flow")
         if ocf is not None:
             fin["ocf_ttm"] = ocf   # statement-primary; gate falls back to info operating_cashflow
+
+    # TTM revenue is centred ~6 months back, so it lags today's revenue on a fast grower;
+    # derive the current run-rate for the EV/Sales base (gated + only-help inside
+    # models.run_rate_revenue, so this is a no-op for everything but a hyper-grower).
+    # Pre-gate on the growth we already hold from `info` so the extra quarterly fetch is
+    # only paid by the few names that could clear the floor — a batch run over the whole
+    # universe would otherwise add one yfinance round-trip per ticker for nothing, against
+    # a feed that rate-limits (see services.yf_pool). run_rate_revenue re-checks the floor
+    # and stays authoritative; this only avoids the IO.
+    fin["revenue_run_rate"] = None
+    if (fin.get("revenue_growth") or 0) > m.RUN_RATE_GROWTH_FLOOR:
+        quarters = await fetch_quarterly_revenue(ticker)
+        fin["revenue_run_rate"] = m.run_rate_revenue(
+            quarters, fin.get("revenue_ttm"), fin.get("revenue_growth"))
 
     # Forward tiers anchor EV/EBITDA to its historical median when reconstructable
     # (the reconstruction skips itself across a recent split — see services.yahoo).
