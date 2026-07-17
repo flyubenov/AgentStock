@@ -25,10 +25,30 @@ EV_EBITDA_CAP = 20.0
 # (base-rate drag — the same size penalty the growth fade applies via _fade_hold_years).
 # NVDA's peak-era median reads ~fairly valued at 25x but flips to undervalued at 30x, so the
 # size-scaled ceiling keeps the mega-cap terminal multiple honest.
+#
+# The lift toward that ceiling is coupled to the GREATER of growth and QUALITY. Growth-only
+# was the flip side of the ANET fix: it mean-reverted a low-growth compounder whose premium
+# is moat/quality-driven, not growth-driven (CDNS grows 14% but the market has durably paid
+# 40x+ for the EDA-duopoly franchise; growth-only compressed its 43.8x median to 22x, pricing
+# it -33%). Quality is read from FCF/EBITDA conversion (the same EBITDA_CONV_FLOOR/CAP band the
+# compression logic uses, and the textbook fundamental basis of an EV/EBITDA multiple) — NOT
+# ROE, which is goodwill-distorted for an acquirer and would understate exactly these names.
+# So a durable high-conversion franchise keeps its premium terminal multiple independent of
+# its growth rate, while a low-conversion or non-durable name still compresses.
+#
+# The quality band is deliberately TIGHTER than the compression band (EBITDA_CONV_FLOOR/CAP
+# 0.40-0.65): most asset-light software clears 0.65, so reusing it would hand nearly every
+# durable software name the full ceiling and effectively bypass the growth-coupling. The
+# quality lift starts only at QUALITY_CONV_LO (where a mature FCF-conversion premium begins to
+# be genuinely distinctive) and reaches full lift at QUALITY_CONV_HI (near-total conversion).
+# CDNS (0.79) then earns a PARTIAL lift (~25.6x) rather than the full 30x — moat credited, but
+# not maxed on a merely-good conversion.
 EV_EBITDA_CAP_CEIL = 30.0
 EV_EBITDA_CAP_CEIL_MEGA = 25.0
 EV_EBITDA_CAP_G_LO = 0.10
 EV_EBITDA_CAP_G_HI = 0.30
+QUALITY_CONV_LO = 0.65
+QUALITY_CONV_HI = 0.90
 MATURE_MULTIPLE_FACTOR = (1 + TERMINAL_GROWTH) / (DISCOUNT_RATE - TERMINAL_GROWTH)  # = 14.714...
 EBITDA_CONV_FLOOR = 0.40
 EBITDA_CONV_CAP = 0.65
@@ -109,17 +129,25 @@ def _null_result(has_scenarios: bool) -> dict:
     }
 
 
-def _ev_ebitda_ceiling(growth: float | None, durable: bool, mega: bool = False) -> float:
-    """Growth-coupled ceiling for the EV/EBITDA exit multiple (see EV_EBITDA_CAP_CEIL).
-    Returns the flat EV_EBITDA_CAP for a slow/no-growth name, or a spot (non-durable)
-    trailing multiple; ramps up to the terminal ceiling for a genuine grower whose multiple
-    is a durable historical median. Mega-caps ramp to the lower EV_EBITDA_CAP_CEIL_MEGA.
-    `growth` is the demonstrated revenue growth."""
-    if not durable or growth is None or growth <= EV_EBITDA_CAP_G_LO:
+def _ev_ebitda_ceiling(growth: float | None, durable: bool, mega: bool = False,
+                       conversion: float | None = None) -> float:
+    """Growth/quality-coupled ceiling for the EV/EBITDA exit multiple (see EV_EBITDA_CAP_CEIL).
+    Returns the flat EV_EBITDA_CAP for a spot (non-durable) trailing multiple. For a durable
+    historical median the ceiling ramps toward the terminal top (EV_EBITDA_CAP_CEIL_MEGA for a
+    mega-cap, else EV_EBITDA_CAP_CEIL) on the GREATER of two fractions:
+      - growth:  demonstrated revenue growth from EV_EBITDA_CAP_G_LO to _G_HI, and
+      - quality: FCF/EBITDA conversion from QUALITY_CONV_LO to QUALITY_CONV_HI.
+    A durable high-conversion franchise thus keeps its premium multiple even at a modest growth
+    rate (CDNS), while a low-conversion / low-growth / non-durable name compresses to the base."""
+    if not durable:
         return EV_EBITDA_CAP
     top = EV_EBITDA_CAP_CEIL_MEGA if mega else EV_EBITDA_CAP_CEIL
-    frac = min(1.0, (growth - EV_EBITDA_CAP_G_LO) / (EV_EBITDA_CAP_G_HI - EV_EBITDA_CAP_G_LO))
-    return EV_EBITDA_CAP + frac * (top - EV_EBITDA_CAP)
+    g_frac = (0.0 if growth is None or growth <= EV_EBITDA_CAP_G_LO
+              else min(1.0, (growth - EV_EBITDA_CAP_G_LO) / (EV_EBITDA_CAP_G_HI - EV_EBITDA_CAP_G_LO)))
+    q_frac = 0.0
+    if conversion is not None and QUALITY_CONV_HI > QUALITY_CONV_LO:
+        q_frac = max(0.0, min(1.0, (conversion - QUALITY_CONV_LO) / (QUALITY_CONV_HI - QUALITY_CONV_LO)))
+    return EV_EBITDA_CAP + max(g_frac, q_frac) * (top - EV_EBITDA_CAP)
 
 
 def _compressed_exit_multiple(current_mult: float, conversion: float, conv_lo: float, conv_hi: float) -> float:
@@ -265,7 +293,13 @@ def calc_ev_ebitda(fin: dict, growth: dict, hist_multiple: float | None = None,
     if g_demo is None:
         g_demo = fin.get("revenue_growth")
     mega = (fin.get("market_cap") or 0) >= MEGA_CAP_FLOOR
-    multiple = min(multiple, _ev_ebitda_ceiling(g_demo, durable=hist_multiple is not None, mega=mega))
+    # Quality signal for the ceiling: trailing FCF/EBITDA conversion (read from fin, not the
+    # local `ebitda` which may already be the hist statement base).
+    fcf_ttm, ebitda_ttm = fin.get("fcf_ttm"), fin.get("ebitda_ttm")
+    conversion = (fcf_ttm / ebitda_ttm
+                  if (fcf_ttm is not None and ebitda_ttm and ebitda_ttm > 0) else None)
+    multiple = min(multiple, _ev_ebitda_ceiling(
+        g_demo, durable=hist_multiple is not None, mega=mega, conversion=conversion))
     fcf = fin.get("fcf_ttm")
     if compress and fcf is not None and ebitda > 0:
         conversion = fcf / ebitda
