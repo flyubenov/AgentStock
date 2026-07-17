@@ -5,6 +5,30 @@ TERMINAL_GROWTH = 0.03
 HORIZON = 10
 MOS = 0.90
 EV_EBITDA_CAP = 20.0
+# Growth-coupled ceiling for the EV/EBITDA exit multiple. EV_EBITDA_CAP is the ceiling for
+# a slow/no-growth name (and the flat cap the SOTP path still uses); a genuine grower earns
+# a higher ceiling so a DURABLE premium multiple — a reconstructed historical median the
+# market has paid for years — survives instead of being clamped to a mature-business level.
+# ANET's 27.5x median was silently clamped to 20x, single-handedly pricing the leg $27/sh
+# low. The lift above EV_EBITDA_CAP is granted ONLY against that durable median (hist path),
+# never a spot trailing multiple, which can be a one-quarter EBITDA dip. Linear ramp from
+# EV_EBITDA_CAP at EV_EBITDA_CAP_G_LO growth to EV_EBITDA_CAP_CEIL at EV_EBITDA_CAP_G_HI.
+#
+# The ceiling is a TERMINAL exit multiple applied ~10 years out, so it must stay defensible
+# as a mature-franchise level even for a name whose reconstructed median sits far higher.
+# ANET's 27.5x median clears the 30x mid/large ceiling untouched — a genuine grower keeps its
+# durable multiple, while a hyper-growth name's peak median is trimmed to the terminal ceiling
+# rather than extrapolated forever.
+#
+# Mega-caps (>= MEGA_CAP_FLOOR) get a LOWER 25x ceiling: a >$1T franchise sustaining a 30x
+# EBITDA multiple all the way to the terminal year is a far stronger claim than a $200B one
+# (base-rate drag — the same size penalty the growth fade applies via _fade_hold_years).
+# NVDA's peak-era median reads ~fairly valued at 25x but flips to undervalued at 30x, so the
+# size-scaled ceiling keeps the mega-cap terminal multiple honest.
+EV_EBITDA_CAP_CEIL = 30.0
+EV_EBITDA_CAP_CEIL_MEGA = 25.0
+EV_EBITDA_CAP_G_LO = 0.10
+EV_EBITDA_CAP_G_HI = 0.30
 MATURE_MULTIPLE_FACTOR = (1 + TERMINAL_GROWTH) / (DISCOUNT_RATE - TERMINAL_GROWTH)  # = 14.714...
 EBITDA_CONV_FLOOR = 0.40
 EBITDA_CONV_CAP = 0.65
@@ -83,6 +107,19 @@ def _null_result(has_scenarios: bool) -> dict:
         "weight": 0.0,
         "has_scenarios": has_scenarios,
     }
+
+
+def _ev_ebitda_ceiling(growth: float | None, durable: bool, mega: bool = False) -> float:
+    """Growth-coupled ceiling for the EV/EBITDA exit multiple (see EV_EBITDA_CAP_CEIL).
+    Returns the flat EV_EBITDA_CAP for a slow/no-growth name, or a spot (non-durable)
+    trailing multiple; ramps up to the terminal ceiling for a genuine grower whose multiple
+    is a durable historical median. Mega-caps ramp to the lower EV_EBITDA_CAP_CEIL_MEGA.
+    `growth` is the demonstrated revenue growth."""
+    if not durable or growth is None or growth <= EV_EBITDA_CAP_G_LO:
+        return EV_EBITDA_CAP
+    top = EV_EBITDA_CAP_CEIL_MEGA if mega else EV_EBITDA_CAP_CEIL
+    frac = min(1.0, (growth - EV_EBITDA_CAP_G_LO) / (EV_EBITDA_CAP_G_HI - EV_EBITDA_CAP_G_LO))
+    return EV_EBITDA_CAP + frac * (top - EV_EBITDA_CAP)
 
 
 def _compressed_exit_multiple(current_mult: float, conversion: float, conv_lo: float, conv_hi: float) -> float:
@@ -222,7 +259,13 @@ def calc_ev_ebitda(fin: dict, growth: dict, hist_multiple: float | None = None,
         ebitda = hist_ebitda_base
     if ebitda is None or multiple is None or not shares:
         return _null_result(True)
-    multiple = min(multiple, EV_EBITDA_CAP)
+    # A durable historical median (hist_multiple) earns a growth-coupled ceiling; a spot
+    # trailing multiple keeps the flat EV_EBITDA_CAP. Demonstrated growth drives the lift.
+    g_demo = fin.get("revenue_growth_stmt")
+    if g_demo is None:
+        g_demo = fin.get("revenue_growth")
+    mega = (fin.get("market_cap") or 0) >= MEGA_CAP_FLOOR
+    multiple = min(multiple, _ev_ebitda_ceiling(g_demo, durable=hist_multiple is not None, mega=mega))
     fcf = fin.get("fcf_ttm")
     if compress and fcf is not None and ebitda > 0:
         conversion = fcf / ebitda

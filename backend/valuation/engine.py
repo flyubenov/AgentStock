@@ -16,13 +16,35 @@ SUSTAINABLE_CEIL = 0.039
 # the residual. Distinct from the pre-profit guard, which handles negative FCF.
 FCF_EBITDA_FLOOR = 0.15
 
-# Revenue-coupled growth cap: hyper-growers earn a modest, bounded increment of
-# near-term growth credit above the flat base. The ramp is deliberately shallow
-# (+1pp of cap per 8pp of growth) and the 0.25 ceiling — reached at g=0.60 — is the
-# ultimate backstop against a noisy-high growth reading.
+# Revenue-coupled growth cap: growers earn a bounded increment of near-term growth credit
+# above the flat base. The ramp credits SLOPE of each point of growth above the base, up to
+# the CEIL backstop against a noisy-high reading. The near-term rate is held only `hold`
+# years (3 for a $150B+ name) and then faded to TERMINAL_GROWTH by the horizon, so the fade
+# — not this cap — bounds the long-run damage of a high rate; the cap need only avoid
+# projecting a *spurious* rate. The original ramp (slope 0.125, ceil 0.25) was calibrated as
+# a noise-suppressor for EARLY_GROWTH hyper-growers and was far too stingy for a corroborated
+# operating compounder: ANET, growing a statement-corroborated ~28% (revenue) / 25%
+# (earnings), was clamped to 21%. The steeper slope credits corroborated growth much more
+# closely — but it can only ever pass through the demonstrated `raw` rate (earnings/revenue
+# growth), never manufacture growth above it, so a single noisy-high feed reading is still
+# bounded by `raw` and by the CEIL. EARLY_GROWTH keeps its own shallow slope (EG_CAP_SLOPE),
+# so NBIS/TEM are unchanged.
+#
+# The CEILING is deliberately LEFT at 0.25: it is the backstop for a hyper-grower whose `raw`
+# rate sits far above it (IREN's 167%, pinned at the ceiling whatever the slope). Only the
+# SLOPE is steepened, so a mid-range corroborated grower REACHES the existing ceiling rather
+# than a higher one — ANET's ~28.6% statement growth now lands at 0.25 (its 25% earnings-
+# growth `raw`), while a 167% grower stays pinned at 0.25 exactly as before. At slope 0.60
+# the 0.25 ceiling is reached at g≈0.283, so anything growing faster than ~28% saturates.
 GROWTH_CAP_BASE = 0.20
 GROWTH_CAP_CEIL = 0.25
-GROWTH_CAP_SLOPE = 0.125
+GROWTH_CAP_SLOPE = 0.60
+# The optimistic scenario runs this far above the realistic near-term cap. Without it, a
+# grower whose demonstrated rate sits AT the cap had optimistic == realistic — the
+# min(base+0.05, cap) clamp erased the entire bull case, so the 3-way scenario average was
+# biased strictly BELOW realistic (only the pessimistic leg had room to move). The headroom
+# restores a genuine, bounded upside leg (base is <= cap, so optimistic = base + 0.05).
+GROWTH_OPT_HEADROOM = 0.05
 
 # EARLY_GROWTH runs its own ceiling on the SAME shallow ramp. The tier is defined by
 # unprofitability, so _cap_eligible ("names demonstrating economics": FCF > 0, or
@@ -45,6 +67,10 @@ GROWTH_CAP_SLOPE = 0.125
 # this ceiling (TEM sits at 0.22 regardless), so it is set on a thin sample — prefer a
 # round, defensible assumption over a value reverse-engineered from one company's output.
 EG_CAP_CEIL = 0.35
+# EARLY_GROWTH keeps the original shallow ramp (a noise-suppressor for hyper-growth rates
+# printed off a small base); the GROWTH-tier slope steepening above must NOT leak into this
+# tier, or NBIS/TEM re-calibrate. See EG_CAP_CEIL's note on why 0.125 was chosen here.
+EG_CAP_SLOPE = 0.125
 # ...but a hyper-growth *rate* off a tiny revenue base is arithmetic, not a business
 # ($1M -> $5M = 400%). Demand demonstrated scale before granting the elevated ceiling,
 # mirroring the screener's RULE_OF_40_GROWTH_CAP guard against a tiny-base rate
@@ -67,13 +93,14 @@ _SCENARIO_FN = {
 }
 
 
-def _growth_cap(g: float, ceil: float = GROWTH_CAP_CEIL) -> float:
-    """Near-term growth cap coupled to revenue growth: flat GROWTH_CAP_BASE until
-    growth passes GROWTH_CAP_BASE, then a gentle linear ramp to `ceil` (the default
-    GROWTH_CAP_CEIL is reached at g=0.60; EG_CAP_CEIL at g=1.40). The ceiling bounds a
-    noisy-high growth reading."""
+def _growth_cap(g: float, ceil: float = GROWTH_CAP_CEIL,
+                slope: float = GROWTH_CAP_SLOPE) -> float:
+    """Near-term growth cap coupled to revenue growth: flat GROWTH_CAP_BASE until growth
+    passes GROWTH_CAP_BASE, then a linear ramp of `slope` per point of excess growth up to
+    `ceil`. GROWTH tiers use the default (steep) slope; EARLY_GROWTH passes its own shallow
+    EG_CAP_SLOPE. The ceiling bounds a noisy-high growth reading."""
     return min(ceil,
-               GROWTH_CAP_BASE + GROWTH_CAP_SLOPE * max(0.0, g - GROWTH_CAP_BASE))
+               GROWTH_CAP_BASE + slope * max(0.0, g - GROWTH_CAP_BASE))
 
 
 def _eg_cap_eligible(fin: dict) -> bool:
@@ -171,7 +198,7 @@ def build_scenarios(fin: dict, distorted_cap: float = 0.20,
             g = fin.get("revenue_growth") or 0.0
         if stock_type == "EARLY_GROWTH":
             if _eg_cap_eligible(fin):
-                cap = _growth_cap(g, EG_CAP_CEIL)
+                cap = _growth_cap(g, EG_CAP_CEIL, EG_CAP_SLOPE)
         elif _cap_eligible(fin):
             cap = _growth_cap(g)
     if _earnings_distorted(fin):
@@ -188,8 +215,16 @@ def build_scenarios(fin: dict, distorted_cap: float = 0.20,
         raw = (fin.get("earnings_growth") or fin.get("revenue_growth")
                or fin.get("revenue_growth_stmt") or 0.07)
     base = max(0.02, min(float(raw), cap))
+    # Optimistic upside above the near-term cap is granted only when the demonstrated rate
+    # isn't heavily suppressed by the ceiling backstop (raw within a headroom of the cap): a
+    # corroborated grower like ANET (raw ≈ cap) gets a genuine bull case, while a hyper-grower
+    # pinned far below its raw rate by the noise ceiling (IREN's 167%, NBIS's 684%) keeps
+    # optimistic AT the cap — the backstop must hold in the bull case too, or the exact
+    # noise the ceiling exists to suppress leaks back in through the optimistic leg.
+    opt_ceiling = (cap + GROWTH_OPT_HEADROOM
+                   if float(raw) <= cap + GROWTH_OPT_HEADROOM else cap)
     return {
-        "optimistic": min(base + 0.05, cap),
+        "optimistic": min(base + 0.05, opt_ceiling),
         "realistic": base,
         "pessimistic": max(base - 0.04, 0.02),
     }
