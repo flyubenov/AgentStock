@@ -319,6 +319,30 @@ def evaluate(fin: dict) -> dict:
             "status": "failed", "errors": ["insufficient data for any model"],
         }
 
+    # EV/Sales cannot be the SOLE anchor on a revenue base the model has already
+    # declared uninformative. Below EG_REVENUE_FLOOR, _eg_cap_eligible refuses to read
+    # the growth rate as evidence about the business (a tiny base prints hyper-growth on
+    # arithmetic) — so the same base cannot then carry 100% of the value. That was
+    # ASTS: $84.9M of lumpy contract revenue, one $54.3M milestone quarter, against a
+    # $21.4B market cap, priced at $1.15 (-98%) — false precision about a pre-commercial
+    # business the trailing statements cannot see. A sub-floor name with any independent
+    # leg is corroborated and passes (AMBA keeps a DCF; IDR a P/E), as does a sole
+    # EV/Sales leg once the base clears the floor (NBIS). Note this restores the outcome
+    # the pre-profit guard used to produce for these names before the EARLY_GROWTH DCF
+    # drop above made it skip the tier: the guard was also refusing to value cash-burning
+    # pre-commercial companies, not just protecting against a negative DCF leg.
+    if set(results) == {"ev_sales"} and not _eg_cap_eligible(fin):
+        return {
+            "ticker": ticker, "company_name": company_name, "current_price": current_price,
+            "last_evaluated": None, "stock_type": stock_type,
+            "fair_value": None, "price_vs_fair_value_pct": None,
+            "fair_value_breakdown": {},
+            "status": "failed",
+            "errors": ["revenue base too small to anchor a sales-multiple valuation, and "
+                       "no independent model survives — trailing financials don't support "
+                       "a reliable valuation"],
+        }
+
     total_weight = sum(r["weight"] for r in results.values())
     breakdown = {
         mid: {

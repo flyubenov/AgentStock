@@ -797,6 +797,48 @@ def test_elevated_early_growth_cap_does_not_leak_to_other_tiers():
     assert engine.build_scenarios(fin)["realistic"] == pytest.approx(0.25)
 
 
+def _pre_commercial_fin(**over):
+    """ASTS-shaped: hyper-growth off a sub-floor revenue base, burning cash, with no
+    other leg left standing — EV/Sales alone carries the valuation."""
+    fin = _early_growth_fin(market_cap=21_350_000_000, shares_outstanding=299_000_000,
+                            current_price=55.01, revenue_ttm=84_900_000,
+                            fcf_ttm=-1_193_000_000, operating_cashflow=-800_000_000,
+                            ebitda_ttm=-316_000_000, revenue_growth=19.52,
+                            ev_sales=251.4)
+    fin.update(over)
+    return fin
+
+
+def test_sole_ev_sales_leg_below_revenue_floor_is_declined():
+    # The model already declares a sub-floor revenue base uninformative about growth
+    # (_eg_cap_eligible). It cannot then turn around and let that same base carry 100%
+    # of the valuation. ASTS: $84.9M of lumpy contract revenue against a $21.4B market
+    # cap priced a pre-commercial satellite business at $1.15 (-98%) — false precision
+    # about a business the trailing statements cannot see.
+    r = engine.evaluate(_pre_commercial_fin())
+    assert r["status"] == "failed"
+    assert r["fair_value"] is None
+    assert "revenue" in r["errors"][0]
+
+
+def test_sole_ev_sales_leg_above_revenue_floor_still_values():
+    # NBIS-shaped: EV/Sales alone is fine once the base clears the floor — the floor is
+    # the whole distinction, not the leg count.
+    r = engine.evaluate(_pre_commercial_fin(revenue_ttm=877_900_000, ev_sales=24.3))
+    assert r["status"] == "completed"
+    assert set(r["fair_value_breakdown"]) == {"ev_sales"}
+    assert r["fair_value"] > 0
+
+
+def test_sub_floor_revenue_keeps_valuing_when_another_leg_survives():
+    # The guard is about EV/Sales being the SOLE anchor. A sub-floor name that still has
+    # an independent leg (AMBA keeps a DCF, IDR a P/E) is corroborated — leave it alone.
+    r = engine.evaluate(_pre_commercial_fin(fcf_ttm=40_000_000, ebitda_ttm=30_000_000,
+                                            operating_cashflow=45_000_000))
+    assert r["status"] == "completed"
+    assert set(r["fair_value_breakdown"]) > {"ev_sales"}
+
+
 def test_early_growth_cap_does_not_reach_the_ddm_perpetuity():
     # The DDM passes distorted_cap=SUSTAINABLE_CEIL; Gordon growth must never take the
     # elevated cap or it would overshoot the discount rate.
