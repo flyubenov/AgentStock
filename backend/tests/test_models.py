@@ -503,6 +503,34 @@ def test_ev_ebitda_ceiling_ramps_with_growth():
     assert m._ev_ebitda_ceiling(None, durable=True) == pytest.approx(20.0)   # unknown growth
 
 
+def test_ev_ebitda_ceiling_lifted_by_quality_at_low_growth():
+    # A durable high-conversion franchise (CDNS: 0.79 FCF/EBITDA) earns a PARTIAL lift at a
+    # modest growth rate — the moat premium is credited on quality, not only on growth, but a
+    # merely-good conversion isn't maxed. Growth alone (14%) would give ~22x.
+    growth_only = m._ev_ebitda_ceiling(0.14, durable=True)                       # ~22
+    with_quality = m._ev_ebitda_ceiling(0.14, durable=True, conversion=0.79)     # ~25.6
+    assert with_quality > growth_only
+    assert with_quality == pytest.approx(25.6)
+
+
+def test_ev_ebitda_ceiling_quality_takes_the_greater_fraction():
+    # ceiling rides max(growth_frac, quality_frac): a fast grower with weak conversion still
+    # gets the growth lift; conversion below the QUALITY_CONV_LO floor adds nothing.
+    assert m._ev_ebitda_ceiling(0.30, durable=True, conversion=0.50) == pytest.approx(30.0)  # growth wins
+    assert m._ev_ebitda_ceiling(0.05, durable=True, conversion=0.50) == pytest.approx(20.0)  # neither clears
+    assert m._ev_ebitda_ceiling(0.20, durable=True, conversion=0.775) == pytest.approx(25.0) # tie at midpoints
+
+
+def test_ev_ebitda_quality_lift_respects_mega_ceiling():
+    # quality can't push a mega-cap above its lower 25x terminal ceiling.
+    assert m._ev_ebitda_ceiling(0.10, durable=True, mega=True, conversion=0.90) == pytest.approx(25.0)
+
+
+def test_ev_ebitda_quality_lift_needs_a_durable_median():
+    # a spot (non-durable) trailing multiple is never lifted, however high the conversion.
+    assert m._ev_ebitda_ceiling(0.14, durable=False, conversion=0.90) == pytest.approx(20.0)
+
+
 def test_ev_ebitda_ceiling_is_lower_for_mega_caps():
     # A >$1T franchise gets a lower terminal ceiling (25x vs 30x) — a sustained mega-cap
     # premium multiple is a stronger claim than a mid-cap one (size base-rate drag).
