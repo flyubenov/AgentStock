@@ -109,6 +109,38 @@ def _earnings_distorted(fin: dict) -> bool:
     return eg is not None and eg < 0 and rg > 0
 
 
+def _earnings_non_operating(fin: dict) -> bool:
+    """GAAP earnings grew while the OPERATING business did not — the increment came from
+    below the operating line (JV equity income, other non-operating income), which cannot
+    be extrapolated as operating cash-flow growth.
+
+    The mirror image of _earnings_distorted: there earnings UNDERSTATE a healthy business
+    (amortization / one-offs) and revenue stands in; here they OVERSTATE one whose
+    operating line is flat or shrinking. BWXT: +20.7% earnings growth on operating income
+    that FELL 1.4% (its JV equity income alone went 55.9M -> 74.9M while the operating
+    margin compressed for a fourth year), which projected a decade of 20% growth for a
+    business earning no more from operations than it did three years earlier.
+
+    The trigger is the SIGN of operating growth, not a gap between the two rates: a
+    declining operating line is a real cliff (any positive earnings growth is then
+    non-operating by construction), whereas "earnings grew somewhat faster than
+    operations" is an arbitrary threshold with nothing underneath it. A missing statement
+    reading is unknown, not declining — keep the earnings source.
+
+    BOTH readings are statement-ANNUAL and come from the same rows. This deliberately
+    ignores info['earningsGrowth'], which is the latest-QUARTER YoY: testing it against
+    an annual operating change compares a quarterly rate to an annual one. That mismatch
+    misfired on CEG (a positive quarterly bounce against one soft annual operating year,
+    while its annual net income had FALLEN 38% and its operating income had gone -408M ->
+    4,198M over three years) and on DDOG (operating income oscillating around zero on a
+    -1.3% margin, where the YoY is noise, not a trajectory). Comparing like with like
+    excludes both: their annual earnings fell, so there was no growth to call
+    non-operating."""
+    ni_g = fin.get("net_income_growth_stmt")
+    og = fin.get("op_income_growth_stmt")
+    return ni_g is not None and ni_g > 0 and og is not None and og <= 0
+
+
 def build_scenarios(fin: dict, distorted_cap: float = 0.20,
                     stock_type: str | None = None) -> dict:
     """Per-stock capped growth scenarios (spec decision #1).
@@ -144,6 +176,14 @@ def build_scenarios(fin: dict, distorted_cap: float = 0.20,
             cap = _growth_cap(g)
     if _earnings_distorted(fin):
         raw = min(fin.get("revenue_growth") or 0, distorted_cap)
+    elif _earnings_non_operating(fin):
+        # Source from the operating line itself — the clean signal here, unlike the
+        # distorted case where amortization hits operating income too and revenue is the
+        # fallback. Revenue growth would be wrong: BWXT's top line grew 18.3% precisely
+        # WHILE margins compressed, so it overstates cash-flow growth for the same reason
+        # the earnings figure does. The existing max(0.02, ...) floor keeps a declining
+        # operating line from projecting negative growth.
+        raw = fin["op_income_growth_stmt"]
     else:
         raw = (fin.get("earnings_growth") or fin.get("revenue_growth")
                or fin.get("revenue_growth_stmt") or 0.07)
@@ -432,6 +472,14 @@ async def run(ticker: str) -> TickerResult:
         fin["ev_ebitda_hist_base"] = hist["ebitda"]
         if hist.get("revenue_growth") is not None:
             fin["revenue_growth_stmt"] = hist["revenue_growth"]
+        # Operating-line growth: lets build_scenarios tell earnings growth the operating
+        # business produced from growth that arrived below it (see
+        # _earnings_non_operating). Rides this fetch rather than paying its own yfinance
+        # round-trip per ticker (rate limits — see services.yf_pool). Inherits this
+        # dict's bail-to-None whenever the EV/EBITDA median is uncomputable, which the
+        # guard reads as "unknown" and leaves the growth source alone.
+        fin["op_income_growth_stmt"] = hist.get("op_income_growth")
+        fin["net_income_growth_stmt"] = hist.get("net_income_growth")
 
     data = evaluate(fin)
     data["last_evaluated"] = datetime.now(timezone.utc).isoformat()

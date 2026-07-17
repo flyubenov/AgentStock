@@ -2,7 +2,7 @@ import pytest
 from datetime import date
 from services.yahoo import (
     ev_ebitda_history_median, latest_statement_ebitda, statements_predate_split,
-    _statement_revenue_yoy,
+    _statement_revenue_yoy, _statement_op_income_yoy, _statement_net_income_yoy,
 )
 
 
@@ -82,3 +82,37 @@ def test_statement_revenue_yoy_none_when_insufficient():
     assert _statement_revenue_yoy([{"revenue": 100.0}]) is None
     assert _statement_revenue_yoy([{"revenue": 100.0}, {"revenue": None}]) is None
     assert _statement_revenue_yoy([{"revenue": 100.0}, {"revenue": 0.0}]) is None
+
+
+# -- _statement_op_income_yoy (operating-line growth from reconstruction rows) --
+def test_statement_op_income_yoy_latest_over_prior():
+    # BWXT FY25 vs FY24: operating income FELL 329.066M -> 324.576M (-1.4%) while
+    # revenue grew +18.3% — the signal that its +20.7% earnings growth is non-operating.
+    rows = [{"operating_income": 324.576e6}, {"operating_income": 329.066e6},
+            {"operating_income": 333.286e6}]
+    assert _statement_op_income_yoy(rows) == pytest.approx(324.576 / 329.066 - 1)
+
+
+def test_statement_op_income_yoy_none_when_insufficient():
+    assert _statement_op_income_yoy([{"operating_income": 100.0}]) is None
+    assert _statement_op_income_yoy([{"operating_income": 100.0},
+                                     {"operating_income": None}]) is None
+    # A non-positive prior year makes the ratio meaningless (sign flip), not "growth".
+    assert _statement_op_income_yoy([{"operating_income": 100.0},
+                                     {"operating_income": 0.0}]) is None
+    assert _statement_op_income_yoy([{"operating_income": 100.0},
+                                     {"operating_income": -50.0}]) is None
+
+
+# -- _statement_net_income_yoy (annual earnings reading, comparable to the op line) ----
+def test_statement_net_income_yoy_latest_over_prior():
+    # BWXT FY25 vs FY24: net income +16.7% (281.941M -> 328.945M) while operating income
+    # fell — the pair the non-operating guard tests against each other.
+    rows = [{"net_income": 328.945e6}, {"net_income": 281.941e6}]
+    assert _statement_net_income_yoy(rows) == pytest.approx(328.945 / 281.941 - 1)
+
+
+def test_statement_net_income_yoy_none_when_insufficient():
+    assert _statement_net_income_yoy([{"net_income": 100.0}]) is None
+    assert _statement_net_income_yoy([{"net_income": 100.0}, {"net_income": None}]) is None
+    assert _statement_net_income_yoy([{"net_income": 100.0}, {"net_income": -50.0}]) is None

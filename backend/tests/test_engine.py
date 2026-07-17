@@ -797,6 +797,78 @@ def test_elevated_early_growth_cap_does_not_leak_to_other_tiers():
     assert engine.build_scenarios(fin)["realistic"] == pytest.approx(0.25)
 
 
+def _non_operating_growth_fin(**over):
+    """BWXT-shaped: GAAP earnings grew +20.7% while statement OPERATING income fell
+    -1.4% (329.066M -> 324.576M) on +18.3% revenue. The whole earnings increment came
+    from below the operating line — JV equity income (55.9M -> 74.9M, and growing every
+    year) plus other non-operating — while the operating margin compressed for a fourth
+    straight year (13.8 -> 13.4 -> 12.2 -> 10.1%)."""
+    fin = _large_cap_fin(market_cap=15_917_129_728, shares_outstanding=91_614_649,
+                         current_price=173.74, revenue_ttm=3_376_384_000,
+                         fcf_ttm=295_291_000, operating_cashflow=521_798_016,
+                         ebitda_ttm=464_580_992, eps_ttm=3.75, forward_eps=5.19142,
+                         net_debt=1_505_588_992, revenue_growth=0.261,
+                         earnings_growth=0.207, revenue_growth_stmt=0.183,
+                         net_income_growth_stmt=0.1667, op_income_growth_stmt=-0.0136)
+    fin.update(over)
+    return fin
+
+
+def test_growth_is_not_sourced_from_non_operating_earnings():
+    # Earnings growth is only evidence about future cash flows when the OPERATING
+    # business produced it. BWXT's did not, so extrapolating +20.7% for a decade
+    # projects JV equity income as though it were operating cash flow.
+    s = engine.build_scenarios(_non_operating_growth_fin(), stock_type="GROWTH")
+    assert s["realistic"] == pytest.approx(0.02)   # floored, not the 0.20-capped 20.7%
+
+
+def test_earnings_non_operating_compares_like_with_like():
+    # BOTH sides must be statement-annual. info's earningsGrowth is the latest-QUARTER
+    # YoY, so testing it against an annual operating-income change compares a quarterly
+    # rate to an annual one. CEG fired on exactly that: a positive quarterly earnings
+    # bounce against one down annual operating year, while its ANNUAL net income had
+    # actually fallen 38% (3,749M -> 2,319M) and its operating income had grown from
+    # -408M to 4,198M over three years. The predicate must not read info at all.
+    fin = _non_operating_growth_fin(net_income_growth_stmt=-0.381,   # CEG: annual NI fell
+                                    earnings_growth=0.207)          # info quarterly bounce
+    assert engine._earnings_non_operating(fin) is False
+
+
+def test_earnings_non_operating_requires_earnings_to_have_actually_grown():
+    # The rule is about earnings OVERSTATING the operating business. A genuine decliner
+    # (earnings falling as well) is not non-operating growth — it is just a decline, and
+    # the normal floored path already handles it. build_scenarios currently collapses
+    # both to the 0.02 floor, so only the predicate can pin this: the floor is hiding the
+    # distinction, not making it moot.
+    assert engine._earnings_non_operating(_non_operating_growth_fin()) is True
+    assert engine._earnings_non_operating(
+        _non_operating_growth_fin(net_income_growth_stmt=-0.30)) is False
+
+
+def test_growth_keeps_earnings_source_when_the_operating_business_grew():
+    # The guard must not touch a name whose earnings growth IS operating.
+    s = engine.build_scenarios(
+        _non_operating_growth_fin(op_income_growth_stmt=0.15), stock_type="GROWTH")
+    assert s["realistic"] == pytest.approx(0.20)   # 0.207 earnings growth, capped
+
+
+def test_growth_keeps_earnings_source_when_operating_income_is_unknown():
+    # No statement reading (fetch_ev_ebitda_history bails to None whenever the EV/EBITDA
+    # median is uncomputable) is "unknown", not "declining" — keep the old behaviour.
+    s = engine.build_scenarios(
+        _non_operating_growth_fin(op_income_growth_stmt=None), stock_type="GROWTH")
+    assert s["realistic"] == pytest.approx(0.20)
+
+
+def test_non_operating_guard_does_not_preempt_the_distorted_earnings_path():
+    # _earnings_distorted (eg < 0, revenue growing — ABBV/ETN amortization) must keep
+    # sourcing from revenue growth. A declining operating line is expected there, so the
+    # two rules must not collide: the distorted path is about earnings understating.
+    fin = _non_operating_growth_fin(earnings_growth=-0.30, op_income_growth_stmt=-0.20)
+    s = engine.build_scenarios(fin, stock_type="GROWTH")
+    assert s["realistic"] == pytest.approx(0.20)   # min(revenue_growth 0.261, cap 0.20)
+
+
 def _pre_commercial_fin(**over):
     """ASTS-shaped: hyper-growth off a sub-floor revenue base, burning cash, with no
     other leg left standing — EV/Sales alone carries the valuation."""

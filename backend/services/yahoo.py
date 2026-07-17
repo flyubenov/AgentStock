@@ -175,18 +175,38 @@ def latest_statement_ebitda(rows: list[dict]) -> float | None:
     return None
 
 
-def _statement_revenue_yoy(rows: list[dict]) -> float | None:
-    """Year-over-year revenue growth (as a fraction) from the two most-recent
+def _statement_yoy(rows: list[dict], field: str) -> float | None:
+    """Year-over-year growth (as a fraction) of `field` from the two most-recent
     reconstruction rows (most-recent-first). None when fewer than two rows or the
-    prior-year revenue is missing/non-positive. Feeds build_scenarios as a growth
-    fallback when yfinance info['revenueGrowth'] is broken (statement-primary)."""
+    prior-year figure is missing/non-positive — a sign flip out of a loss is not a
+    growth rate. All callers share one timeframe (statement-annual), which is what makes
+    the readings comparable to each other (see engine._earnings_non_operating)."""
     if len(rows) < 2:
         return None
-    latest = rows[0].get("revenue")
-    prior = rows[1].get("revenue")
+    latest = rows[0].get(field)
+    prior = rows[1].get(field)
     if latest is None or not prior or prior <= 0:
         return None
     return latest / prior - 1.0
+
+
+def _statement_revenue_yoy(rows: list[dict]) -> float | None:
+    """Feeds build_scenarios as a growth fallback when yfinance info['revenueGrowth']
+    is broken (statement-primary)."""
+    return _statement_yoy(rows, "revenue")
+
+
+def _statement_op_income_yoy(rows: list[dict]) -> float | None:
+    """The clean operating-line signal: lets build_scenarios tell earnings growth the
+    operating business produced from growth that arrived below it."""
+    return _statement_yoy(rows, "operating_income")
+
+
+def _statement_net_income_yoy(rows: list[dict]) -> float | None:
+    """The earnings reading _earnings_non_operating tests against the operating line.
+    Statement-annual on purpose: info['earningsGrowth'] is a QUARTERLY YoY and is not
+    comparable to an annual operating change."""
+    return _statement_yoy(rows, "net_income")
 
 
 @lru_cache(maxsize=256)
@@ -230,16 +250,21 @@ def _fetch_ev_ebitda_history_sync(ticker: str) -> dict | None:
             ebitda = _cell(ist, "EBITDA", col)
             shares = _cell(ist, "Diluted Average Shares", col)
             revenue = _cell(ist, "Total Revenue", col)
+            op_income = _cell(ist, "Operating Income", col)
+            net_income = _cell(ist, "Net Income", col)
             debt = _cell(bs, "Total Debt", col) if col in bs.columns else None
             cash = _cell(bs, "Cash Cash Equivalents And Short Term Investments", col) if col in bs.columns else None
             net_debt = (debt or 0) - (cash or 0) if (debt is not None or cash is not None) else 0
             rows.append({"avg_price": float(avg_close[year]), "shares": shares,
-                         "ebitda": ebitda, "net_debt": net_debt, "revenue": revenue})
+                         "ebitda": ebitda, "net_debt": net_debt, "revenue": revenue,
+                         "operating_income": op_income, "net_income": net_income})
         median = ev_ebitda_history_median(rows)
         if median is None:
             return None
         return {"multiple": median, "ebitda": latest_statement_ebitda(rows),
-                "revenue_growth": _statement_revenue_yoy(rows)}
+                "revenue_growth": _statement_revenue_yoy(rows),
+                "op_income_growth": _statement_op_income_yoy(rows),
+                "net_income_growth": _statement_net_income_yoy(rows)}
     except Exception:
         return None
 
