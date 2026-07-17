@@ -43,6 +43,26 @@ async def test_pre_profit_fv_is_persisted_to_database():
 
 
 @pytest.mark.asyncio
+async def test_declined_fv_outside_pre_profit_is_persisted_to_database():
+    # A guard can decline a name while KEEPING its real stock_type (the sub-floor
+    # EV/Sales guard leaves ASTS as EARLY_GROWTH; the non-positive-composite clamp
+    # leaves its tier alone too). Keying persistence to the literal "PRE_PROFIT" let
+    # those declines skip the upsert, so Sheets silently kept the stale FV the guard
+    # had just rejected — ASTS still showed $1.15 after the engine declined it. The
+    # test is identity, not tier name: a verdict about a real company gets a row.
+    fv = TickerResult(ticker="ASTS", status="failed", stock_type="EARLY_GROWTH",
+                      company_name="AST SpaceMobile", current_price=55.01,
+                      errors=["revenue base too small to anchor a sales-multiple valuation"])
+    sc = ScreenerResult(ticker="ASTS", status="completed", quality_score=3.6)
+    with patch("orchestrator.batch.engine_run", new=AsyncMock(return_value=fv)), \
+         patch("orchestrator.batch.screener_run", new=AsyncMock(return_value=sc)), \
+         patch("orchestrator.batch.upsert_result", new=AsyncMock()) as up_fv, \
+         patch("orchestrator.batch.upsert_screener_result", new=AsyncMock()):
+        [e async for e in batch.run_batch(["ASTS"], "job1", asyncio.Event())]
+    up_fv.assert_awaited_once()   # a stale row is worse than a blank one
+
+
+@pytest.mark.asyncio
 async def test_true_fv_failure_is_not_persisted():
     # A genuine failure (no data, no stock_type) must NOT be written to the Database.
     fv = TickerResult(ticker="ZZZZ", status="failed")

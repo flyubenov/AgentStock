@@ -23,12 +23,20 @@ async def _run_one(ticker: str) -> dict:
         errors.append(f"fair_value: {fv_res}")
     else:
         fv_dump = fv_res.model_dump()
-        # Persist to the Database when the FV either succeeded, or was declined as
-        # PRE_PROFIT: a pre-profit name still carries identity + a valid Quality
-        # Score, so it must get a Database row (blank Fair Value) to appear in the
-        # grid and receive the column-Q score mirror. True failures (no data) are
-        # skipped.
-        if fv_res.status != "failed" or fv_res.stock_type == "PRE_PROFIT":
+        # Persist to the Database when the FV succeeded, or when a guard DECLINED a
+        # real company: it still carries identity + a valid Quality Score, so it must
+        # get a Database row (blank Fair Value) to appear in the grid and receive the
+        # column-Q score mirror. True failures (no data — the ticker never resolved,
+        # so there is no price) are skipped.
+        #
+        # The test is identity, not tier name. This was keyed to the literal
+        # "PRE_PROFIT", which silently assumed every decline rewrites stock_type to
+        # that string. The pre-profit guard does; the sub-floor EV/Sales guard and the
+        # non-positive-composite clamp deliberately keep the real tier. Those declines
+        # skipped the upsert, leaving Sheets holding the very fair value the guard had
+        # just rejected — ASTS kept serving $1.15 after the engine declined it, and no
+        # amount of recalculating could clear it. A stale row is worse than a blank one.
+        if fv_res.status != "failed" or fv_res.current_price is not None:
             try:
                 await upsert_result(fv_res)
             except Exception as e:
