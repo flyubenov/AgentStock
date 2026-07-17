@@ -444,8 +444,12 @@ def test_ev_ebitda_compress_false_skips_compression():
     assert uncompressed == pytest.approx(uncompressed_15x)
 
 
-def test_ev_ebitda_still_caps_at_20():
-    base = {"ebitda_ttm": 1_000_000, "net_debt": 0, "shares_outstanding": 100_000, "fcf_ttm": 600_000}
+def test_ev_ebitda_spot_multiple_caps_at_20_even_with_growth():
+    # A SPOT trailing multiple (not a durable historical median) is never granted the
+    # growth-coupled lift — it could be a one-quarter EBITDA dip — so it caps at 20 even
+    # for a fast grower.
+    base = {"ebitda_ttm": 1_000_000, "net_debt": 0, "shares_outstanding": 100_000,
+            "fcf_ttm": 600_000, "revenue_growth_stmt": 0.40}
     capped = m.calc_ev_ebitda({**base, "ev_ebitda": 50.0}, GROWTH, compress=False)["fair_value"]
     at_cap = m.calc_ev_ebitda({**base, "ev_ebitda": 20.0}, GROWTH, compress=False)["fair_value"]
     assert capped == pytest.approx(at_cap)
@@ -459,11 +463,60 @@ def test_ev_ebitda_hist_multiple_overrides_current():
     assert at_hist == pytest.approx(at_12_direct)
 
 
-def test_ev_ebitda_hist_multiple_still_capped_at_20():
+def test_ev_ebitda_hist_multiple_capped_at_20_without_growth():
+    # With no demonstrated-growth signal the durable median still caps at the 20 base
+    # ceiling (the growth-coupled lift only fires for a genuine grower).
     base = {"ebitda_ttm": 1_000_000, "net_debt": 0, "shares_outstanding": 100_000}
     over_cap = m.calc_ev_ebitda(base, GROWTH, hist_multiple=30.0, compress=False)["fair_value"]
     at_cap = m.calc_ev_ebitda(base, GROWTH, hist_multiple=20.0, compress=False)["fair_value"]
     assert over_cap == pytest.approx(at_cap)
+
+
+def test_ev_ebitda_durable_median_lifted_by_growth():
+    # A genuine grower's durable historical median survives above the 20 base ceiling,
+    # up to the 30x terminal ceiling — the ANET fix (27.5x median no longer clamped to 20).
+    base = {"ebitda_ttm": 1_000_000, "net_debt": 0, "shares_outstanding": 100_000,
+            "revenue_growth_stmt": 0.30}
+    at_275 = m.calc_ev_ebitda(base, GROWTH, hist_multiple=27.5, compress=False)["fair_value"]
+    at_20 = m.calc_ev_ebitda(base, GROWTH, hist_multiple=20.0, compress=False)["fair_value"]
+    at_30_direct = m.calc_ev_ebitda(base, GROWTH, hist_multiple=27.5, compress=False)["fair_value"]
+    assert at_275 > at_20                      # the median is no longer clamped to 20
+    assert at_275 == pytest.approx(at_30_direct)
+
+
+def test_ev_ebitda_durable_median_trimmed_to_terminal_ceiling():
+    # An extreme median (NVDA-shape peak-era multiple) is trimmed to the 30x terminal
+    # ceiling, not extrapolated forever.
+    base = {"ebitda_ttm": 1_000_000, "net_debt": 0, "shares_outstanding": 100_000,
+            "revenue_growth_stmt": 0.45}
+    over = m.calc_ev_ebitda(base, GROWTH, hist_multiple=45.0, compress=False)["fair_value"]
+    at_ceiling = m.calc_ev_ebitda(base, GROWTH, hist_multiple=30.0, compress=False)["fair_value"]
+    assert over == pytest.approx(at_ceiling)
+
+
+def test_ev_ebitda_ceiling_ramps_with_growth():
+    assert m._ev_ebitda_ceiling(0.05, durable=True) == pytest.approx(20.0)   # below G_LO
+    assert m._ev_ebitda_ceiling(0.20, durable=True) == pytest.approx(25.0)   # midpoint
+    assert m._ev_ebitda_ceiling(0.30, durable=True) == pytest.approx(30.0)   # at G_HI
+    assert m._ev_ebitda_ceiling(0.80, durable=True) == pytest.approx(30.0)   # saturated
+    assert m._ev_ebitda_ceiling(0.30, durable=False) == pytest.approx(20.0)  # spot never lifts
+    assert m._ev_ebitda_ceiling(None, durable=True) == pytest.approx(20.0)   # unknown growth
+
+
+def test_ev_ebitda_ceiling_is_lower_for_mega_caps():
+    # A >$1T franchise gets a lower terminal ceiling (25x vs 30x) — a sustained mega-cap
+    # premium multiple is a stronger claim than a mid-cap one (size base-rate drag).
+    assert m._ev_ebitda_ceiling(0.30, durable=True, mega=True) == pytest.approx(25.0)
+    assert m._ev_ebitda_ceiling(0.80, durable=True, mega=True) == pytest.approx(25.0)  # saturated lower
+    assert m._ev_ebitda_ceiling(0.20, durable=True, mega=True) == pytest.approx(22.5)  # midpoint
+    # a mega-cap's durable median is trimmed to 25x, below the 30x a mid-cap would keep
+    base = {"ebitda_ttm": 1_000_000, "net_debt": 0, "shares_outstanding": 100_000,
+            "revenue_growth_stmt": 0.45}
+    mega = m.calc_ev_ebitda({**base, "market_cap": 3_000_000_000_000}, GROWTH,
+                            hist_multiple=45.0, compress=False)["fair_value"]
+    midcap = m.calc_ev_ebitda({**base, "market_cap": 200_000_000_000}, GROWTH,
+                              hist_multiple=45.0, compress=False)["fair_value"]
+    assert mega < midcap
 
 
 def test_ev_ebitda_hist_base_projects_statement_ebitda_not_info_ebitda():

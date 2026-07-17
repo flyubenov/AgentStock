@@ -39,7 +39,9 @@ def test_build_scenarios_distorted_earnings_uses_full_revenue_growth():
     # normal 20% cap, not the 3.9% DDM ceiling.
     s = engine.build_scenarios({"earnings_growth": -0.094, "revenue_growth": 0.168})
     assert s["realistic"] == pytest.approx(0.168)
-    assert s["optimistic"] == pytest.approx(0.20)        # 0.168 + 0.05, capped at 0.20
+    # optimistic = base + 0.05; raw (0.168) is within a headroom of the 0.20 base cap, so
+    # the bull case is granted the headroom rather than clamped flat at the cap.
+    assert s["optimistic"] == pytest.approx(0.218)
     assert s["pessimistic"] == pytest.approx(0.128)
 
 
@@ -424,9 +426,11 @@ def test_growth_cap_below_threshold_is_base():
 
 
 def test_growth_cap_ramps_linearly():
-    assert engine._growth_cap(0.30) == pytest.approx(0.2125)
-    assert engine._growth_cap(0.40) == pytest.approx(0.225)
-    assert engine._growth_cap(0.50) == pytest.approx(0.2375)
+    # GROWTH-tier slope is 0.60: the 0.25 ceiling is reached at g ~= 0.283, so the linear
+    # region is g in (0.20, 0.283).
+    assert engine._growth_cap(0.22) == pytest.approx(0.212)
+    assert engine._growth_cap(0.24) == pytest.approx(0.224)
+    assert engine._growth_cap(0.26) == pytest.approx(0.236)
 
 
 def test_growth_cap_saturates_at_ceiling():
@@ -470,10 +474,23 @@ def _hypergrower_fin(**over):
 
 
 def test_build_scenarios_elevated_cap_for_eligible_hypergrower():
-    # statement growth 0.70 -> cap saturates at the 0.25 ceiling
+    # statement growth 0.70 -> cap saturates at the 0.25 ceiling. raw (1.13) is far above
+    # the cap, so the optimistic backstop holds: optimistic stays AT the cap, no headroom.
     s = engine.build_scenarios(_hypergrower_fin())
     assert s["realistic"] == pytest.approx(0.25)
-    assert s["optimistic"] == pytest.approx(0.25)     # capped at the elevated ceiling
+    assert s["optimistic"] == pytest.approx(0.25)     # suppressed hyper-grower: no bull-case leak
+
+
+def test_build_scenarios_corroborated_grower_gets_optimistic_upside():
+    # ANET shape: statement growth ~28.6% reaches the 0.25 cap and raw (25% earnings growth)
+    # sits right at it — a corroborated grower, so optimistic gets genuine headroom above
+    # realistic instead of collapsing onto it.
+    s = engine.build_scenarios(_hypergrower_fin(revenue_growth_stmt=0.286,
+                                                revenue_growth=0.351,
+                                                earnings_growth=0.25))
+    assert s["realistic"] == pytest.approx(0.25)
+    assert s["optimistic"] == pytest.approx(0.30)     # 0.25 + 0.05 headroom
+    assert s["optimistic"] > s["realistic"]
 
 
 def test_build_scenarios_statement_growth_preferred_over_info():
@@ -483,10 +500,10 @@ def test_build_scenarios_statement_growth_preferred_over_info():
 
 
 def test_build_scenarios_info_growth_when_stmt_absent():
-    # no statement growth -> info 0.40 -> _growth_cap(0.40) = 0.225
+    # no statement growth -> info 0.40 -> _growth_cap(0.40) saturates at the 0.25 ceiling
     s = engine.build_scenarios(
         _hypergrower_fin(revenue_growth_stmt=None, revenue_growth=0.40, earnings_growth=1.0))
-    assert s["realistic"] == pytest.approx(0.225)
+    assert s["realistic"] == pytest.approx(0.25)
 
 
 def test_build_scenarios_ceiling_backstop_on_absurd_growth():
@@ -760,10 +777,12 @@ def test_early_growth_cap_ramps_with_growth_to_its_own_ceiling():
     # shallow slope (+1pp of cap per 8pp of growth), so a moderate grower barely moves
     # and only a hyper-grower reaches the ceiling — the credit is coupled to the growth,
     # not granted by the tier.
-    assert engine._growth_cap(0.361, engine.EG_CAP_CEIL) == pytest.approx(0.220, abs=1e-3)  # TEM
-    assert engine._growth_cap(6.839, engine.EG_CAP_CEIL) == pytest.approx(0.35)   # NBIS
-    assert engine._growth_cap(1.40, engine.EG_CAP_CEIL) == pytest.approx(0.35)    # saturates at 140%
-    # unchanged for every other tier: same slope, original ceiling
+    # EARLY_GROWTH passes its own shallow EG_CAP_SLOPE (the GROWTH-tier default slope is
+    # steeper and must not leak in — see EG_CAP_SLOPE).
+    assert engine._growth_cap(0.361, engine.EG_CAP_CEIL, engine.EG_CAP_SLOPE) == pytest.approx(0.220, abs=1e-3)  # TEM
+    assert engine._growth_cap(6.839, engine.EG_CAP_CEIL, engine.EG_CAP_SLOPE) == pytest.approx(0.35)   # NBIS
+    assert engine._growth_cap(1.40, engine.EG_CAP_CEIL, engine.EG_CAP_SLOPE) == pytest.approx(0.35)    # saturates at 140%
+    # unchanged for every other tier: original ceiling
     assert engine._growth_cap(6.839) == pytest.approx(0.25)
 
 
