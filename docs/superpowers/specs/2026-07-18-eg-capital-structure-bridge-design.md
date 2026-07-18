@@ -137,3 +137,25 @@ Unit tests on the pure helper and legs:
 4. A synthetic CRWV-like fixture: composite drops from > price to modestly below price.
 5. A synthetic FCF-positive fixture on EV/Sales: leg value identical with and without the change.
 6. Full suite green (currently 311 tests); no unrelated movement.
+
+## Outcome (recorded during implementation)
+
+Two over-corrections surfaced in the regression sweep and resolved the design's open gates:
+
+1. **IREN over-corrected → scoped to `calc_ev_sales` only.** On the EV/EBITDA capex-reroute,
+   IREN's FCF margin is an extreme transient (−226% on $501M revenue), which accreted a ~$12B
+   gap against a ~$4.8B enterprise value — dropping the leg from $30.94 to $10.64. Per the
+   design's decision gate, the correction was **removed from `calc_ev_ebitda`** and confined to
+   the EARLY_GROWTH forward-sales bridge. The reroute regime already carries bespoke weighting
+   for these names. IREN returns to $20.27 (canary restored).
+
+2. **NBIS over-corrected on `ev_sales` → added `FUNDING_BURN_MARGIN_FLOOR = −1.0`.** Same
+   extreme-transient pathology, now on the sales leg (−230% on a $1.6B run-rate → a $73B gap
+   against a $64B EV, driving the leg negative and *declining* NBIS). A starting-burn-margin
+   floor caps the assumed sustained burn at 100% of revenue. It sits at/below CRWV's −87%, so
+   the calibration anchor and any moderate burner are untouched; only extreme-transient names
+   clamp. NBIS returns a valued (deeply overvalued) $48.51 (−72.7%) instead of a silent failure.
+
+**Final live results:** CRWV $62.46 (−14.68%), NBIS $48.51 (−72.7%), IREN $20.27 (unchanged),
+TEM $31.04 (completes, moderate −18% burn), ASTS declines (sub-floor revenue), ANET/KLAC/KO
+unchanged. **327 tests pass** (311 + 16 net new).
