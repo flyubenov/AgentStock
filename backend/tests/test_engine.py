@@ -937,3 +937,61 @@ def test_early_growth_cap_does_not_reach_the_ddm_perpetuity():
                                distorted_cap=engine.SUSTAINABLE_CEIL,
                                stock_type="EARLY_GROWTH")
     assert s["realistic"] <= engine.SUSTAINABLE_CEIL
+
+
+def _crwv_like_fin(**over):
+    # CoreWeave profile: hyper-growth, deeply FCF-negative, heavily levered.
+    fin = {
+        "ticker": "CRWV", "company_name": "CoreWeave, Inc.", "current_price": 73.21,
+        "sector": "Technology", "industry": "Software - Infrastructure",
+        "long_business_summary": "cloud infrastructure", "market_cap": 39_941_000_000,
+        "shares_outstanding": 447_573_939, "revenue_ttm": 6_227_000_000,
+        "revenue_run_rate": 8_312_000_000, "revenue_growth": 1.116,
+        "eps_ttm": -2.72, "ebitda_ttm": 3_024_000_000, "ev_ebitda": 24.081,
+        "ev_sales": 11.695, "net_debt": 32_881_000_000, "fcf_ttm": -7_251_000_000,
+        "operating_cashflow": 3_058_000_000, "earnings_growth": None,
+    }
+    fin.update(over)
+    return fin
+
+
+def test_evaluate_funding_gap_flips_levered_burner():
+    # The funding-gap correction accretes the projected external funding onto the exit
+    # net debt, flipping CRWV from the frozen bridge's +55% "undervalued" to fair-to-
+    # modestly-overvalued. Guards against the frozen-capital-structure artifact.
+    result = engine.evaluate(_crwv_like_fin())
+    assert result["status"] == "completed"
+    assert result["stock_type"] == "EARLY_GROWTH"
+    assert "ev_sales" in result["fair_value_breakdown"]
+    assert "sotp" in result["fair_value_breakdown"]
+    assert "dcf" not in result["fair_value_breakdown"]  # zeroed for EARLY_GROWTH burner
+    fv = result["fair_value"]
+    assert fv is not None and fv > 0
+    assert fv < result["current_price"]  # the flip: no longer "undervalued"
+
+
+def test_evaluate_funding_gap_below_frozen_bridge():
+    # Same profile at a near-zero burn (self-funding) keeps the frozen bridge and prices
+    # materially higher than the real burner -> the gap is doing the work, not classification.
+    burner = engine.evaluate(_crwv_like_fin())["fair_value"]
+    self_funding = engine.evaluate(_crwv_like_fin(fcf_ttm=-1_000))["fair_value"]
+    assert burner < self_funding
+
+
+def test_evaluate_funding_gap_floor_keeps_extreme_burner_valued():
+    # NBIS profile: an extreme transient burn (-230% of a tiny run-rate) on a sole EV/Sales
+    # leg (negative EBITDA drops SOTP). Unfloored, the funding gap would exceed the enterprise
+    # value and decline the name; the burn-margin floor keeps it a valued (deeply overvalued)
+    # number instead of a silent failure.
+    fin = _crwv_like_fin(
+        ticker="NBIS", company_name="Nebius Group N.V.", current_price=177.71,
+        market_cap=45_120_000_000, shares_outstanding=220_406_311,
+        revenue_ttm=877_900_000, revenue_run_rate=1_596_000_000, revenue_growth=6.839,
+        ebitda_ttm=-38_600_000, ev_sales=52.091, net_debt=217_000_000,
+        fcf_ttm=-3_681_200_000, eps_ttm=2.59)
+    result = engine.evaluate(fin)
+    assert result["status"] == "completed"
+    assert result["stock_type"] == "EARLY_GROWTH"
+    assert set(result["fair_value_breakdown"]) == {"ev_sales"}  # negative EBITDA -> no SOTP
+    assert result["fair_value"] is not None and result["fair_value"] > 0
+    assert result["fair_value"] < result["current_price"]  # deeply overvalued, but valued

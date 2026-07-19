@@ -100,6 +100,31 @@ DEPRESSED_PE_RATIO = 1.5
 # and fire only on a partial-consolidation collapse where FCF itself is depressed.
 TROUGH_REBASE_RATIO = 2.5
 
+# Funding-gap correction for the forward EV-multiple equity bridge. A forward leg prices a
+# YEAR-10 enterprise value but bridges to equity with TODAY's net debt and share count. For a
+# cash-burning, levered name (CRWV: net debt 82% of market cap, FCF -$7.25B) that overstates
+# equity — the projected growth is funded by external capital that becomes a claim ahead of
+# today's owners, so by year 10 neither net debt nor the share count resembles today's.
+# exit_net_debt accretes the cumulative external funding the burn requires onto today's net
+# debt. Self-gating: a name with fcf_ttm >= 0 funds its own growth, so the gap is zero and the
+# bridge is unchanged — every FCF-positive name stays byte-for-byte on the frozen bridge.
+# Calibration ("Base"): the current (deep) burn margin fades toward FUNDING_TERMINAL_FCF_MARGIN
+# by HORIZON, held flat for FUNDING_FADE_HOLD years first (CRWV is mid-buildout). 10% is a
+# defensible mature free-cash margin for a capital-intensive GPU-rental business (constant GPU
+# refresh — not a 20%+ hyperscaler). Recalibration is a one-line change here.
+#
+# The starting burn margin (fcf_ttm / rev0) is floored at FUNDING_BURN_MARGIN_FLOOR: a name
+# early in its ramp can print an extreme transient FCF margin because its revenue base lags a
+# capex spike (NBIS: -230% on a $1.6B run-rate; IREN: -226% on $501M). Extrapolated as a
+# sustained burn that manufactures an unphysical funding gap larger than the whole enterprise
+# value ($73B against a $64B EV for NBIS), driving the leg negative and wrongly declining the
+# name. The floor caps the assumed sustained burn at 100% of revenue — no company burns more
+# than its entire revenue in FCF as a run-rate. It sits at/below CRWV's -87% (the calibration
+# anchor), so CRWV and any moderate burner are untouched; only the extreme-transient names clamp.
+FUNDING_TERMINAL_FCF_MARGIN = 0.10
+FUNDING_FADE_HOLD = 2
+FUNDING_BURN_MARGIN_FLOOR = -1.0
+
 ALL_METHODS = ["dcf", "fcfe", "ev_ebitda", "pe", "ev_sales", "ddm", "pb", "rim", "sotp", "nav"]
 SCENARIO_MODELS = {"dcf", "fcfe", "ev_ebitda", "ev_sales", "ddm", "rim"}
 APPROX_METHODS = {"sotp", "nav"}
@@ -200,6 +225,41 @@ def _scenario_ev_multiple(base: float, growth: float, multiple: float, net_debt:
         projected *= (1 + _faded_rate(growth, hold, t))
     future_ev = projected * multiple
     return _apply_mos((future_ev - net_debt) / shares / (1 + DISCOUNT_RATE) ** HORIZON)
+
+
+def exit_net_debt(fin: dict, rev0: float | None, growth: float, hold: int,
+                  net_debt: float, m_term: float | None = None,
+                  fade_hold: int | None = None, burn_floor: float | None = None) -> float:
+    """Today's net debt plus the cumulative external funding a cash burn requires over
+    HORIZON (see FUNDING_TERMINAL_FCF_MARGIN). Returns net_debt unchanged when the name is
+    self-funding (fcf_ttm >= 0) or the inputs are missing — the self-gating property that
+    keeps every FCF-positive name byte-for-byte on the frozen bridge.
+
+    rev0/growth/hold describe the SAME revenue path the calling leg projects, so the burn is
+    estimated against that leg's own revenue trajectory. The starting FCF margin is measured on
+    rev0 (fcf_ttm / rev0 — the run-rate basis when the leg projects from run-rate) and floored
+    at FUNDING_BURN_MARGIN_FLOOR (an extreme transient burn on a lagging revenue base would
+    otherwise extrapolate to an unphysical gap), fading from FUNDING_FADE_HOLD years to m_term by
+    HORIZON. Nominal (undiscounted) sum: exit_net_debt is a year-10 figure subtracted from the
+    year-10 enterprise value before the per-share equity is discounted, so it is internally
+    consistent with _scenario_ev_multiple."""
+    fcf = fin.get("fcf_ttm")
+    if fcf is None or fcf >= 0 or not rev0:
+        return net_debt
+    floor = FUNDING_BURN_MARGIN_FLOOR if burn_floor is None else burn_floor
+    m0 = max(fcf / rev0, floor)
+    mt = FUNDING_TERMINAL_FCF_MARGIN if m_term is None else m_term
+    fh = FUNDING_FADE_HOLD if fade_hold is None else fade_hold
+    gap = 0.0
+    rev_t = rev0
+    for t in range(1, HORIZON + 1):
+        rev_t *= (1 + _faded_rate(growth, hold, t))
+        margin = (m0 if (t <= fh or fh >= HORIZON)
+                  else m0 + (mt - m0) * (t - fh) / (HORIZON - fh))
+        fcf_t = margin * rev_t
+        if fcf_t < 0:
+            gap += -fcf_t
+    return net_debt + gap
 
 
 # -- DCF (FCFF) ----------------------------------------------------------------
@@ -306,6 +366,13 @@ def calc_ev_ebitda(fin: dict, growth: dict, hist_multiple: float | None = None,
         multiple = _compressed_exit_multiple(multiple, conversion, EBITDA_CONV_FLOOR, EBITDA_CONV_CAP)
     net_debt = fin.get("net_debt") or 0
     hold = _fade_hold_years(fin.get("market_cap"), fin.get("revenue_growth"))
+    # NOTE: the funding-gap net-debt correction (exit_net_debt) is deliberately NOT applied
+    # here. The EV/EBITDA capex-reroute is the regime for FCF-negative capital-intensive names
+    # (IREN), which already carries bespoke reroute weighting. Their trailing FCF margin can be
+    # an extreme transient capex spike on a tiny revenue base (IREN: -226% on $501M revenue),
+    # which the funding gap extrapolates into a nonsensical accretion (~$12B against a ~$4.8B EV)
+    # — an over-correction on top of a leg already tuned for these names. The correction stays
+    # scoped to the EARLY_GROWTH forward-sales bridge (calc_ev_sales — CRWV, NBIS).
     scenarios = {k: _scenario_ev_multiple(ebitda, growth[k], multiple, net_debt, shares, hold) for k in SCENARIO_KEYS}
     return {"scenarios": scenarios, "fair_value": _avg(scenarios), "weight": 0.0, "has_scenarios": True}
 
@@ -360,7 +427,13 @@ def calc_ev_sales(fin: dict, growth: dict) -> dict:
         return _null_result(True)
     multiple = min(multiple, MATURE_EV_SALES)
     net_debt = fin.get("net_debt") or 0
-    scenarios = {k: _scenario_ev_multiple(revenue, growth[k], multiple, net_debt, shares) for k in SCENARIO_KEYS}
+    # Forward EV/Sales projects a year-10 revenue; bridge it to equity with the year-10
+    # funding-adjusted net debt (self-gating — unchanged for FCF-positive names). hold=HORIZON
+    # to match this leg's flat (unfaded) revenue projection.
+    scenarios = {k: _scenario_ev_multiple(
+                    revenue, growth[k], multiple,
+                    exit_net_debt(fin, revenue, growth[k], HORIZON, net_debt), shares)
+                 for k in SCENARIO_KEYS}
     return {"scenarios": scenarios, "fair_value": _avg(scenarios), "weight": 0.0, "has_scenarios": True}
 
 

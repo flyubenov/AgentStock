@@ -618,3 +618,82 @@ def test_calc_ev_sales_falls_back_to_ttm_without_run_rate():
             "ev_sales": 2.0}
     assert m.calc_ev_sales({**base, "revenue_run_rate": None}, GROWTH)["fair_value"] == \
         pytest.approx(m.calc_ev_sales(base, GROWTH)["fair_value"])
+
+
+# -- funding-gap correction (exit_net_debt) ------------------------------------
+def test_exit_net_debt_self_gates_on_nonnegative_fcf():
+    # FCF >= 0 -> self-funding -> net debt unchanged (the primary safety property).
+    assert m.exit_net_debt({"fcf_ttm": 5e8}, 1e9, 0.10, m.HORIZON, 2e9) == 2e9
+    assert m.exit_net_debt({"fcf_ttm": 0.0}, 1e9, 0.10, m.HORIZON, 2e9) == 2e9
+
+
+def test_exit_net_debt_self_gates_on_missing_inputs():
+    assert m.exit_net_debt({"fcf_ttm": None}, 1e9, 0.10, m.HORIZON, 2e9) == 2e9
+    assert m.exit_net_debt({"fcf_ttm": -1e9}, None, 0.10, m.HORIZON, 2e9) == 2e9
+    assert m.exit_net_debt({"fcf_ttm": -1e9}, 0.0, 0.10, m.HORIZON, 2e9) == 2e9
+
+
+def test_exit_net_debt_accretes_the_burn():
+    # A burner's exit net debt exceeds today's by the cumulative funding gap.
+    nd = m.exit_net_debt({"fcf_ttm": -5e8}, 1e9, 0.10, m.HORIZON, 2e9)
+    assert nd > 2e9
+
+
+def test_exit_net_debt_more_burn_when_terminal_margin_lower():
+    fin = {"fcf_ttm": -5e8}
+    lenient = m.exit_net_debt(fin, 1e9, 0.10, m.HORIZON, 0.0, m_term=0.15)
+    strict = m.exit_net_debt(fin, 1e9, 0.10, m.HORIZON, 0.0, m_term=0.0)
+    assert strict > lenient  # a lower terminal FCF margin -> larger cumulative burn
+
+
+def test_exit_net_debt_floors_extreme_transient_burn():
+    # A -230% transient burn on a tiny revenue base is floored at the sustained-burn cap, so
+    # its gap equals that of a name burning exactly at the floor (not the runaway raw margin).
+    extreme = m.exit_net_debt({"fcf_ttm": -2.3e9}, 1e9, 0.30, m.HORIZON, 0.0)   # m0 -230% -> floor
+    at_floor = m.exit_net_debt({"fcf_ttm": -1e9}, 1e9, 0.30, m.HORIZON, 0.0)    # m0 -100% == floor
+    assert extreme == pytest.approx(at_floor)
+
+
+def test_exit_net_debt_floor_leaves_moderate_burner_untouched():
+    # A burner above the floor (e.g. -50%) is unaffected by it: overriding the floor lower
+    # changes nothing, confirming the clamp only bites the extreme transient names.
+    fin = {"fcf_ttm": -5e8}  # m0 = -50% on rev0 1e9
+    default = m.exit_net_debt(fin, 1e9, 0.30, m.HORIZON, 0.0)
+    deeper_floor = m.exit_net_debt(fin, 1e9, 0.30, m.HORIZON, 0.0, burn_floor=-3.0)
+    assert default == pytest.approx(deeper_floor)
+
+
+def test_exit_net_debt_more_burn_when_hold_longer():
+    fin = {"fcf_ttm": -5e8}
+    short = m.exit_net_debt(fin, 1e9, 0.10, m.HORIZON, 0.0, fade_hold=0)
+    long_ = m.exit_net_debt(fin, 1e9, 0.10, m.HORIZON, 0.0, fade_hold=4)
+    assert long_ > short  # holding the deep burn longer before fading -> larger gap
+
+
+def test_ev_sales_funding_gap_gates_on_positive_fcf():
+    # A self-funding name (positive FCF) is byte-for-byte identical to the frozen bridge.
+    base = {"revenue_run_rate": 8e9, "revenue_ttm": 8e9, "ev_sales": 5.0,
+            "net_debt": 10e9, "shares_outstanding": 1e8}
+    frozen = m.calc_ev_sales(base, GROWTH)["fair_value"]                  # no fcf key
+    positive = m.calc_ev_sales({**base, "fcf_ttm": 1e9}, GROWTH)["fair_value"]
+    assert positive == pytest.approx(frozen)
+
+
+def test_ev_sales_funding_gap_lowers_a_burner():
+    base = {"revenue_run_rate": 8e9, "revenue_ttm": 8e9, "ev_sales": 5.0,
+            "net_debt": 10e9, "shares_outstanding": 1e8}
+    frozen = m.calc_ev_sales(base, GROWTH)["fair_value"]
+    burner = m.calc_ev_sales({**base, "fcf_ttm": -5e9}, GROWTH)["fair_value"]
+    assert burner < frozen
+
+
+def test_ev_ebitda_leg_not_funding_gap_adjusted():
+    # Scoping guard: the funding-gap correction is confined to the EARLY_GROWTH forward-sales
+    # bridge and must NOT touch the EV/EBITDA capex-reroute leg (IREN regime). A burner and a
+    # non-burner therefore price this leg identically — the trailing FCF only feeds the exit
+    # multiple's compression, never the net-debt bridge here.
+    base = {"ebitda_ttm": 1e9, "ev_ebitda": 12.0, "net_debt": 5e9,
+            "shares_outstanding": 1e8, "revenue_run_rate": 4e9, "revenue_ttm": 4e9}
+    frozen = m.calc_ev_ebitda(base, GROWTH, compress=False)["fair_value"]
+    burner = m.calc_ev_ebitda({**base, "fcf_ttm": -3e9}, GROWTH, compress=False)["fair_value"]
+    assert burner == pytest.approx(frozen)
