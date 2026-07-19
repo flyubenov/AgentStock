@@ -74,7 +74,7 @@ The most common ask is directional: *"PLTR's quality is too high"*, *"NBIS's FV 
 2. **Judge whether the number is actually wrong** — a defensible verdict the user simply dislikes is *not* a gap. If the number is sound, **say so and recommend leaving it as is**, with the evidence. This is a valid, frequent, and correct outcome; do not manufacture a change to seem responsive.
 3. **Only if it's genuinely off, lay out the levers** — separated by *kind*, because they have very different blast radii:
    - **Input levers** (change what feeds the method): fix a broken/stale/wrong-basis input (`info` vs statement, quarterly-vs-annual growth, split distortion, sign artifact). Lower blast radius — usually corrects one ticker.
-   - **Logic levers** (change the method/cap/tier/weight itself): widen a cap, adjust a tier's method weights, move a fade band, change a guard threshold. **Higher blast radius** — name which *other* tickers the change moves (the memory and code comments tell you), and quantify the direction. A logic change that fixes this ticker by breaking a documented one is not an option, it's a regression.
+   - **Logic levers** (change the method/cap/tier/weight itself): widen a cap, adjust a tier's method weights, move a fade band, change a guard threshold. **Higher blast radius** — name which *other* tickers the change moves, **including names in other classifications the same code path serves** (the memory and code comments tell you), and quantify the direction. A logic change that fixes this ticker by breaking a documented one — in *any* category — is not an option, it's a regression.
    For each lever: state the mechanism, the expected new number (roughly), and the collateral. Recommend one, with reasoning — don't just enumerate.
 4. Then, and only with the user's buy-in, cross into the TDD flow below.
 
@@ -83,9 +83,12 @@ The most common ask is directional: *"PLTR's quality is too high"*, *"NBIS's FV 
 Cross this line **only** when step 4 proves a genuine logic/data gap, not a legitimate valuation the user simply dislikes.
 
 1. **Establish green first:** `pytest` from `backend/` passes before you touch anything.
-2. **Brainstorm the fix with the user** (`superpowers:brainstorming`) — surface the mechanism, blast radius (which *other* tickers move), and options. Agent Stock's memory is full of fixes that over-corrected a neighbor.
-3. **TDD the change** (`superpowers:test-driven-development`): failing test pinning the desired behavior → minimal engine change → full suite green → re-validate the ticker and the canaries (IREN, NBIS, KLAC are recurring regression canaries).
-4. **When a fix lands, record it in memory** and note which constants were tuned against which inputs (re-tuning against a corrected input is a logged past mistake).
+2. **Match the engagement to the fix's complexity — decide, don't default:**
+   - **Complex / structural change** (new tier or guard, a cap's shape, method weights, anything with cross-classification reach or several viable designs): open a **brainstorming session** (`superpowers:brainstorming`) — surface the mechanism, the options, and the blast radius, and let the design emerge with the user.
+   - **Simple / localized change** (a bounded input fix, a one-ticker threshold nudge, an obviously-correct data correction): **just ask in normal conversation** which approach the user prefers before editing — no full brainstorm needed. When unsure which bucket a change is in, treat it as complex.
+3. **Blast radius is mandatory, and it is cross-classification.** Before proposing *any* change, evaluate its knock-on effect on *other* tickers — not only ones in the same tier, but names in **other** classifications the shared code path also touches (a cap in `models.py`, a guard in `engine.py`, a scoring helper in `scoring.py` runs for everything that reaches it). State which tickers move, in which direction, by roughly how much, and confirm the documented canaries and neighbors don't regress. A change whose blast radius you can't characterize is not ready to propose. Agent Stock's memory is full of fixes that over-corrected a neighbor in a *different* category.
+4. **TDD the change** (`superpowers:test-driven-development`): failing test pinning the desired behavior → minimal engine change → full suite green → re-validate the ticker and the canaries (IREN, NBIS, KLAC are recurring regression canaries).
+5. **When a fix lands, record it in memory** and note which constants were tuned against which inputs (re-tuning against a corrected input is a logged past mistake), and which other tickers the change was verified not to move.
 
 ## Common mistakes
 
