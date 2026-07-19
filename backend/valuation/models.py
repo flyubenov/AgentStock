@@ -186,14 +186,20 @@ def _compressed_exit_multiple(current_mult: float, conversion: float, conv_lo: f
 def _fade_hold_years(market_cap: float | None, revenue_growth: float | None = None) -> int:
     """Years near-term growth is held before fading to TERMINAL_GROWTH, keyed to
     size: mega-caps (>= $1T) fade immediately, mid/small names hold growth longer.
-    A mega-cap still growing above MEGA_CAP_GROWTH_RELIEF keeps the small-cap hold
-    (its size penalty is waived while the hyper-growth is demonstrably present)."""
+    A company still growing above MEGA_CAP_GROWTH_RELIEF keeps the small-cap hold
+    (its size penalty is waived while the hyper-growth is demonstrably present) --
+    applied to BOTH the mega (>= $1T) and the $150B-$1T bands so the hold is
+    monotonic in size: a larger company never holds longer than a smaller one at
+    the same growth rate (e.g. PLTR at ~$317B / ~85% is no longer faded harder than
+    a <$150B or a >$1T peer growing as fast)."""
     mc = market_cap or 0
     if mc >= MEGA_CAP_FLOOR:
         if (revenue_growth or 0) >= MEGA_CAP_GROWTH_RELIEF:
             return FADE_HOLD_MID
         return FADE_HOLD_MEGA
     if mc >= LARGE_CAP_FADE_FLOOR:
+        if (revenue_growth or 0) >= MEGA_CAP_GROWTH_RELIEF:
+            return FADE_HOLD_MID
         return FADE_HOLD_LARGE
     return FADE_HOLD_MID
 

@@ -232,6 +232,36 @@ def test_dcf_fade_relieved_for_high_growth_mega_cap():
     assert fast > flat
 
 
+def test_fade_relief_for_high_growth_large_cap():
+    # The $150B-$1T band mirrors the mega valve: a fast grower there keeps the
+    # small-cap hold (FADE_HOLD_MID) instead of the faster mid-band fade. Restores
+    # monotonicity -- a mid-band grower must not fade harder than smaller AND larger
+    # peers at the same rate (e.g. PLTR at ~$317B / ~85% growth).
+    mc = 300_000_000_000
+    assert m._fade_hold_years(mc, m.MEGA_CAP_GROWTH_RELIEF) == m.FADE_HOLD_MID
+    assert m._fade_hold_years(mc, m.MEGA_CAP_GROWTH_RELIEF - 0.01) == m.FADE_HOLD_LARGE
+    assert m._fade_hold_years(mc, None) == m.FADE_HOLD_LARGE   # no growth signal -> mid-band fade
+
+
+def test_fade_hold_years_monotonic_at_high_growth():
+    # At a fixed high growth rate, a larger company never holds LONGER than a smaller
+    # one: small (<$150B) == large ($150B-$1T) == mega (>=$1T) all == FADE_HOLD_MID.
+    g = 0.50
+    small = m._fade_hold_years(40_000_000_000, g)
+    large = m._fade_hold_years(300_000_000_000, g)
+    mega = m._fade_hold_years(2_000_000_000_000, g)
+    assert small == large == mega == m.FADE_HOLD_MID
+
+
+def test_dcf_fade_relieved_for_high_growth_large_cap():
+    # Same $300B company: a 45% grower fades gentler (higher FV) than a flat one.
+    base = {"fcf_ttm": 1_000_000, "net_debt": 0, "shares_outstanding": 100_000,
+            "market_cap": 300_000_000_000}
+    fast = m.calc_dcf({**base, "revenue_growth": 0.45}, GROWTH)["fair_value"]
+    flat = m.calc_dcf({**base, "revenue_growth": 0.05}, GROWTH)["fair_value"]
+    assert fast > flat
+
+
 def test_ev_ebitda_fade_is_more_aggressive_for_mega_caps():
     base = {"ebitda_ttm": 1_000_000, "ev_ebitda": 12.0, "net_debt": 0, "shares_outstanding": 100_000}
     mega = m.calc_ev_ebitda({**base, "market_cap": 2_000_000_000_000}, GROWTH, compress=False)["fair_value"]
