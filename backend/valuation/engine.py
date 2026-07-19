@@ -46,6 +46,24 @@ GROWTH_CAP_SLOPE = 0.60
 # restores a genuine, bounded upside leg (base is <= cap, so optimistic = base + 0.05).
 GROWTH_OPT_HEADROOM = 0.05
 
+# The magnitude backstop above (raw <= cap + GROWTH_OPT_HEADROOM) was a *proxy* for
+# corroboration — "grant the bull case only if the demonstrated rate sits within a
+# headroom of the cap." It conflates how FAST a name grows with whether that growth is
+# REAL: a cash-generative compounder whose earnings run a bit ahead of a revenue-driven
+# cap (FTNT: 28.6% earnings, 20% revenue, 25% FCF margin — statement revenue growth 14.2%
+# pins the cap at the 0.20 base, so raw sits ~4pp past the 0.05 band) had its entire bull
+# case erased and optimistic collapsed onto realistic, biasing the 3-way average strictly
+# below realistic. It was lumped in with the 100%+ feed-noise names the backstop exists
+# for. Corroboration replaces the proxy for these names: a demonstrably cash-generative
+# grower (_cap_eligible) whose rate is in the sustainable-compounder regime (raw <= this
+# ceiling) earns the headroom even past the magnitude band. The noise names the backstop
+# targets — NBIS (684%), IREN (167%), a 113% eligible hyper-grower — all sit far above the
+# ceiling (or are EARLY_GROWTH cash burners that fail _cap_eligible), so they stay pinned
+# at the cap. The gate is ADDITIVE to the magnitude path, so no name that already gets a
+# bull case loses it. Regime ceiling: sustainable compounders top out ~30-35% earnings
+# growth; a persistent rate above that is a spike we won't extrapolate into the bull leg.
+CORROBORATED_GROWTH_CEIL = 0.35
+
 # EARLY_GROWTH runs its own ceiling on the SAME shallow ramp. The tier is defined by
 # unprofitability, so _cap_eligible ("names demonstrating economics": FCF > 0, or
 # EBITDA > 0 and OCF > 0) can never fire for a cash burner and the tier fell through to
@@ -215,14 +233,18 @@ def build_scenarios(fin: dict, distorted_cap: float = 0.20,
         raw = (fin.get("earnings_growth") or fin.get("revenue_growth")
                or fin.get("revenue_growth_stmt") or 0.07)
     base = max(0.02, min(float(raw), cap))
-    # Optimistic upside above the near-term cap is granted only when the demonstrated rate
-    # isn't heavily suppressed by the ceiling backstop (raw within a headroom of the cap): a
-    # corroborated grower like ANET (raw ≈ cap) gets a genuine bull case, while a hyper-grower
-    # pinned far below its raw rate by the noise ceiling (IREN's 167%, NBIS's 684%) keeps
-    # optimistic AT the cap — the backstop must hold in the bull case too, or the exact
-    # noise the ceiling exists to suppress leaks back in through the optimistic leg.
+    # Optimistic upside above the near-term cap is granted when the demonstrated rate is
+    # corroborated — via EITHER path: (1) raw within a headroom of the cap (ANET, raw ≈
+    # cap), or (2) a cash-generative compounder whose rate is in the sustainable regime
+    # (see CORROBORATED_GROWTH_CEIL) — so FTNT, whose earnings run past the magnitude band,
+    # keeps a bull case. A hyper-grower pinned far below its raw rate by the noise ceiling
+    # (IREN's 167%, NBIS's 684%) satisfies neither and keeps optimistic AT the cap — the
+    # backstop must hold in the bull case too, or the exact noise the ceiling exists to
+    # suppress leaks back in through the optimistic leg.
+    corroborated = _cap_eligible(fin) and float(raw) <= CORROBORATED_GROWTH_CEIL
     opt_ceiling = (cap + GROWTH_OPT_HEADROOM
-                   if float(raw) <= cap + GROWTH_OPT_HEADROOM else cap)
+                   if (float(raw) <= cap + GROWTH_OPT_HEADROOM or corroborated)
+                   else cap)
     return {
         "optimistic": min(base + 0.05, opt_ceiling),
         "realistic": base,

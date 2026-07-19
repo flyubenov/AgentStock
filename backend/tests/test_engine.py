@@ -493,6 +493,43 @@ def test_build_scenarios_corroborated_grower_gets_optimistic_upside():
     assert s["optimistic"] > s["realistic"]
 
 
+def test_build_scenarios_corroborated_compounder_above_magnitude_band():
+    # FTNT shape: cash-generative (FCF > 0), revenue ~20%, earnings ~28.6%. Statement
+    # revenue growth (14.2%) is below GROWTH_CAP_BASE so the cap lands at the 0.20 base,
+    # which puts raw (0.286 earnings) ABOVE cap + GROWTH_OPT_HEADROOM (0.25). The magnitude
+    # proxy alone denies the bull case and collapses optimistic onto realistic (the artifact).
+    # Corroboration — cash-generative AND raw in the sustainable-compounder regime
+    # (<= CORROBORATED_GROWTH_CEIL) — restores a genuine bull leg.
+    s = engine.build_scenarios(_hypergrower_fin(revenue_growth_stmt=0.1417,
+                                                revenue_growth=0.201,
+                                                earnings_growth=0.286))
+    assert s["realistic"] == pytest.approx(0.20)
+    assert s["optimistic"] == pytest.approx(0.25)     # 0.20 + 0.05 headroom, restored
+    assert s["optimistic"] > s["realistic"]
+
+
+def test_build_scenarios_corroboration_requires_cash_generation():
+    # Same 28.6% growth but a cash burner (fails _cap_eligible): corroboration must NOT
+    # fire, so the bull case stays collapsed onto realistic. Guards the corroboration path
+    # from leaking a bull leg to unprofitable names that clear the rate ceiling.
+    s = engine.build_scenarios(_hypergrower_fin(fcf_ttm=-1e8, ebitda_ttm=-1e7, ocf_ttm=-2e7,
+                                                revenue_growth_stmt=0.1417,
+                                                revenue_growth=0.201,
+                                                earnings_growth=0.286))
+    assert s["optimistic"] == pytest.approx(s["realistic"])
+
+
+def test_build_scenarios_corroboration_capped_at_regime_ceiling():
+    # A cash-generative name whose demonstrated rate is above the sustainable-compounder
+    # regime (raw > CORROBORATED_GROWTH_CEIL) is a hyper-growth spike, not a corroborated
+    # compounder: no bull-case headroom, mirroring the eligible-hypergrower backstop.
+    raw = engine.CORROBORATED_GROWTH_CEIL + 0.05
+    s = engine.build_scenarios(_hypergrower_fin(revenue_growth_stmt=0.1417,
+                                                revenue_growth=0.201,
+                                                earnings_growth=raw))
+    assert s["optimistic"] == pytest.approx(s["realistic"])
+
+
 def test_build_scenarios_statement_growth_preferred_over_info():
     # info 0.30 would give 0.2125; statement 0.70 wins -> 0.25
     s = engine.build_scenarios(_hypergrower_fin(revenue_growth_stmt=0.70, revenue_growth=0.30))
