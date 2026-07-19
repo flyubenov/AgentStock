@@ -64,7 +64,18 @@ To test **logic on synthetic inputs** (no network), call the pure cores directly
 2. **Reconcile the composite.** Confirm `fair_value == Σ weight·leg_fv`. Note which legs survived — `pick_ev_multiple` is **winner-take-all** (ev_sales folds into ev_ebitda or vice-versa), and guards can zero a leg (EARLY_GROWTH DCF, pre-profit decline, capex reroute).
 3. **Cross-check inputs vs logic.** Compare the dumped `fin` inputs to reality. Classic input traps: quarterly-YoY growth read as annual, statement-vs-`info` EBITDA basis (~2×), split-distorted history, sign-artifact ratios (negative denominators), stale TTM base.
 4. **Localize the driver.** Which leg/cap/guard/tier moved the number? Call the leg function with the live `fin` to isolate it. Distinguish **data problem** (bad input) from **logic problem** (a cap/fade/tier that mis-fits this company).
-5. **Verdict.** State it as a range: is the reported number a defensible center? Name the single biggest swing factor. **It is a valid, common outcome to conclude the number is sound** — say so plainly; don't manufacture a gap.
+5. **Verdict.** State it as a range: is the reported number a defensible center? Name the single biggest swing factor. **It is a valid, common outcome to conclude the number is sound** — say so plainly; don't manufacture a gap. **If — and only if — you propose a change, the verdict MUST carry a worked numeric example** (see below); a proposal without before→after numbers is not finished.
+
+### The worked-example rule (required whenever a change is proposed)
+
+Any proposed change — in the verdict, the levers section, or a brainstorm — must be pinned to concrete numbers, never described in the abstract. Show, in this shape:
+
+- **What changes:** the exact input / metric / constant / cap / branch (name the symbol and file), its **current value → proposed value**.
+- **Which outcome it targets and by how much:** FV and/or Quality Score, **before → after**, with direction and rough magnitude. State explicitly if one pipeline is unaffected (a fade/cap/weight change usually moves **FV only**; a metric/section change usually moves **Quality only** — they share almost no code).
+- **Measure it, don't estimate it:** get the after-number by re-running the pure core on the live `fin` with the value swapped (a read-only probe: monkey-patch the constant, call `evaluate` / `score` again, diff). Guessing the magnitude is not acceptable.
+- **Blast radius, quantified:** which other tickers move, in which direction, by roughly how much (see the cross-classification rule below).
+
+Example (PLTR fade band): *change `_fade_hold_years` `$150B–$1T` branch from `FADE_HOLD_LARGE (3)` → `FADE_HOLD_MID (5)` for `revenue_growth > 0.40`; FV $48.42 → $52.42 (+8.3%, −63.4% → −60.4%); Quality unaffected (fade is FV-only); blast radius = only $150B–$1T names growing >40%, canaries unmoved.*
 
 ## When the user asserts a number is too high or too low
 
@@ -75,7 +86,7 @@ The most common ask is directional: *"PLTR's quality is too high"*, *"NBIS's FV 
 3. **Only if it's genuinely off, lay out the levers** — separated by *kind*, because they have very different blast radii:
    - **Input levers** (change what feeds the method): fix a broken/stale/wrong-basis input (`info` vs statement, quarterly-vs-annual growth, split distortion, sign artifact). Lower blast radius — usually corrects one ticker.
    - **Logic levers** (change the method/cap/tier/weight itself): widen a cap, adjust a tier's method weights, move a fade band, change a guard threshold. **Higher blast radius** — name which *other* tickers the change moves, **including names in other classifications the same code path serves** (the memory and code comments tell you), and quantify the direction. A logic change that fixes this ticker by breaking a documented one — in *any* category — is not an option, it's a regression.
-   For each lever: state the mechanism, the expected new number (roughly), and the collateral. Recommend one, with reasoning — don't just enumerate.
+   For each lever, give the **worked-example** shape (current→proposed value, before→after FV and/or Quality, blast radius — see "The worked-example rule"). Recommend one, with reasoning — don't just enumerate.
 4. Then, and only with the user's buy-in, cross into the TDD flow below.
 
 ## Only if a real gap is confirmed — then optimize
