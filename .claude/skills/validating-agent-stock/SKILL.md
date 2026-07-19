@@ -23,6 +23,7 @@ You are an expert financial analyst validating a result that Agent Stock — a t
 
 1. **Read the relevant memory before analyzing.** `C:\Users\f_lub\.claude\projects\C--Users-f-lub-proj-Agent-Stock\memory\` (index: `MEMORY.md`). Many tickers and mechanisms are already documented — NBIS's real 684% growth, the size-coupled fade saga, winner-take-all `pick_ev_multiple`, split-aware history. Grep it for the ticker AND the mechanism. **Do not re-derive settled decisions or re-open a fix the memory already records.**
 2. **Separate "the number the engine computes now" from "the number the app shows."** The grid/UI serves **persisted Google Sheets rows**; they can be stale (a code fix does *not* change what's shown until a recompute). Always recompute live before trusting or faulting a number. See [[app-serves-persisted-rows-not-live-compute]].
+3. **Read the ticker-tagged code comments around whatever leg/cap/guard drives this ticker.** Agent Stock is in active optimization, and nearly every constant, cap, and guard carries an inline comment naming the ticker(s) it was tuned against and *why* (`grep` the driver in `valuation/{engine,models}.py`, `classifier.py`, `screener/{metrics,scoring}.py` — e.g. `# NVDA's peak-era median reads ~fairly valued at 25x but flips to undervalued at 30x`, `# TEM: +$635M net debt over -$185M EBITDA … scored 10/10`). These comments are the design intent: they tell you whether the behavior you're seeing is deliberate calibration or an unforeseen case. **Never propose changing a constant without first reading the comment that set it** — you will otherwise re-break a documented neighbor.
 
 ## Run one ticker (the harness — don't reinvent it)
 
@@ -64,6 +65,18 @@ To test **logic on synthetic inputs** (no network), call the pure cores directly
 3. **Cross-check inputs vs logic.** Compare the dumped `fin` inputs to reality. Classic input traps: quarterly-YoY growth read as annual, statement-vs-`info` EBITDA basis (~2×), split-distorted history, sign-artifact ratios (negative denominators), stale TTM base.
 4. **Localize the driver.** Which leg/cap/guard/tier moved the number? Call the leg function with the live `fin` to isolate it. Distinguish **data problem** (bad input) from **logic problem** (a cap/fade/tier that mis-fits this company).
 5. **Verdict.** State it as a range: is the reported number a defensible center? Name the single biggest swing factor. **It is a valid, common outcome to conclude the number is sound** — say so plainly; don't manufacture a gap.
+
+## When the user asserts a number is too high or too low
+
+The most common ask is directional: *"PLTR's quality is too high"*, *"NBIS's FV is understated"*, *"why is this rated so low?"* Answer it in a fixed shape — never jump straight to "here's the fix":
+
+1. **Explain why the current number was produced.** Trace it to the specific driver(s): which section/leg dominated, which cap or guard fired, which input fed it. Quote the tuning comment that set the constant. This is the bulk of the answer — the user is usually asking *why*, not *change it*.
+2. **Judge whether the number is actually wrong** — a defensible verdict the user simply dislikes is *not* a gap. If the number is sound, **say so and recommend leaving it as is**, with the evidence. This is a valid, frequent, and correct outcome; do not manufacture a change to seem responsive.
+3. **Only if it's genuinely off, lay out the levers** — separated by *kind*, because they have very different blast radii:
+   - **Input levers** (change what feeds the method): fix a broken/stale/wrong-basis input (`info` vs statement, quarterly-vs-annual growth, split distortion, sign artifact). Lower blast radius — usually corrects one ticker.
+   - **Logic levers** (change the method/cap/tier/weight itself): widen a cap, adjust a tier's method weights, move a fade band, change a guard threshold. **Higher blast radius** — name which *other* tickers the change moves (the memory and code comments tell you), and quantify the direction. A logic change that fixes this ticker by breaking a documented one is not an option, it's a regression.
+   For each lever: state the mechanism, the expected new number (roughly), and the collateral. Recommend one, with reasoning — don't just enumerate.
+4. Then, and only with the user's buy-in, cross into the TDD flow below.
 
 ## Only if a real gap is confirmed — then optimize
 
