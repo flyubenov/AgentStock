@@ -207,7 +207,7 @@ def _quality_frac(fin: dict) -> float:
     """FCF/EBITDA conversion ramped QUALITY_CONV_LO->HI — the same quality signal
     _ev_ebitda_ceiling reads. 0.0 when the conversion is unavailable or non-positive."""
     fcf, ebitda = fin.get("fcf_ttm"), fin.get("ebitda_ttm")
-    if fcf is None or not ebitda or ebitda <= 0:
+    if fcf is None or not ebitda or ebitda <= 0 or m.QUALITY_CONV_HI <= m.QUALITY_CONV_LO:
         return 0.0
     conv = fcf / ebitda
     return max(0.0, min(1.0, (conv - m.QUALITY_CONV_LO) / (m.QUALITY_CONV_HI - m.QUALITY_CONV_LO)))
@@ -216,7 +216,12 @@ def _quality_frac(fin: dict) -> float:
 def _leverage_frac(fin: dict) -> float:
     """Net debt as a fraction of market cap, floored at 0 so net-cash names read 0. The
     balance-sheet-capacity signal that tempers the EARLY_GROWTH optimistic ceiling: the more
-    of a burner's market cap is net debt, the less room it has to fund a hyper-growth ramp."""
+    of a burner's market cap is net debt, the less room it has to fund a hyper-growth ramp.
+
+    A missing net_debt (absent key -> None) or a non-positive market_cap reads 0.0 (the full,
+    untempered ceiling), same as true net cash. The production fetch path populates net_debt
+    (the same field models.exit_net_debt relies on), so an absent key means "no data", and
+    leaving such a name untempered is the safe default rather than a code gap."""
     nd = fin.get("net_debt")
     mc = fin.get("market_cap")
     if nd is None or not mc or mc <= 0:
@@ -230,7 +235,17 @@ def _opt_ceil(fin: dict, stock_type: str | None) -> float:
     is tempered DOWN toward SCEN_OPT_CEIL_EARLY_LEVERED as leverage rises, so a net-debt-funded
     burner (CRWV) does not get the same cash-funded bull case as a net-cash hyper-grower (NBIS).
     Mega (>=$1T) is a hard cap quality cannot lift; large ($150B-$1T) ramps from the large
-    ceiling toward the default on _quality_frac; everything else takes the default."""
+    ceiling toward the default on _quality_frac; everything else takes the default.
+
+    Corner: a fully-levered EARLY_GROWTH name (leverage_frac >= SCEN_LEVERAGE_HI) whose growth
+    also saturates its realistic cap (EG_CAP_CEIL = 0.35 at g >= 1.40) gets a tempered ceiling
+    (0.35) equal to its realistic base, so build_scenarios' optimistic collapses onto realistic
+    there. This is intended, NOT the false-precision collapse the band removes: it is a binding
+    economic ceiling (a maximally-levered hyper-burner is exactly where a bull case above the
+    realistic rate is least fundable), the pessimistic leg still widens, and no live name hits
+    the simultaneous >140% growth AND >60% net-debt/market-cap extremes it requires. Forcing an
+    artificial gap here would manufacture the false precision the band exists to remove, or (if
+    applied via a base+floor above _opt_ceil) breach the MEGA/LARGE hard caps for other names."""
     if stock_type == "EARLY_GROWTH":
         return _ramp(_leverage_frac(fin), SCEN_LEVERAGE_LO, SCEN_LEVERAGE_HI,
                      SCEN_OPT_CEIL_EARLY, SCEN_OPT_CEIL_EARLY_LEVERED)
