@@ -95,6 +95,28 @@ EG_CAP_SLOPE = 0.125
 # dominating. Below the floor the tier keeps the flat GROWTH_CAP_BASE.
 EG_REVENUE_FLOOR = 500_000_000
 
+# Scenario-band offsets (2026-07-21-scenario-growth-band spec). The optimistic and
+# pessimistic legs are asymmetric, growth-coupled offsets off the realistic base, ramped
+# over [SCEN_BAND_G_LO, SCEN_BAND_G_HI] and saturating — the same flat-floor -> ramp ->
+# ceiling shape as _growth_cap / _ev_ebitda_ceiling. Floors equal the prior flat offsets
+# (+0.05 / -0.04) so low-growth names are inert and the band only widens as growth rises.
+SCEN_BAND_G_LO = 0.10
+SCEN_BAND_G_HI = 0.30
+SCEN_UP_FLOOR = 0.05
+SCEN_UP_CEIL = 0.10
+SCEN_DOWN_FLOOR = 0.04
+SCEN_DOWN_CEIL = 0.12
+# Type/size-coupled saturating ceiling for the OPTIMISTIC growth leg — the noise-suppressor
+# that replaces the old corroboration gate. EARLY_GROWTH's optimistic runs ABOVE its
+# noise-suppressed realistic cap (the "what if the hyper-growth is real" leg). MEGA (>=$1T)
+# is a HARD cap (mirrors _ev_ebitda_ceiling's mega top: quality decides whether a name
+# reaches its size ceiling, never lifts it above). LARGE ($150B-$1T) earns back toward the
+# default on FCF/EBITDA conversion quality.
+SCEN_OPT_CEIL_EARLY = 0.50
+SCEN_OPT_CEIL_MEGA = 0.28
+SCEN_OPT_CEIL_LARGE = 0.32
+SCEN_OPT_CEIL_DEFAULT = 0.35
+
 # Operating-compounder tiers: real earnings AND real EBITDA, so they take the
 # "balance past and future" basis — historical-median EV/EBITDA + forward P/E.
 FORWARD_TIERS = {"MEGA_CAP", "LARGE_CAP", "MID_CAP", "GROWTH"}
@@ -184,6 +206,51 @@ def _earnings_non_operating(fin: dict) -> bool:
     ni_g = fin.get("net_income_growth_stmt")
     og = fin.get("op_income_growth_stmt")
     return ni_g is not None and ni_g > 0 and og is not None and og <= 0
+
+
+def _ramp(g: float, lo: float, hi: float, at_lo: float, at_hi: float) -> float:
+    """Flat floor -> linear ramp -> saturate, the shape _ev_ebitda_ceiling's g_frac uses.
+    Returns at_lo for g <= lo, at_hi for g >= hi, linear in between."""
+    if g <= lo:
+        return at_lo
+    return at_lo + min(1.0, (g - lo) / (hi - lo)) * (at_hi - at_lo)
+
+
+def _quality_frac(fin: dict) -> float:
+    """FCF/EBITDA conversion ramped QUALITY_CONV_LO->HI — the same quality signal
+    _ev_ebitda_ceiling reads. 0.0 when the conversion is unavailable or non-positive."""
+    fcf, ebitda = fin.get("fcf_ttm"), fin.get("ebitda_ttm")
+    if fcf is None or not ebitda or ebitda <= 0:
+        return 0.0
+    conv = fcf / ebitda
+    return max(0.0, min(1.0, (conv - m.QUALITY_CONV_LO) / (m.QUALITY_CONV_HI - m.QUALITY_CONV_LO)))
+
+
+def _opt_ceil(fin: dict, stock_type: str | None) -> float:
+    """Type/size-coupled saturating ceiling for the optimistic growth leg, with a quality
+    carve-out for the large tier. EARLY_GROWTH is checked first (any size); mega (>=$1T) is a
+    hard cap quality cannot lift; large ($150B-$1T) ramps from the large ceiling toward the
+    default on _quality_frac; everything else takes the default."""
+    if stock_type == "EARLY_GROWTH":
+        return SCEN_OPT_CEIL_EARLY
+    mc = fin.get("market_cap") or 0
+    if mc >= m.MEGA_CAP_FLOOR:
+        return SCEN_OPT_CEIL_MEGA
+    if mc >= m.LARGE_CAP_FADE_FLOOR:
+        return SCEN_OPT_CEIL_LARGE + _quality_frac(fin) * (SCEN_OPT_CEIL_DEFAULT - SCEN_OPT_CEIL_LARGE)
+    return SCEN_OPT_CEIL_DEFAULT
+
+
+def _band_growth_signal(fin: dict) -> float:
+    """Growth rate the band offsets key off — the SAME rate the realistic leg is derived
+    from, so the distorted / non-operating guards govern the bull leg too (BWXT's
+    non-operating revenue growth must not sneak back through optimistic)."""
+    if _earnings_distorted(fin):
+        return float(fin.get("revenue_growth") or 0.0)
+    if _earnings_non_operating(fin):
+        return float(fin.get("op_income_growth_stmt") or 0.0)
+    g = fin.get("revenue_growth_stmt")
+    return float(g if g is not None else (fin.get("revenue_growth") or 0.0))
 
 
 def build_scenarios(fin: dict, distorted_cap: float = 0.20,

@@ -1032,3 +1032,80 @@ def test_evaluate_funding_gap_floor_keeps_extreme_burner_valued():
     assert set(result["fair_value_breakdown"]) == {"ev_sales"}  # negative EBITDA -> no SOTP
     assert result["fair_value"] is not None and result["fair_value"] > 0
     assert result["fair_value"] < result["current_price"]  # deeply overvalued, but valued
+
+
+# --- scenario-band primitives (2026-07-21-scenario-growth-band) ----------------
+def test_ramp_below_floor_returns_floor():
+    assert engine._ramp(0.05, 0.10, 0.30, 0.05, 0.10) == pytest.approx(0.05)
+    assert engine._ramp(0.10, 0.10, 0.30, 0.05, 0.10) == pytest.approx(0.05)
+
+
+def test_ramp_linear_region():
+    assert engine._ramp(0.20, 0.10, 0.30, 0.05, 0.10) == pytest.approx(0.075)
+    assert engine._ramp(0.168, 0.10, 0.30, 0.05, 0.10) == pytest.approx(0.067)
+
+
+def test_ramp_saturates_at_ceiling():
+    assert engine._ramp(0.30, 0.10, 0.30, 0.05, 0.10) == pytest.approx(0.10)
+    assert engine._ramp(6.84, 0.10, 0.30, 0.05, 0.10) == pytest.approx(0.10)
+
+
+def test_quality_frac_conversion_ramp():
+    # fcf/ebitda = 0.8125 -> (0.8125-0.65)/(0.90-0.65) = 0.65
+    assert engine._quality_frac({"fcf_ttm": 3.9e9, "ebitda_ttm": 4.8e9}) == pytest.approx(0.65)
+    # conversion >= HI -> clamps to 1.0
+    assert engine._quality_frac({"fcf_ttm": 4.8e9, "ebitda_ttm": 4.8e9}) == pytest.approx(1.0)
+    # conversion <= LO -> 0.0
+    assert engine._quality_frac({"fcf_ttm": 3.0e9, "ebitda_ttm": 4.8e9}) == pytest.approx(0.0)
+
+
+def test_quality_frac_missing_or_nonpositive_data():
+    assert engine._quality_frac({"fcf_ttm": None, "ebitda_ttm": 4.8e9}) == 0.0
+    assert engine._quality_frac({"fcf_ttm": 3.9e9, "ebitda_ttm": 0}) == 0.0
+    assert engine._quality_frac({"fcf_ttm": 3.9e9, "ebitda_ttm": -1.0}) == 0.0
+
+
+def test_opt_ceil_early_growth_is_highest():
+    assert engine._opt_ceil({"market_cap": 5e9}, "EARLY_GROWTH") == pytest.approx(0.50)
+    # EARLY wins even at mega size (checked before size bands)
+    assert engine._opt_ceil({"market_cap": 2e12}, "EARLY_GROWTH") == pytest.approx(0.50)
+
+
+def test_opt_ceil_mega_is_hard_cap():
+    # mega, low quality -> 0.28
+    assert engine._opt_ceil({"market_cap": 2e12, "fcf_ttm": 1.0, "ebitda_ttm": 10.0},
+                            "MEGA_CAP") == pytest.approx(0.28)
+    # mega, high quality -> STILL 0.28 (quality cannot lift the mega cap)
+    assert engine._opt_ceil({"market_cap": 2e12, "fcf_ttm": 4.8e9, "ebitda_ttm": 4.8e9},
+                            "MEGA_CAP") == pytest.approx(0.28)
+
+
+def test_opt_ceil_large_quality_carveout():
+    # large ($200B), q=1.0 (fcf==ebitda) -> 0.32 + 1.0*0.03 = 0.35
+    assert engine._opt_ceil({"market_cap": 2e11, "fcf_ttm": 4.8e9, "ebitda_ttm": 4.8e9},
+                            "GROWTH") == pytest.approx(0.35)
+    # large, q=0.0 (low conversion) -> 0.32
+    assert engine._opt_ceil({"market_cap": 2e11, "fcf_ttm": 3.0e9, "ebitda_ttm": 4.8e9},
+                            "GROWTH") == pytest.approx(0.32)
+
+
+def test_opt_ceil_default_below_large_floor():
+    assert engine._opt_ceil({"market_cap": 1e11}, "GROWTH") == pytest.approx(0.35)
+    assert engine._opt_ceil({}, None) == pytest.approx(0.35)
+
+
+def test_band_growth_signal_respects_guards():
+    # distorted (eg<0, rg>0) -> revenue_growth (matches realistic's distorted source)
+    assert engine._band_growth_signal(
+        {"earnings_growth": -0.1, "revenue_growth": 0.168}) == pytest.approx(0.168)
+    # non-operating (ni_stmt>0, op_stmt<=0) -> op_income_growth_stmt
+    assert engine._band_growth_signal(
+        {"earnings_growth": 0.2, "revenue_growth": 0.18, "net_income_growth_stmt": 0.2,
+         "op_income_growth_stmt": -0.014}) == pytest.approx(-0.014)
+    # normal -> statement revenue growth preferred over info
+    assert engine._band_growth_signal(
+        {"earnings_growth": 0.3, "revenue_growth": 0.40,
+         "revenue_growth_stmt": 0.29}) == pytest.approx(0.29)
+    # normal, no statement -> info revenue growth
+    assert engine._band_growth_signal(
+        {"earnings_growth": 0.3, "revenue_growth": 0.40}) == pytest.approx(0.40)
