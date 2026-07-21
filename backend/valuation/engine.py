@@ -92,6 +92,17 @@ SCEN_OPT_CEIL_EARLY = 0.50
 SCEN_OPT_CEIL_MEGA = 0.28
 SCEN_OPT_CEIL_LARGE = 0.32
 SCEN_OPT_CEIL_DEFAULT = 0.35
+# A levered burner cannot fund the cash-hungry hyper-growth ramp the 0.50 EARLY_GROWTH
+# ceiling prices in, so leverage tempers that ceiling down toward the ordinary-grower bull
+# (SCEN_OPT_CEIL_EARLY_LEVERED). Keyed off net_debt/market_cap: a net-cash hyper-grower
+# (NBIS) keeps the full 0.50; a name whose net debt reaches SCEN_LEVERAGE_HI of its market
+# cap (CRWV, ~82%) gets the full temper. This mirrors the funding-gap bridge's premise
+# (models.exit_net_debt) on the growth-RATE ceiling itself, not just the EV->equity bridge:
+# without it the bull leg's EV lift outran the additive funding claim and flipped CRWV's
+# verdict (see [[crwv-funding-gap-bridge]]).
+SCEN_OPT_CEIL_EARLY_LEVERED = 0.35
+SCEN_LEVERAGE_LO = 0.20
+SCEN_LEVERAGE_HI = 0.60
 
 # Operating-compounder tiers: real earnings AND real EBITDA, so they take the
 # "balance past and future" basis — historical-median EV/EBITDA + forward P/E.
@@ -202,13 +213,27 @@ def _quality_frac(fin: dict) -> float:
     return max(0.0, min(1.0, (conv - m.QUALITY_CONV_LO) / (m.QUALITY_CONV_HI - m.QUALITY_CONV_LO)))
 
 
+def _leverage_frac(fin: dict) -> float:
+    """Net debt as a fraction of market cap, floored at 0 so net-cash names read 0. The
+    balance-sheet-capacity signal that tempers the EARLY_GROWTH optimistic ceiling: the more
+    of a burner's market cap is net debt, the less room it has to fund a hyper-growth ramp."""
+    nd = fin.get("net_debt")
+    mc = fin.get("market_cap")
+    if nd is None or not mc or mc <= 0:
+        return 0.0
+    return max(0.0, nd / mc)
+
+
 def _opt_ceil(fin: dict, stock_type: str | None) -> float:
     """Type/size-coupled saturating ceiling for the optimistic growth leg, with a quality
-    carve-out for the large tier. EARLY_GROWTH is checked first (any size); mega (>=$1T) is a
-    hard cap quality cannot lift; large ($150B-$1T) ramps from the large ceiling toward the
-    default on _quality_frac; everything else takes the default."""
+    carve-out for the large tier. EARLY_GROWTH is checked first (any size): its 0.50 ceiling
+    is tempered DOWN toward SCEN_OPT_CEIL_EARLY_LEVERED as leverage rises, so a net-debt-funded
+    burner (CRWV) does not get the same cash-funded bull case as a net-cash hyper-grower (NBIS).
+    Mega (>=$1T) is a hard cap quality cannot lift; large ($150B-$1T) ramps from the large
+    ceiling toward the default on _quality_frac; everything else takes the default."""
     if stock_type == "EARLY_GROWTH":
-        return SCEN_OPT_CEIL_EARLY
+        return _ramp(_leverage_frac(fin), SCEN_LEVERAGE_LO, SCEN_LEVERAGE_HI,
+                     SCEN_OPT_CEIL_EARLY, SCEN_OPT_CEIL_EARLY_LEVERED)
     mc = fin.get("market_cap") or 0
     if mc >= m.MEGA_CAP_FLOOR:
         return SCEN_OPT_CEIL_MEGA

@@ -980,17 +980,15 @@ def _crwv_like_fin(**over):
 
 
 def test_evaluate_funding_gap_flips_levered_burner():
-    # The funding-gap correction accretes the projected external funding onto the exit
-    # net debt. Pre growth-band, this flipped CRWV from the frozen bridge's +55%
-    # "undervalued" to fair-to-modestly-overvalued (fv < price), because the optimistic
-    # ev_sales scenario was pinned AT realistic — the opt==realistic collapse the growth
-    # band (2026-07-21-scenario-growth-band spec) exists to fix. With the band open,
-    # CRWV's 111.6% growth saturates the EARLY_GROWTH ramp and the optimistic leg
-    # legitimately widens (0.3145 -> 0.4145), lifting the bull-case ev_sales scenario and
-    # the composite average back above price — the expected "a grower's FV rises" effect,
-    # not a regression of the funding-gap fix (which is still exercised/verified by
-    # test_evaluate_funding_gap_below_frozen_bridge: the real burner still prices below
-    # a self-funding twin).
+    # The funding-gap correction accretes the projected external funding onto the exit net
+    # debt, flipping CRWV from the frozen bridge's +55% "undervalued" to below price. The
+    # growth band must not undo that verdict: CRWV is a deeply FCF-negative burner whose
+    # net debt is ~82% of its market cap, so the leverage temper pulls its EARLY_GROWTH
+    # optimistic ceiling down from 0.50 to 0.35 (SCEN_OPT_CEIL_EARLY_LEVERED). The bull-case
+    # ev_sales growth therefore widens only to 0.35, not the 0.4145 an un-tempered ceiling
+    # would allow, so the EV lift stays behind the additive funding claim and the composite
+    # holds below the $73.21 price (fv ~= 62.07). A net-cash hyper-grower (NBIS) keeps the
+    # full 0.50 ceiling and its uplift — see test_opt_ceil_early_growth_tempered_by_leverage.
     result = engine.evaluate(_crwv_like_fin())
     assert result["status"] == "completed"
     assert result["stock_type"] == "EARLY_GROWTH"
@@ -999,7 +997,8 @@ def test_evaluate_funding_gap_flips_levered_burner():
     assert "dcf" not in result["fair_value_breakdown"]  # zeroed for EARLY_GROWTH burner
     fv = result["fair_value"]
     assert fv is not None and fv > 0
-    assert fv == pytest.approx(88.41, abs=0.01)
+    assert fv < _crwv_like_fin()["current_price"]  # verdict stays SELL, not flipped to BUY
+    assert fv == pytest.approx(62.07, abs=0.01)
 
 
 def test_evaluate_funding_gap_below_frozen_bridge():
@@ -1064,6 +1063,21 @@ def test_opt_ceil_early_growth_is_highest():
     assert engine._opt_ceil({"market_cap": 5e9}, "EARLY_GROWTH") == pytest.approx(0.50)
     # EARLY wins even at mega size (checked before size bands)
     assert engine._opt_ceil({"market_cap": 2e12}, "EARLY_GROWTH") == pytest.approx(0.50)
+
+
+def test_opt_ceil_early_growth_tempered_by_leverage():
+    # net-cash hyper-grower (NBIS-shaped): net_debt <= 0 -> frac 0 -> full 0.50 bull ceiling
+    assert engine._opt_ceil({"market_cap": 5e10, "net_debt": -8e9},
+                            "EARLY_GROWTH") == pytest.approx(0.50)
+    # below the leverage floor (net debt 20% of market cap) -> still full 0.50
+    assert engine._opt_ceil({"market_cap": 1e10, "net_debt": 2e9},
+                            "EARLY_GROWTH") == pytest.approx(0.50)
+    # levered burner (CRWV-shaped): net debt >= 60% of market cap -> fully tempered to 0.35
+    assert engine._opt_ceil({"market_cap": 4e10, "net_debt": 3.3e10},
+                            "EARLY_GROWTH") == pytest.approx(0.35)
+    # partial leverage (frac 0.40, midpoint of 0.20..0.60) -> halfway 0.50 -> 0.35 = 0.425
+    assert engine._opt_ceil({"market_cap": 1e10, "net_debt": 4e9},
+                            "EARLY_GROWTH") == pytest.approx(0.425)
 
 
 def test_opt_ceil_mega_is_hard_cap():
