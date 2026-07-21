@@ -39,30 +39,6 @@ FCF_EBITDA_FLOOR = 0.15
 GROWTH_CAP_BASE = 0.20
 GROWTH_CAP_CEIL = 0.25
 GROWTH_CAP_SLOPE = 0.60
-# The optimistic scenario runs this far above the realistic near-term cap. Without it, a
-# grower whose demonstrated rate sits AT the cap had optimistic == realistic — the
-# min(base+0.05, cap) clamp erased the entire bull case, so the 3-way scenario average was
-# biased strictly BELOW realistic (only the pessimistic leg had room to move). The headroom
-# restores a genuine, bounded upside leg (base is <= cap, so optimistic = base + 0.05).
-GROWTH_OPT_HEADROOM = 0.05
-
-# The magnitude backstop above (raw <= cap + GROWTH_OPT_HEADROOM) was a *proxy* for
-# corroboration — "grant the bull case only if the demonstrated rate sits within a
-# headroom of the cap." It conflates how FAST a name grows with whether that growth is
-# REAL: a cash-generative compounder whose earnings run a bit ahead of a revenue-driven
-# cap (FTNT: 28.6% earnings, 20% revenue, 25% FCF margin — statement revenue growth 14.2%
-# pins the cap at the 0.20 base, so raw sits ~4pp past the 0.05 band) had its entire bull
-# case erased and optimistic collapsed onto realistic, biasing the 3-way average strictly
-# below realistic. It was lumped in with the 100%+ feed-noise names the backstop exists
-# for. Corroboration replaces the proxy for these names: a demonstrably cash-generative
-# grower (_cap_eligible) whose rate is in the sustainable-compounder regime (raw <= this
-# ceiling) earns the headroom even past the magnitude band. The noise names the backstop
-# targets — NBIS (684%), IREN (167%), a 113% eligible hyper-grower — all sit far above the
-# ceiling (or are EARLY_GROWTH cash burners that fail _cap_eligible), so they stay pinned
-# at the cap. The gate is ADDITIVE to the magnitude path, so no name that already gets a
-# bull case loses it. Regime ceiling: sustainable compounders top out ~30-35% earnings
-# growth; a persistent rate above that is a spike we won't extrapolate into the bull leg.
-CORROBORATED_GROWTH_CEIL = 0.35
 
 # EARLY_GROWTH runs its own ceiling on the SAME shallow ramp. The tier is defined by
 # unprofitability, so _cap_eligible ("names demonstrating economics": FCF > 0, or
@@ -94,6 +70,39 @@ EG_CAP_SLOPE = 0.125
 # mirroring the screener's RULE_OF_40_GROWTH_CAP guard against a tiny-base rate
 # dominating. Below the floor the tier keeps the flat GROWTH_CAP_BASE.
 EG_REVENUE_FLOOR = 500_000_000
+
+# Scenario-band offsets (2026-07-21-scenario-growth-band spec). The optimistic and
+# pessimistic legs are asymmetric, growth-coupled offsets off the realistic base, ramped
+# over [SCEN_BAND_G_LO, SCEN_BAND_G_HI] and saturating — the same flat-floor -> ramp ->
+# ceiling shape as _growth_cap / _ev_ebitda_ceiling. Floors equal the prior flat offsets
+# (+0.05 / -0.04) so low-growth names are inert and the band only widens as growth rises.
+SCEN_BAND_G_LO = 0.10
+SCEN_BAND_G_HI = 0.30
+SCEN_UP_FLOOR = 0.05
+SCEN_UP_CEIL = 0.10
+SCEN_DOWN_FLOOR = 0.04
+SCEN_DOWN_CEIL = 0.12
+# Type/size-coupled saturating ceiling for the OPTIMISTIC growth leg — the noise-suppressor
+# that replaces the old corroboration gate. EARLY_GROWTH's optimistic runs ABOVE its
+# noise-suppressed realistic cap (the "what if the hyper-growth is real" leg). MEGA (>=$1T)
+# is a HARD cap (mirrors _ev_ebitda_ceiling's mega top: quality decides whether a name
+# reaches its size ceiling, never lifts it above). LARGE ($150B-$1T) earns back toward the
+# default on FCF/EBITDA conversion quality.
+SCEN_OPT_CEIL_EARLY = 0.50
+SCEN_OPT_CEIL_MEGA = 0.28
+SCEN_OPT_CEIL_LARGE = 0.32
+SCEN_OPT_CEIL_DEFAULT = 0.35
+# A levered burner cannot fund the cash-hungry hyper-growth ramp the 0.50 EARLY_GROWTH
+# ceiling prices in, so leverage tempers that ceiling down toward the ordinary-grower bull
+# (SCEN_OPT_CEIL_EARLY_LEVERED). Keyed off net_debt/market_cap: a net-cash hyper-grower
+# (NBIS) keeps the full 0.50; a name whose net debt reaches SCEN_LEVERAGE_HI of its market
+# cap (CRWV, ~82%) gets the full temper. This mirrors the funding-gap bridge's premise
+# (models.exit_net_debt) on the growth-RATE ceiling itself, not just the EV->equity bridge:
+# without it the bull leg's EV lift outran the additive funding claim and flipped CRWV's
+# verdict (see [[crwv-funding-gap-bridge]]).
+SCEN_OPT_CEIL_EARLY_LEVERED = 0.35
+SCEN_LEVERAGE_LO = 0.20
+SCEN_LEVERAGE_HI = 0.60
 
 # Operating-compounder tiers: real earnings AND real EBITDA, so they take the
 # "balance past and future" basis — historical-median EV/EBITDA + forward P/E.
@@ -186,6 +195,80 @@ def _earnings_non_operating(fin: dict) -> bool:
     return ni_g is not None and ni_g > 0 and og is not None and og <= 0
 
 
+def _ramp(g: float, lo: float, hi: float, at_lo: float, at_hi: float) -> float:
+    """Flat floor -> linear ramp -> saturate, the shape _ev_ebitda_ceiling's g_frac uses.
+    Returns at_lo for g <= lo, at_hi for g >= hi, linear in between."""
+    if g <= lo:
+        return at_lo
+    return at_lo + min(1.0, (g - lo) / (hi - lo)) * (at_hi - at_lo)
+
+
+def _quality_frac(fin: dict) -> float:
+    """FCF/EBITDA conversion ramped QUALITY_CONV_LO->HI — the same quality signal
+    _ev_ebitda_ceiling reads. 0.0 when the conversion is unavailable or non-positive."""
+    fcf, ebitda = fin.get("fcf_ttm"), fin.get("ebitda_ttm")
+    if fcf is None or not ebitda or ebitda <= 0 or m.QUALITY_CONV_HI <= m.QUALITY_CONV_LO:
+        return 0.0
+    conv = fcf / ebitda
+    return max(0.0, min(1.0, (conv - m.QUALITY_CONV_LO) / (m.QUALITY_CONV_HI - m.QUALITY_CONV_LO)))
+
+
+def _leverage_frac(fin: dict) -> float:
+    """Net debt as a fraction of market cap, floored at 0 so net-cash names read 0. The
+    balance-sheet-capacity signal that tempers the EARLY_GROWTH optimistic ceiling: the more
+    of a burner's market cap is net debt, the less room it has to fund a hyper-growth ramp.
+
+    A missing net_debt (absent key -> None) or a non-positive market_cap reads 0.0 (the full,
+    untempered ceiling), same as true net cash. The production fetch path populates net_debt
+    (the same field models.exit_net_debt relies on), so an absent key means "no data", and
+    leaving such a name untempered is the safe default rather than a code gap."""
+    nd = fin.get("net_debt")
+    mc = fin.get("market_cap")
+    if nd is None or not mc or mc <= 0:
+        return 0.0
+    return max(0.0, nd / mc)
+
+
+def _opt_ceil(fin: dict, stock_type: str | None) -> float:
+    """Type/size-coupled saturating ceiling for the optimistic growth leg, with a quality
+    carve-out for the large tier. EARLY_GROWTH is checked first (any size): its 0.50 ceiling
+    is tempered DOWN toward SCEN_OPT_CEIL_EARLY_LEVERED as leverage rises, so a net-debt-funded
+    burner (CRWV) does not get the same cash-funded bull case as a net-cash hyper-grower (NBIS).
+    Mega (>=$1T) is a hard cap quality cannot lift; large ($150B-$1T) ramps from the large
+    ceiling toward the default on _quality_frac; everything else takes the default.
+
+    Corner: a fully-levered EARLY_GROWTH name (leverage_frac >= SCEN_LEVERAGE_HI) whose growth
+    also saturates its realistic cap (EG_CAP_CEIL = 0.35 at g >= 1.40) gets a tempered ceiling
+    (0.35) equal to its realistic base, so build_scenarios' optimistic collapses onto realistic
+    there. This is intended, NOT the false-precision collapse the band removes: it is a binding
+    economic ceiling (a maximally-levered hyper-burner is exactly where a bull case above the
+    realistic rate is least fundable), the pessimistic leg still widens, and no live name hits
+    the simultaneous >140% growth AND >60% net-debt/market-cap extremes it requires. Forcing an
+    artificial gap here would manufacture the false precision the band exists to remove, or (if
+    applied via a base+floor above _opt_ceil) breach the MEGA/LARGE hard caps for other names."""
+    if stock_type == "EARLY_GROWTH":
+        return _ramp(_leverage_frac(fin), SCEN_LEVERAGE_LO, SCEN_LEVERAGE_HI,
+                     SCEN_OPT_CEIL_EARLY, SCEN_OPT_CEIL_EARLY_LEVERED)
+    mc = fin.get("market_cap") or 0
+    if mc >= m.MEGA_CAP_FLOOR:
+        return SCEN_OPT_CEIL_MEGA
+    if mc >= m.LARGE_CAP_FADE_FLOOR:
+        return SCEN_OPT_CEIL_LARGE + _quality_frac(fin) * (SCEN_OPT_CEIL_DEFAULT - SCEN_OPT_CEIL_LARGE)
+    return SCEN_OPT_CEIL_DEFAULT
+
+
+def _band_growth_signal(fin: dict) -> float:
+    """Growth rate the band offsets key off — the SAME rate the realistic leg is derived
+    from, so the distorted / non-operating guards govern the bull leg too (BWXT's
+    non-operating revenue growth must not sneak back through optimistic)."""
+    if _earnings_distorted(fin):
+        return float(fin.get("revenue_growth") or 0.0)
+    if _earnings_non_operating(fin):
+        return float(fin.get("op_income_growth_stmt") or 0.0)
+    g = fin.get("revenue_growth_stmt")
+    return float(g if g is not None else (fin.get("revenue_growth") or 0.0))
+
+
 def build_scenarios(fin: dict, distorted_cap: float = 0.20,
                     stock_type: str | None = None) -> dict:
     """Per-stock capped growth scenarios (spec decision #1).
@@ -233,22 +316,25 @@ def build_scenarios(fin: dict, distorted_cap: float = 0.20,
         raw = (fin.get("earnings_growth") or fin.get("revenue_growth")
                or fin.get("revenue_growth_stmt") or 0.07)
     base = max(0.02, min(float(raw), cap))
-    # Optimistic upside above the near-term cap is granted when the demonstrated rate is
-    # corroborated — via EITHER path: (1) raw within a headroom of the cap (ANET, raw ≈
-    # cap), or (2) a cash-generative compounder whose rate is in the sustainable regime
-    # (see CORROBORATED_GROWTH_CEIL) — so FTNT, whose earnings run past the magnitude band,
-    # keeps a bull case. A hyper-grower pinned far below its raw rate by the noise ceiling
-    # (IREN's 167%, NBIS's 684%) satisfies neither and keeps optimistic AT the cap — the
-    # backstop must hold in the bull case too, or the exact noise the ceiling exists to
-    # suppress leaks back in through the optimistic leg.
-    corroborated = _cap_eligible(fin) and float(raw) <= CORROBORATED_GROWTH_CEIL
-    opt_ceiling = (cap + GROWTH_OPT_HEADROOM
-                   if (float(raw) <= cap + GROWTH_OPT_HEADROOM or corroborated)
-                   else cap)
+    # Scenario dispersion (2026-07-21-scenario-growth-band spec): growth-coupled, asymmetric,
+    # ramp-and-saturate offsets off the realistic base. The saturating _opt_ceil replaces the
+    # old corroboration-gated ceiling as the noise-suppressor — a 684% grower's optimistic is
+    # clipped to its tier ceiling, not run at 684% — so every name gets a genuine, bounded
+    # bull leg instead of optimistic collapsing onto realistic.
+    if distorted_cap < GROWTH_CAP_BASE:
+        # DDM / perpetuity copy: keep the flat floor offsets so Gordon growth stays bounded.
+        return {
+            "optimistic": base + SCEN_UP_FLOOR,
+            "realistic": base,
+            "pessimistic": max(base - SCEN_DOWN_FLOOR, 0.02),
+        }
+    g = _band_growth_signal(fin)
+    up = _ramp(g, SCEN_BAND_G_LO, SCEN_BAND_G_HI, SCEN_UP_FLOOR, SCEN_UP_CEIL)
+    dn = _ramp(g, SCEN_BAND_G_LO, SCEN_BAND_G_HI, SCEN_DOWN_FLOOR, SCEN_DOWN_CEIL)
     return {
-        "optimistic": min(base + 0.05, opt_ceiling),
+        "optimistic": max(base, min(base + up, _opt_ceil(fin, stock_type))),
         "realistic": base,
-        "pessimistic": max(base - 0.04, 0.02),
+        "pessimistic": max(base - dn, 0.02),
     }
 
 

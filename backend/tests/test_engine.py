@@ -22,8 +22,10 @@ def _large_cap_fin(**over):
 
 def test_build_scenarios_capped():
     s = engine.build_scenarios({"earnings_growth": 0.56, "revenue_growth": 0.10})
-    assert s["realistic"] == 0.20             # base capped at 0.20
-    assert s["optimistic"] == pytest.approx(0.20)   # optimistic ceiling now 20%
+    assert s["realistic"] == 0.20             # base capped at 0.20 (unchanged)
+    # band: g = info revenue growth 0.10 (at the floor) -> up 0.05 -> opt 0.25, clipped by
+    # the 0.35 default ceiling; the old corroboration gate no longer collapses it to the cap.
+    assert s["optimistic"] == pytest.approx(0.25)
     assert s["pessimistic"] == pytest.approx(0.16)
 
 
@@ -39,10 +41,9 @@ def test_build_scenarios_distorted_earnings_uses_full_revenue_growth():
     # normal 20% cap, not the 3.9% DDM ceiling.
     s = engine.build_scenarios({"earnings_growth": -0.094, "revenue_growth": 0.168})
     assert s["realistic"] == pytest.approx(0.168)
-    # optimistic = base + 0.05; raw (0.168) is within a headroom of the 0.20 base cap, so
-    # the bull case is granted the headroom rather than clamped flat at the cap.
-    assert s["optimistic"] == pytest.approx(0.218)
-    assert s["pessimistic"] == pytest.approx(0.128)
+    # band: g = revenue_growth 0.168 (distorted source) -> up 0.067, dn 0.0672
+    assert s["optimistic"] == pytest.approx(0.235)
+    assert s["pessimistic"] == pytest.approx(0.1008)
 
 
 def test_build_scenarios_distorted_earnings_ddm_cap_keeps_sustainable_ceiling():
@@ -474,11 +475,13 @@ def _hypergrower_fin(**over):
 
 
 def test_build_scenarios_elevated_cap_for_eligible_hypergrower():
-    # statement growth 0.70 -> cap saturates at the 0.25 ceiling. raw (1.13) is far above
-    # the cap, so the optimistic backstop holds: optimistic stays AT the cap, no headroom.
+    # statement growth 0.70 -> realistic cap saturates at 0.25. The optimistic leg is no
+    # longer collapsed onto the cap: it rides +0.10 (g saturates) up to the 0.35 default
+    # ceiling, which is the new noise-suppressor (0.70 growth is NOT run at 0.70).
     s = engine.build_scenarios(_hypergrower_fin())
     assert s["realistic"] == pytest.approx(0.25)
-    assert s["optimistic"] == pytest.approx(0.25)     # suppressed hyper-grower: no bull-case leak
+    assert s["optimistic"] == pytest.approx(0.35)     # clipped at the default ceiling
+    assert s["optimistic"] > s["realistic"]
 
 
 def test_build_scenarios_corroborated_grower_gets_optimistic_upside():
@@ -489,45 +492,26 @@ def test_build_scenarios_corroborated_grower_gets_optimistic_upside():
                                                 revenue_growth=0.351,
                                                 earnings_growth=0.25))
     assert s["realistic"] == pytest.approx(0.25)
-    assert s["optimistic"] == pytest.approx(0.30)     # 0.25 + 0.05 headroom
+    # band: g = statement revenue growth 0.286 -> up 0.0965 -> opt 0.3465 (< 0.35 ceiling)
+    assert s["optimistic"] == pytest.approx(0.3465)
     assert s["optimistic"] > s["realistic"]
 
 
 def test_build_scenarios_corroborated_compounder_above_magnitude_band():
     # FTNT shape: cash-generative (FCF > 0), revenue ~20%, earnings ~28.6%. Statement
-    # revenue growth (14.2%) is below GROWTH_CAP_BASE so the cap lands at the 0.20 base,
-    # which puts raw (0.286 earnings) ABOVE cap + GROWTH_OPT_HEADROOM (0.25). The magnitude
-    # proxy alone denies the bull case and collapses optimistic onto realistic (the artifact).
-    # Corroboration — cash-generative AND raw in the sustainable-compounder regime
-    # (<= CORROBORATED_GROWTH_CEIL) — restores a genuine bull leg.
+    # revenue growth (14.2%) is below GROWTH_CAP_BASE so the cap lands at the 0.20 base.
+    # The old corroboration gate compared raw (0.286 earnings) to a flat magnitude proxy
+    # and, finding it too high, denied the bull case and collapsed optimistic onto realistic
+    # (the artifact). The growth-coupled band restores a genuine bull leg keyed off the
+    # statement growth.
     s = engine.build_scenarios(_hypergrower_fin(revenue_growth_stmt=0.1417,
                                                 revenue_growth=0.201,
                                                 earnings_growth=0.286))
     assert s["realistic"] == pytest.approx(0.20)
-    assert s["optimistic"] == pytest.approx(0.25)     # 0.20 + 0.05 headroom, restored
+    # band: g = statement revenue growth 0.1417 -> up 0.060425 -> opt 0.260425 (brief's
+    # "0.2604" rounds the intermediate `up` display to 4dp; the exact ramp value is used here)
+    assert s["optimistic"] == pytest.approx(0.260425)
     assert s["optimistic"] > s["realistic"]
-
-
-def test_build_scenarios_corroboration_requires_cash_generation():
-    # Same 28.6% growth but a cash burner (fails _cap_eligible): corroboration must NOT
-    # fire, so the bull case stays collapsed onto realistic. Guards the corroboration path
-    # from leaking a bull leg to unprofitable names that clear the rate ceiling.
-    s = engine.build_scenarios(_hypergrower_fin(fcf_ttm=-1e8, ebitda_ttm=-1e7, ocf_ttm=-2e7,
-                                                revenue_growth_stmt=0.1417,
-                                                revenue_growth=0.201,
-                                                earnings_growth=0.286))
-    assert s["optimistic"] == pytest.approx(s["realistic"])
-
-
-def test_build_scenarios_corroboration_capped_at_regime_ceiling():
-    # A cash-generative name whose demonstrated rate is above the sustainable-compounder
-    # regime (raw > CORROBORATED_GROWTH_CEIL) is a hyper-growth spike, not a corroborated
-    # compounder: no bull-case headroom, mirroring the eligible-hypergrower backstop.
-    raw = engine.CORROBORATED_GROWTH_CEIL + 0.05
-    s = engine.build_scenarios(_hypergrower_fin(revenue_growth_stmt=0.1417,
-                                                revenue_growth=0.201,
-                                                earnings_growth=raw))
-    assert s["optimistic"] == pytest.approx(s["realistic"])
 
 
 def test_build_scenarios_statement_growth_preferred_over_info():
@@ -729,9 +713,13 @@ def test_evaluate_dominant_acquisition_rebases_and_caps_dcf():
     r = engine.evaluate(trough)
     b = r["fair_value_breakdown"]
     assert r["stock_type"] == "GROWTH"
-    # rebased DCF lands exactly at the forward-P/E leg (cap binds — the raw rebase ~$500
-    # exceeds the ~$383 anchor).
-    assert b["dcf"]["fair_value"] == pytest.approx(b["pe"]["fair_value"], abs=0.01)
+    # rebased DCF is capped PER-SCENARIO at the forward-P/E leg. The optimistic/realistic
+    # scenarios (2026-07-21 growth band: opt 0.30, realistic 0.20) still exceed the ~$383
+    # anchor and saturate at it; the pessimistic scenario's own offset now widens with g
+    # (0.20 - 0.12 = 0.08, vs the old flat -0.04), so it genuinely lands below the cap
+    # rather than also saturating — the composite average is therefore <= the anchor, not
+    # forced exactly onto it. The cap invariant itself ("can't run above the anchor") holds.
+    assert b["dcf"]["fair_value"] <= b["pe"]["fair_value"] + 0.01
     # the rebase lifted the DCF leg well above what the trailing-FCF base would give.
     unrebased = m.calc_dcf(trough, engine.build_scenarios(trough))["fair_value"]
     assert b["dcf"]["fair_value"] > unrebased
@@ -993,9 +981,15 @@ def _crwv_like_fin(**over):
 
 
 def test_evaluate_funding_gap_flips_levered_burner():
-    # The funding-gap correction accretes the projected external funding onto the exit
-    # net debt, flipping CRWV from the frozen bridge's +55% "undervalued" to fair-to-
-    # modestly-overvalued. Guards against the frozen-capital-structure artifact.
+    # The funding-gap correction accretes the projected external funding onto the exit net
+    # debt, flipping CRWV from the frozen bridge's +55% "undervalued" to below price. The
+    # growth band must not undo that verdict: CRWV is a deeply FCF-negative burner whose
+    # net debt is ~82% of its market cap, so the leverage temper pulls its EARLY_GROWTH
+    # optimistic ceiling down from 0.50 to 0.35 (SCEN_OPT_CEIL_EARLY_LEVERED). The bull-case
+    # ev_sales growth therefore widens only to 0.35, not the 0.4145 an un-tempered ceiling
+    # would allow, so the EV lift stays behind the additive funding claim and the composite
+    # holds below the $73.21 price (fv ~= 62.07). A net-cash hyper-grower (NBIS) keeps the
+    # full 0.50 ceiling and its uplift — see test_opt_ceil_early_growth_tempered_by_leverage.
     result = engine.evaluate(_crwv_like_fin())
     assert result["status"] == "completed"
     assert result["stock_type"] == "EARLY_GROWTH"
@@ -1004,7 +998,8 @@ def test_evaluate_funding_gap_flips_levered_burner():
     assert "dcf" not in result["fair_value_breakdown"]  # zeroed for EARLY_GROWTH burner
     fv = result["fair_value"]
     assert fv is not None and fv > 0
-    assert fv < result["current_price"]  # the flip: no longer "undervalued"
+    assert fv < _crwv_like_fin()["current_price"]  # verdict stays SELL, not flipped to BUY
+    assert fv == pytest.approx(62.07, abs=0.01)
 
 
 def test_evaluate_funding_gap_below_frozen_bridge():
@@ -1032,3 +1027,95 @@ def test_evaluate_funding_gap_floor_keeps_extreme_burner_valued():
     assert set(result["fair_value_breakdown"]) == {"ev_sales"}  # negative EBITDA -> no SOTP
     assert result["fair_value"] is not None and result["fair_value"] > 0
     assert result["fair_value"] < result["current_price"]  # deeply overvalued, but valued
+
+
+# --- scenario-band primitives (2026-07-21-scenario-growth-band) ----------------
+def test_ramp_below_floor_returns_floor():
+    assert engine._ramp(0.05, 0.10, 0.30, 0.05, 0.10) == pytest.approx(0.05)
+    assert engine._ramp(0.10, 0.10, 0.30, 0.05, 0.10) == pytest.approx(0.05)
+
+
+def test_ramp_linear_region():
+    assert engine._ramp(0.20, 0.10, 0.30, 0.05, 0.10) == pytest.approx(0.075)
+    assert engine._ramp(0.168, 0.10, 0.30, 0.05, 0.10) == pytest.approx(0.067)
+
+
+def test_ramp_saturates_at_ceiling():
+    assert engine._ramp(0.30, 0.10, 0.30, 0.05, 0.10) == pytest.approx(0.10)
+    assert engine._ramp(6.84, 0.10, 0.30, 0.05, 0.10) == pytest.approx(0.10)
+
+
+def test_quality_frac_conversion_ramp():
+    # fcf/ebitda = 0.8125 -> (0.8125-0.65)/(0.90-0.65) = 0.65
+    assert engine._quality_frac({"fcf_ttm": 3.9e9, "ebitda_ttm": 4.8e9}) == pytest.approx(0.65)
+    # conversion >= HI -> clamps to 1.0
+    assert engine._quality_frac({"fcf_ttm": 4.8e9, "ebitda_ttm": 4.8e9}) == pytest.approx(1.0)
+    # conversion <= LO -> 0.0
+    assert engine._quality_frac({"fcf_ttm": 3.0e9, "ebitda_ttm": 4.8e9}) == pytest.approx(0.0)
+
+
+def test_quality_frac_missing_or_nonpositive_data():
+    assert engine._quality_frac({"fcf_ttm": None, "ebitda_ttm": 4.8e9}) == 0.0
+    assert engine._quality_frac({"fcf_ttm": 3.9e9, "ebitda_ttm": 0}) == 0.0
+    assert engine._quality_frac({"fcf_ttm": 3.9e9, "ebitda_ttm": -1.0}) == 0.0
+
+
+def test_opt_ceil_early_growth_is_highest():
+    assert engine._opt_ceil({"market_cap": 5e9}, "EARLY_GROWTH") == pytest.approx(0.50)
+    # EARLY wins even at mega size (checked before size bands)
+    assert engine._opt_ceil({"market_cap": 2e12}, "EARLY_GROWTH") == pytest.approx(0.50)
+
+
+def test_opt_ceil_early_growth_tempered_by_leverage():
+    # net-cash hyper-grower (NBIS-shaped): net_debt <= 0 -> frac 0 -> full 0.50 bull ceiling
+    assert engine._opt_ceil({"market_cap": 5e10, "net_debt": -8e9},
+                            "EARLY_GROWTH") == pytest.approx(0.50)
+    # below the leverage floor (net debt 20% of market cap) -> still full 0.50
+    assert engine._opt_ceil({"market_cap": 1e10, "net_debt": 2e9},
+                            "EARLY_GROWTH") == pytest.approx(0.50)
+    # levered burner (CRWV-shaped): net debt >= 60% of market cap -> fully tempered to 0.35
+    assert engine._opt_ceil({"market_cap": 4e10, "net_debt": 3.3e10},
+                            "EARLY_GROWTH") == pytest.approx(0.35)
+    # partial leverage (frac 0.40, midpoint of 0.20..0.60) -> halfway 0.50 -> 0.35 = 0.425
+    assert engine._opt_ceil({"market_cap": 1e10, "net_debt": 4e9},
+                            "EARLY_GROWTH") == pytest.approx(0.425)
+
+
+def test_opt_ceil_mega_is_hard_cap():
+    # mega, low quality -> 0.28
+    assert engine._opt_ceil({"market_cap": 2e12, "fcf_ttm": 1.0, "ebitda_ttm": 10.0},
+                            "MEGA_CAP") == pytest.approx(0.28)
+    # mega, high quality -> STILL 0.28 (quality cannot lift the mega cap)
+    assert engine._opt_ceil({"market_cap": 2e12, "fcf_ttm": 4.8e9, "ebitda_ttm": 4.8e9},
+                            "MEGA_CAP") == pytest.approx(0.28)
+
+
+def test_opt_ceil_large_quality_carveout():
+    # large ($200B), q=1.0 (fcf==ebitda) -> 0.32 + 1.0*0.03 = 0.35
+    assert engine._opt_ceil({"market_cap": 2e11, "fcf_ttm": 4.8e9, "ebitda_ttm": 4.8e9},
+                            "GROWTH") == pytest.approx(0.35)
+    # large, q=0.0 (low conversion) -> 0.32
+    assert engine._opt_ceil({"market_cap": 2e11, "fcf_ttm": 3.0e9, "ebitda_ttm": 4.8e9},
+                            "GROWTH") == pytest.approx(0.32)
+
+
+def test_opt_ceil_default_below_large_floor():
+    assert engine._opt_ceil({"market_cap": 1e11}, "GROWTH") == pytest.approx(0.35)
+    assert engine._opt_ceil({}, None) == pytest.approx(0.35)
+
+
+def test_band_growth_signal_respects_guards():
+    # distorted (eg<0, rg>0) -> revenue_growth (matches realistic's distorted source)
+    assert engine._band_growth_signal(
+        {"earnings_growth": -0.1, "revenue_growth": 0.168}) == pytest.approx(0.168)
+    # non-operating (ni_stmt>0, op_stmt<=0) -> op_income_growth_stmt
+    assert engine._band_growth_signal(
+        {"earnings_growth": 0.2, "revenue_growth": 0.18, "net_income_growth_stmt": 0.2,
+         "op_income_growth_stmt": -0.014}) == pytest.approx(-0.014)
+    # normal -> statement revenue growth preferred over info
+    assert engine._band_growth_signal(
+        {"earnings_growth": 0.3, "revenue_growth": 0.40,
+         "revenue_growth_stmt": 0.29}) == pytest.approx(0.29)
+    # normal, no statement -> info revenue growth
+    assert engine._band_growth_signal(
+        {"earnings_growth": 0.3, "revenue_growth": 0.40}) == pytest.approx(0.40)

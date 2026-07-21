@@ -74,6 +74,14 @@ async def test_run_iren_reroutes_to_completed_fair_value():
     assert result.status == "completed"
     assert result.stock_type == "MID_CAP"
     assert result.fair_value is not None
-    assert 20 < result.fair_value < _IREN_INFO["currentPrice"]   # valued & expensive (~-63%)
+    # 2026-07-21 growth-band regression canary ("IREN must not re-explode"). Pre-band,
+    # IREN's optimistic ev_ebitda scenario was pinned AT realistic (44.44 == 44.44 — the
+    # opt==realistic collapse the band exists to fix), giving a composite of $37.73. The
+    # band legitimately opens the bull leg (167.7% statement growth saturates the ramp:
+    # optimistic 44.44 -> 77.0), lifting the composite to $43.15 — a bounded, modest move
+    # (~+14%, in line with the spec's measured live-IREN effect of +15.0%), not the
+    # unbounded-percentile explosion ($1,536) the design doc rejected. Still well below any
+    # explosion-magnitude ceiling.
+    assert 20 < result.fair_value < 60
     assert "ev_ebitda" in result.fair_value_breakdown
     assert "dcf" not in result.fair_value_breakdown
