@@ -499,10 +499,11 @@ def test_build_scenarios_corroborated_grower_gets_optimistic_upside():
 
 def test_build_scenarios_corroborated_compounder_above_magnitude_band():
     # FTNT shape: cash-generative (FCF > 0), revenue ~20%, earnings ~28.6%. Statement
-    # revenue growth (14.2%) is below GROWTH_CAP_BASE so the cap lands at the 0.20 base,
-    # which puts raw (0.286 earnings) ABOVE cap + GROWTH_OPT_HEADROOM (0.25). The magnitude
-    # proxy alone denies the bull case and collapses optimistic onto realistic (the artifact).
-    # The growth-coupled band restores a genuine bull leg keyed off the statement growth.
+    # revenue growth (14.2%) is below GROWTH_CAP_BASE so the cap lands at the 0.20 base.
+    # The old corroboration gate compared raw (0.286 earnings) to a flat magnitude proxy
+    # and, finding it too high, denied the bull case and collapsed optimistic onto realistic
+    # (the artifact). The growth-coupled band restores a genuine bull leg keyed off the
+    # statement growth.
     s = engine.build_scenarios(_hypergrower_fin(revenue_growth_stmt=0.1417,
                                                 revenue_growth=0.201,
                                                 earnings_growth=0.286))
