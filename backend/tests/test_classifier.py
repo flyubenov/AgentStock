@@ -1,3 +1,5 @@
+import pytest
+
 from valuation.classifier import classify
 
 
@@ -47,6 +49,21 @@ def test_subsidiaries_boilerplate_is_not_conglomerate():
 def test_early_growth():
     fin = {"sector": "Technology", "revenue_growth": 0.35, "eps_ttm": -1.2, "ebitda_ttm": 10}
     assert classify(fin)["stock_type"] == "EARLY_GROWTH"
+
+
+def test_early_growth_weights_no_sotp():
+    # SOTP is EV/EBITDA-with-a-conglomerate-discount, and EARLY_GROWTH already zeroes
+    # ev_ebitda because these names' EBITDA is near-zero / SBC-depressed / unreliable.
+    # Re-admitting the same EBITDA basis through SOTP produced a degenerate below-book
+    # value for barely-positive-EBITDA names (CRWD: $59M EBITDA -> a $3.69 SOTP dragging
+    # the composite). The 0.25 is redistributed to dcf/ev_sales preserving their ratio.
+    res = classify({"sector": "Technology", "revenue_growth": 0.35, "eps_ttm": -1.2,
+                    "ebitda_ttm": 10})
+    w = res["method_weights"]
+    assert w["sotp"]["weight"] == 0.0
+    assert w["sotp"]["enabled"] is False
+    assert w["dcf"]["weight"] == pytest.approx(0.4667, abs=1e-4)
+    assert w["ev_sales"]["weight"] == pytest.approx(0.5333, abs=1e-4)
 
 
 def test_growth():
