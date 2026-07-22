@@ -73,15 +73,18 @@ After Change 1, `sotp` has weight 0.00 in every remaining tier, so `calc_sotp` i
 - `"sotp"` from `ALL_METHODS` and `APPROX_METHODS` (`valuation/models.py`).
 - The `"sotp": 0.00` key from every `_TYPE_WEIGHTS` dict (`valuation/classifier.py`).
 
-### Sheets schema (the one piece with a persisted consequence)
+### Sheets schema — keep the blank SOTP column (chosen)
 
-`services/sheets.py` lists `"sotp"` in `_MODEL_COLS` and `"SOTP"` in `_DB_HEADERS`. `_MODEL_COLS` maps breakdowns to
-columns positionally, so a removed `sotp` yields a blank cell; removing the column shifts `NAV` left one position.
+`services/sheets.py` lists `"sotp"` in `_MODEL_COLS` and `"SOTP"` in `_DB_HEADERS`, and `_row_to_database_row` reads
+the quality score by fixed position (col Q, index 16). `_MODEL_COLS` maps breakdowns to columns positionally, so once
+`calc_sotp` is gone the SOTP cell is simply always blank — exactly how any unweighted model already behaves.
 
-- **Default (chosen): full removal** — drop `"sotp"` from `_MODEL_COLS` and `"SOTP"` from `_DB_HEADERS`. The header row
-  self-rewrites from `_DB_HEADERS` on the next upsert.
-- **Fallback:** keep a permanently-blank SOTP column (preserves exact sheet layout) if touching the live sheet layout is
-  undesirable.
+**Decision: leave the SOTP column in place.** Removing it would shift every later column (quality score index 16 → 15)
+and, because `_ensure_database_sheet` only writes headers when the tab is first created and existing rows keep the old
+16-index layout, the reader would mis-map persisted rows (reading the old blank SOTP cell as the quality score) until
+every ticker is re-upserted — the Sheets round-trip regression the memory guards against. Keeping the blank column
+preserves the exact schema at zero migration risk. `services/sheets.py` and `tests/test_sheets_row.py` are therefore
+**unchanged**. Only the executable `sotp` dead code is removed.
 
 ## Change 3 — Fix the `calc_nav` double-count (`valuation/models.py`)
 
