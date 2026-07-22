@@ -564,8 +564,9 @@ def calc_nav(fin: dict) -> dict:
     shares = fin.get("shares_outstanding")
     if bvps is None or not shares:
         return _null_result(False)
-    net_debt = fin.get("net_debt") or 0
-    fv = _apply_mos(bvps - net_debt / shares)
+    # book_value_per_share already nets all liabilities (equity = assets - liabilities),
+    # so subtracting net debt again double-debits it (drove NAV negative for levered REITs).
+    fv = _apply_mos(bvps)
     return {"scenarios": {k: fv for k in SCENARIO_KEYS}, "fair_value": fv, "weight": 0.0, "has_scenarios": False}
 
 

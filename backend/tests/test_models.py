@@ -12,6 +12,16 @@ def test_nav_is_exact():
     assert r["has_scenarios"] is False
 
 
+def test_nav_ignores_net_debt():
+    # NAV = bvps * MOS. book_value_per_share is already equity (assets - all
+    # liabilities, debt included), so net debt must NOT be subtracted again.
+    # A net-debt name and a net-cash name with the same bvps get the same NAV.
+    net_debt = {"book_value_per_share": 10.0, "net_debt": 5_000, "shares_outstanding": 1_000}
+    net_cash = {"book_value_per_share": 10.0, "net_debt": -2_000, "shares_outstanding": 1_000}
+    assert m.calc_nav(net_debt)["fair_value"] == pytest.approx(9.0)
+    assert m.calc_nav(net_cash)["fair_value"] == pytest.approx(9.0)
+
+
 def test_pb_justified_is_exact():
     # roe=0.10, discount=0.10 -> justifiedPB=1.0 -> fv = 10 * 1.0 * 0.90
     fin = {"book_value_per_share": 10.0, "return_on_equity": 0.10}
