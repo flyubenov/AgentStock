@@ -18,14 +18,37 @@ def test_small_negative_ebitda_is_asset_heavy():
     assert classify(fin)["stock_type"] == "ASSET_HEAVY"
 
 
-def test_conglomerate_industry():
-    fin = {"sector": "Industrials", "industry": "Conglomerates"}
-    assert classify(fin)["stock_type"] == "CONGLOMERATE"
+def test_conglomerates_industry_no_longer_conglomerate_dividend():
+    # HON-like: the old rule-3 "Conglomerates" industry no longer captures. A
+    # mature payer falls through to DIVIDEND (yield > 2.5%, payout > 40%).
+    fin = {
+        "sector": "Industrials", "industry": "Conglomerates",
+        "dividend_yield": 0.0414, "payout_ratio": 0.741,
+        "revenue_growth": 0.024, "eps_ttm": 12.53,
+    }
+    assert classify(fin)["stock_type"] == "DIVIDEND"
 
 
-def test_conglomerate_keyword_in_summary():
-    fin = {"sector": "Industrials", "long_business_summary": "A diversified holding company."}
-    assert classify(fin)["stock_type"] == "CONGLOMERATE"
+def test_conglomerates_industry_no_longer_conglomerate_midcap():
+    # MMM-like: yield 1.83% < 2.5% skips DIVIDEND, not cyclical, $88B < $100B -> MID_CAP.
+    fin = {
+        "sector": "Industrials", "industry": "Conglomerates",
+        "dividend_yield": 0.0183, "payout_ratio": 0.572,
+        "revenue_growth": 0.025, "eps_ttm": 5.19,
+        "trailing_pe": 32.9, "market_cap": 88_000_000_000,
+    }
+    assert classify(fin)["stock_type"] == "MID_CAP"
+
+
+def test_diversified_holding_keyword_no_longer_conglomerate():
+    # The old summary keyword ("diversified holding company") no longer triggers
+    # CONGLOMERATE; the name falls through to the size default.
+    fin = {
+        "sector": "Industrials",
+        "long_business_summary": "A diversified holding company.",
+        "eps_ttm": 5.0, "market_cap": 20_000_000_000,
+    }
+    assert classify(fin)["stock_type"] == "MID_CAP"
 
 
 def test_subsidiaries_boilerplate_is_not_conglomerate():
