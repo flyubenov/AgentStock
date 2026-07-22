@@ -1,14 +1,5 @@
 from __future__ import annotations
 
-# Keep only phrases that are specifically indicative of a multi-business
-# conglomerate or breakup thesis. Generic SEC boilerplate ("together with its
-# subsidiaries", "product portfolio", "capital allocation") was pruned because
-# it false-positived single-business companies (e.g. KLAC) into CONGLOMERATE.
-CONGLOMERATE_KEYWORDS = [
-    "spin-off", "spinoff", "breakup", "divestiture",
-    "holding company", "conglomerate",
-]
-
 CYCLICAL_SECTORS = {"Energy", "Basic Materials"}
 
 # Phrases that mark a yfinance "Financial Services" tag as a mis-classification:
@@ -48,23 +39,22 @@ LENDER_KEYWORDS = (
 )
 
 # Default method weights per stock type. Keys match the MethodId set:
-# dcf, fcfe, ev_ebitda, pe, ev_sales, ddm, pb, rim, sotp, nav.
+# dcf, fcfe, ev_ebitda, pe, ev_sales, ddm, pb, rim, nav.
 _TYPE_WEIGHTS: dict[str, dict[str, float]] = {
-    "MEGA_CAP":     {"dcf": 0.55, "fcfe": 0.00, "ev_ebitda": 0.35, "pe": 0.10, "ev_sales": 0.00, "ddm": 0.00, "pb": 0.00, "rim": 0.00, "sotp": 0.00, "nav": 0.00},
-    "LARGE_CAP":    {"dcf": 0.50, "fcfe": 0.00, "ev_ebitda": 0.35, "pe": 0.15, "ev_sales": 0.00, "ddm": 0.00, "pb": 0.00, "rim": 0.00, "sotp": 0.00, "nav": 0.00},
-    "MID_CAP":      {"dcf": 0.45, "fcfe": 0.00, "ev_ebitda": 0.25, "pe": 0.15, "ev_sales": 0.15, "ddm": 0.00, "pb": 0.00, "rim": 0.00, "sotp": 0.00, "nav": 0.00},
-    "DIVIDEND":     {"dcf": 0.25, "fcfe": 0.00, "ev_ebitda": 0.00, "pe": 0.25, "ev_sales": 0.00, "ddm": 0.40, "pb": 0.10, "rim": 0.00, "sotp": 0.00, "nav": 0.00},
-    "GROWTH":       {"dcf": 0.40, "fcfe": 0.00, "ev_ebitda": 0.20, "pe": 0.20, "ev_sales": 0.20, "ddm": 0.00, "pb": 0.00, "rim": 0.00, "sotp": 0.00, "nav": 0.00},
+    "MEGA_CAP":     {"dcf": 0.55, "fcfe": 0.00, "ev_ebitda": 0.35, "pe": 0.10, "ev_sales": 0.00, "ddm": 0.00, "pb": 0.00, "rim": 0.00, "nav": 0.00},
+    "LARGE_CAP":    {"dcf": 0.50, "fcfe": 0.00, "ev_ebitda": 0.35, "pe": 0.15, "ev_sales": 0.00, "ddm": 0.00, "pb": 0.00, "rim": 0.00, "nav": 0.00},
+    "MID_CAP":      {"dcf": 0.45, "fcfe": 0.00, "ev_ebitda": 0.25, "pe": 0.15, "ev_sales": 0.15, "ddm": 0.00, "pb": 0.00, "rim": 0.00, "nav": 0.00},
+    "DIVIDEND":     {"dcf": 0.25, "fcfe": 0.00, "ev_ebitda": 0.00, "pe": 0.25, "ev_sales": 0.00, "ddm": 0.40, "pb": 0.10, "rim": 0.00, "nav": 0.00},
+    "GROWTH":       {"dcf": 0.40, "fcfe": 0.00, "ev_ebitda": 0.20, "pe": 0.20, "ev_sales": 0.20, "ddm": 0.00, "pb": 0.00, "rim": 0.00, "nav": 0.00},
     # No SOTP: it is EV/EBITDA-with-a-conglomerate-discount, and this tier deliberately
     # zeroes ev_ebitda because these names' EBITDA is near-zero / SBC-depressed / unreliable.
     # Re-admitting that basis via SOTP produced a degenerate below-book value for a barely-
     # positive-EBITDA name (CRWD: $59M EBITDA * 20x -> $3.69, below its own $4.55 book, at
     # 0.25 weight). The 0.25 is redistributed to dcf/ev_sales preserving their original ratio.
-    "EARLY_GROWTH": {"dcf": 0.4667, "fcfe": 0.00, "ev_ebitda": 0.00, "pe": 0.00, "ev_sales": 0.5333, "ddm": 0.00, "pb": 0.00, "rim": 0.00, "sotp": 0.00, "nav": 0.00},
-    "CYCLICAL":     {"dcf": 0.40, "fcfe": 0.00, "ev_ebitda": 0.20, "pe": 0.25, "ev_sales": 0.00, "ddm": 0.00, "pb": 0.00, "rim": 0.00, "sotp": 0.00, "nav": 0.15},
-    "FINANCIAL":    {"dcf": 0.00, "fcfe": 0.00, "ev_ebitda": 0.00, "pe": 0.20, "ev_sales": 0.00, "ddm": 0.00, "pb": 0.35, "rim": 0.45, "sotp": 0.00, "nav": 0.00},
-    "CONGLOMERATE": {"dcf": 0.00, "fcfe": 0.00, "ev_ebitda": 0.30, "pe": 0.00, "ev_sales": 0.00, "ddm": 0.00, "pb": 0.00, "rim": 0.00, "sotp": 0.40, "nav": 0.30},
-    "ASSET_HEAVY":  {"dcf": 0.30, "fcfe": 0.00, "ev_ebitda": 0.00, "pe": 0.25, "ev_sales": 0.00, "ddm": 0.00, "pb": 0.00, "rim": 0.00, "sotp": 0.00, "nav": 0.45},
+    "EARLY_GROWTH": {"dcf": 0.4667, "fcfe": 0.00, "ev_ebitda": 0.00, "pe": 0.00, "ev_sales": 0.5333, "ddm": 0.00, "pb": 0.00, "rim": 0.00, "nav": 0.00},
+    "CYCLICAL":     {"dcf": 0.40, "fcfe": 0.00, "ev_ebitda": 0.20, "pe": 0.25, "ev_sales": 0.00, "ddm": 0.00, "pb": 0.00, "rim": 0.00, "nav": 0.15},
+    "FINANCIAL":    {"dcf": 0.00, "fcfe": 0.00, "ev_ebitda": 0.00, "pe": 0.20, "ev_sales": 0.00, "ddm": 0.00, "pb": 0.35, "rim": 0.45, "nav": 0.00},
+    "ASSET_HEAVY":  {"dcf": 0.30, "fcfe": 0.00, "ev_ebitda": 0.00, "pe": 0.25, "ev_sales": 0.00, "ddm": 0.00, "pb": 0.00, "rim": 0.00, "nav": 0.45},
 }
 
 
@@ -114,34 +104,28 @@ def _detect_type(fin: dict) -> str:
     if sector == "Real Estate" or (ebitda <= 0 and 0 < market_cap < 2_000_000_000):
         return "ASSET_HEAVY"
 
-    # 3. Conglomerate
-    is_conglomerate_industry = "conglomerate" in industry or "diversified" in industry
-    has_conglomerate_keywords = any(kw in summary for kw in CONGLOMERATE_KEYWORDS)
-    if is_conglomerate_industry or has_conglomerate_keywords:
-        return "CONGLOMERATE"
-
-    # 4. Early growth
+    # 3. Early growth
     if revenue_growth > 0.20 and (eps <= 0 or ebitda <= 0):
         return "EARLY_GROWTH"
 
-    # 5. Growth — fast-growing, but only below the mega-cap line. A $1T+ company
+    # 4. Growth — fast-growing, but only below the mega-cap line. A $1T+ company
     # is a LARGE_CAP regardless of growth (no size ceiling here would mislabel
     # META/MSFT/GOOGL as GROWTH); base-rate drag is handled by the size-coupled fade.
     if revenue_growth > 0.10 and eps > 0 and dividend_yield < 0.01 and market_cap < 1_000_000_000_000:
         return "GROWTH"
 
-    # 6. Dividend
+    # 5. Dividend
     if dividend_yield > 0.025 and payout_ratio > 0.40:
         return "DIVIDEND"
 
-    # 7. Cyclical
+    # 6. Cyclical
     if sector in CYCLICAL_SECTORS or (0 < trailing_pe < 12 and revenue_growth < 0.05):
         return "CYCLICAL"
 
-    # 8. Size-based default. The >$1T tier is its own MEGA_CAP bucket: the fade
+    # 7. Size-based default. The >$1T tier is its own MEGA_CAP bucket: the fade
     # (models._fade_hold_years) already treats these names differently, and MEGA_CAP
     # leans marginally more on DCF / less on P/E than LARGE_CAP. A >$1T fast grower
-    # reaches here via the GROWTH mega-cap ceiling (rule 5).
+    # reaches here via the GROWTH mega-cap ceiling (rule 4).
     if market_cap > 1_000_000_000_000:
         return "MEGA_CAP"
     if market_cap > 100_000_000_000:

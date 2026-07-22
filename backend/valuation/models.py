@@ -6,7 +6,7 @@ HORIZON = 10
 MOS = 0.90
 EV_EBITDA_CAP = 20.0
 # Growth-coupled ceiling for the EV/EBITDA exit multiple. EV_EBITDA_CAP is the ceiling for
-# a slow/no-growth name (and the flat cap the SOTP path still uses); a genuine grower earns
+# a slow/no-growth name; a genuine grower earns
 # a higher ceiling so a DURABLE premium multiple — a reconstructed historical median the
 # market has paid for years — survives instead of being clamped to a mature-business level.
 # ANET's 27.5x median was silently clamped to 20x, single-handedly pricing the leg $27/sh
@@ -125,9 +125,9 @@ FUNDING_TERMINAL_FCF_MARGIN = 0.10
 FUNDING_FADE_HOLD = 2
 FUNDING_BURN_MARGIN_FLOOR = -1.0
 
-ALL_METHODS = ["dcf", "fcfe", "ev_ebitda", "pe", "ev_sales", "ddm", "pb", "rim", "sotp", "nav"]
+ALL_METHODS = ["dcf", "fcfe", "ev_ebitda", "pe", "ev_sales", "ddm", "pb", "rim", "nav"]
 SCENARIO_MODELS = {"dcf", "fcfe", "ev_ebitda", "ev_sales", "ddm", "rim"}
-APPROX_METHODS = {"sotp", "nav"}
+APPROX_METHODS = {"nav"}
 SCENARIO_KEYS = ("optimistic", "realistic", "pessimistic")
 
 
@@ -558,32 +558,15 @@ def calc_rim(fin: dict, growth: dict) -> dict:
     return {"scenarios": scenarios, "fair_value": _avg(scenarios), "weight": 0.0, "has_scenarios": True}
 
 
-# -- SOTP (EV/EBITDA with 15% conglomerate discount) ---------------------------
-def calc_sotp(fin: dict) -> dict:
-    ebitda = fin.get("ebitda_ttm")
-    multiple = fin.get("ev_ebitda")
-    shares = fin.get("shares_outstanding")
-    # A non-positive EBITDA or multiple cannot yield a meaningful EV/EBITDA-based SOTP:
-    # ebitda * multiple would either reconstruct ~current EV via a double-negative
-    # (circular, and it defeats the cap below) or push the leg negative.
-    if (ebitda is None or ebitda <= 0
-            or multiple is None or multiple <= 0 or not shares):
-        return _null_result(False)
-    multiple = min(multiple, EV_EBITDA_CAP)
-    net_debt = fin.get("net_debt") or 0
-    ev = ebitda * multiple
-    fv = _apply_mos((ev - net_debt) / shares * 0.85)
-    return {"scenarios": {k: fv for k in SCENARIO_KEYS}, "fair_value": fv, "weight": 0.0, "has_scenarios": False}
-
-
-# -- NAV (book value adjusted for net debt per share) --------------------------
+# -- NAV (book value per share) ------------------------------------------------
 def calc_nav(fin: dict) -> dict:
     bvps = fin.get("book_value_per_share")
     shares = fin.get("shares_outstanding")
     if bvps is None or not shares:
         return _null_result(False)
-    net_debt = fin.get("net_debt") or 0
-    fv = _apply_mos(bvps - net_debt / shares)
+    # book_value_per_share already nets all liabilities (equity = assets - liabilities),
+    # so subtracting net debt again double-debits it (drove NAV negative for levered REITs).
+    fv = _apply_mos(bvps)
     return {"scenarios": {k: fv for k in SCENARIO_KEYS}, "fair_value": fv, "weight": 0.0, "has_scenarios": False}
 
 

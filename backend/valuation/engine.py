@@ -110,7 +110,7 @@ FORWARD_TIERS = {"MEGA_CAP", "LARGE_CAP", "MID_CAP", "GROWTH"}
 
 # pe and ev_ebitda are dispatched explicitly (they take method-basis flags); the
 # maps cover the remaining methods with uniform signatures.
-_SINGLE_VALUE_FN = {"pb": m.calc_pb, "sotp": m.calc_sotp, "nav": m.calc_nav}
+_SINGLE_VALUE_FN = {"pb": m.calc_pb, "nav": m.calc_nav}
 # ddm is dispatched explicitly: its perpetuity is fed the SUSTAINABLE_CEIL-capped
 # growth (see evaluate), so it can't overshoot Gordon growth on a distorted name.
 _SCENARIO_FN = {
@@ -382,11 +382,11 @@ def evaluate(fin: dict) -> dict:
         ocf_ttm = fin.get("operating_cashflow")   # info fallback
     ebitda_ttm = fin.get("ebitda_ttm") or 0
 
-    # EARLY_GROWTH is *defined* by unprofitability (classifier rule 4: revenue growth
+    # EARLY_GROWTH is *defined* by unprofitability (classifier rule 3: revenue growth
     # > 20% AND eps/ebitda <= 0), so a trailing-FCF DCF is negative by construction for
     # exactly the names the tier exists to value — dragging the composite below zero and
     # declining a company its own EV/Sales leg prices fine (TEM: DCF -$47 vs EV/Sales
-    # +$29). Zero the leg and let EV/Sales + SOTP carry the tier (weights renormalize
+    # +$29). Zero the leg and let EV/Sales carry the tier (weights renormalize
     # over the surviving legs below). This also makes the pre-profit guard skip the tier
     # for the same reason FINANCIAL skips it: a zero DCF weight, nothing left to protect.
     if stock_type == "EARLY_GROWTH" and fcf_ttm is not None and fcf_ttm <= 0:

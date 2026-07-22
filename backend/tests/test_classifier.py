@@ -18,14 +18,37 @@ def test_small_negative_ebitda_is_asset_heavy():
     assert classify(fin)["stock_type"] == "ASSET_HEAVY"
 
 
-def test_conglomerate_industry():
-    fin = {"sector": "Industrials", "industry": "Conglomerates"}
-    assert classify(fin)["stock_type"] == "CONGLOMERATE"
+def test_conglomerates_industry_no_longer_conglomerate_dividend():
+    # HON-like: the old rule-3 "Conglomerates" industry no longer captures. A
+    # mature payer falls through to DIVIDEND (yield > 2.5%, payout > 40%).
+    fin = {
+        "sector": "Industrials", "industry": "Conglomerates",
+        "dividend_yield": 0.0414, "payout_ratio": 0.741,
+        "revenue_growth": 0.024, "eps_ttm": 12.53,
+    }
+    assert classify(fin)["stock_type"] == "DIVIDEND"
 
 
-def test_conglomerate_keyword_in_summary():
-    fin = {"sector": "Industrials", "long_business_summary": "A diversified holding company."}
-    assert classify(fin)["stock_type"] == "CONGLOMERATE"
+def test_conglomerates_industry_no_longer_conglomerate_midcap():
+    # MMM-like: yield 1.83% < 2.5% skips DIVIDEND, not cyclical, $88B < $100B -> MID_CAP.
+    fin = {
+        "sector": "Industrials", "industry": "Conglomerates",
+        "dividend_yield": 0.0183, "payout_ratio": 0.572,
+        "revenue_growth": 0.025, "eps_ttm": 5.19,
+        "trailing_pe": 32.9, "market_cap": 88_000_000_000,
+    }
+    assert classify(fin)["stock_type"] == "MID_CAP"
+
+
+def test_diversified_holding_keyword_no_longer_conglomerate():
+    # The old summary keyword ("diversified holding company") no longer triggers
+    # CONGLOMERATE; the name falls through to the size default.
+    fin = {
+        "sector": "Industrials",
+        "long_business_summary": "A diversified holding company.",
+        "eps_ttm": 5.0, "market_cap": 20_000_000_000,
+    }
+    assert classify(fin)["stock_type"] == "MID_CAP"
 
 
 def test_subsidiaries_boilerplate_is_not_conglomerate():
@@ -52,16 +75,12 @@ def test_early_growth():
 
 
 def test_early_growth_weights_no_sotp():
-    # SOTP is EV/EBITDA-with-a-conglomerate-discount, and EARLY_GROWTH already zeroes
-    # ev_ebitda because these names' EBITDA is near-zero / SBC-depressed / unreliable.
-    # Re-admitting the same EBITDA basis through SOTP produced a degenerate below-book
-    # value for barely-positive-EBITDA names (CRWD: $59M EBITDA -> a $3.69 SOTP dragging
-    # the composite). The 0.25 is redistributed to dcf/ev_sales preserving their ratio.
+    # SOTP was removed entirely (dead code). EARLY_GROWTH's dcf/ev_sales still carry
+    # the tier at the redistributed ratio.
     res = classify({"sector": "Technology", "revenue_growth": 0.35, "eps_ttm": -1.2,
                     "ebitda_ttm": 10})
     w = res["method_weights"]
-    assert w["sotp"]["weight"] == 0.0
-    assert w["sotp"]["enabled"] is False
+    assert "sotp" not in w
     assert w["dcf"]["weight"] == pytest.approx(0.4667, abs=1e-4)
     assert w["ev_sales"]["weight"] == pytest.approx(0.5333, abs=1e-4)
 
@@ -120,7 +139,7 @@ def test_mid_cap_weights_shape():
     res = classify({"sector": "Technology", "eps_ttm": 5.0, "market_cap": 20_000_000_000})
     assert res["method_weights"]["dcf"]["weight"] == 0.45
     assert res["method_weights"]["ev_sales"]["weight"] == 0.15
-    assert res["method_weights"]["sotp"]["weight"] == 0.0
+    assert "sotp" not in res["method_weights"]
 
 
 def test_mega_cap_weights_shape():

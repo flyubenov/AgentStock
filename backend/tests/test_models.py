@@ -12,6 +12,16 @@ def test_nav_is_exact():
     assert r["has_scenarios"] is False
 
 
+def test_nav_ignores_net_debt():
+    # NAV = bvps * MOS. book_value_per_share is already equity (assets - all
+    # liabilities, debt included), so net debt must NOT be subtracted again.
+    # A net-debt name and a net-cash name with the same bvps get the same NAV.
+    net_debt = {"book_value_per_share": 10.0, "net_debt": 5_000, "shares_outstanding": 1_000}
+    net_cash = {"book_value_per_share": 10.0, "net_debt": -2_000, "shares_outstanding": 1_000}
+    assert m.calc_nav(net_debt)["fair_value"] == pytest.approx(9.0)
+    assert m.calc_nav(net_cash)["fair_value"] == pytest.approx(9.0)
+
+
 def test_pb_justified_is_exact():
     # roe=0.10, discount=0.10 -> justifiedPB=1.0 -> fv = 10 * 1.0 * 0.90
     fin = {"book_value_per_share": 10.0, "return_on_equity": 0.10}
@@ -79,28 +89,6 @@ def test_missing_inputs_return_null():
     assert m.calc_ddm({"dividend_rate": 0}, GROWTH)["fair_value"] is None
 
 
-def test_sotp_null_on_nonpositive_ebitda():
-    # SOTP is EV/EBITDA-based (ebitda * multiple). A negative EBITDA either reconstructs
-    # ~current EV via a double-negative (circular, defeats the cap) or drags the composite
-    # negative; a zero EBITDA yields zero. Guard both so the leg drops and weights renormalize.
-    base = {"ev_ebitda": -20.0, "net_debt": 0, "shares_outstanding": 10_000_000}
-    assert m.calc_sotp({**base, "ebitda_ttm": -50_000_000})["fair_value"] is None
-    assert m.calc_sotp({**base, "ebitda_ttm": 0})["fair_value"] is None
-
-
-def test_sotp_null_on_nonpositive_multiple():
-    # A non-positive reported EV/EBITDA multiple is not a valuation multiple.
-    base = {"ebitda_ttm": 50_000_000, "net_debt": 0, "shares_outstanding": 10_000_000}
-    assert m.calc_sotp({**base, "ev_ebitda": -20.0})["fair_value"] is None
-    assert m.calc_sotp({**base, "ev_ebitda": 0})["fair_value"] is None
-
-
-def test_sotp_positive_ebitda_still_values():
-    # Sanity: a healthy positive EBITDA still produces a value (0.85 conglomerate discount).
-    fin = {"ebitda_ttm": 1_000_000, "ev_ebitda": 10.0, "net_debt": 0,
-           "shares_outstanding": 100_000}
-    r = m.calc_sotp(fin)
-    assert r["fair_value"] is not None and r["fair_value"] > 0
 
 
 def test_ev_ebitda_multiple_is_capped():
