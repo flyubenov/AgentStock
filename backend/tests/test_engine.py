@@ -987,19 +987,25 @@ def test_evaluate_funding_gap_flips_levered_burner():
     # net debt is ~82% of its market cap, so the leverage temper pulls its EARLY_GROWTH
     # optimistic ceiling down from 0.50 to 0.35 (SCEN_OPT_CEIL_EARLY_LEVERED). The bull-case
     # ev_sales growth therefore widens only to 0.35, not the 0.4145 an un-tempered ceiling
-    # would allow, so the EV lift stays behind the additive funding claim and the composite
-    # holds below the $73.21 price (fv ~= 62.07). A net-cash hyper-grower (NBIS) keeps the
-    # full 0.50 ceiling and its uplift — see test_opt_ceil_early_growth_tempered_by_leverage.
+    # would allow, so the EV lift stays behind the additive funding claim.
+    #
+    # SOTP was removed from EARLY_GROWTH (an EV/EBITDA-based leg in a tier that zeroes
+    # ev_ebitda) — so with dcf also zeroed for the burner, CRWV now values on ev_sales
+    # ALONE (fv ~= 71.38, up from 62.07 when SOTP still cushioned it). The verdict still
+    # holds SELL below the $73.21 price, but on a thinner margin (+2.6%): the funding-gap
+    # bridge + the leverage-tempered optimistic ceiling are what keep even the pure-ev_sales
+    # composite under price. A net-cash hyper-grower (NBIS) keeps the full 0.50 ceiling and
+    # its uplift — see test_opt_ceil_early_growth_tempered_by_leverage.
     result = engine.evaluate(_crwv_like_fin())
     assert result["status"] == "completed"
     assert result["stock_type"] == "EARLY_GROWTH"
     assert "ev_sales" in result["fair_value_breakdown"]
-    assert "sotp" in result["fair_value_breakdown"]
+    assert "sotp" not in result["fair_value_breakdown"]  # SOTP removed from EARLY_GROWTH
     assert "dcf" not in result["fair_value_breakdown"]  # zeroed for EARLY_GROWTH burner
     fv = result["fair_value"]
     assert fv is not None and fv > 0
     assert fv < _crwv_like_fin()["current_price"]  # verdict stays SELL, not flipped to BUY
-    assert fv == pytest.approx(62.07, abs=0.01)
+    assert fv == pytest.approx(71.38, abs=0.01)
 
 
 def test_evaluate_funding_gap_below_frozen_bridge():
