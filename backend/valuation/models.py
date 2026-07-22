@@ -6,7 +6,7 @@ HORIZON = 10
 MOS = 0.90
 EV_EBITDA_CAP = 20.0
 # Growth-coupled ceiling for the EV/EBITDA exit multiple. EV_EBITDA_CAP is the ceiling for
-# a slow/no-growth name (and the flat cap the SOTP path still uses); a genuine grower earns
+# a slow/no-growth name; a genuine grower earns
 # a higher ceiling so a DURABLE premium multiple — a reconstructed historical median the
 # market has paid for years — survives instead of being clamped to a mature-business level.
 # ANET's 27.5x median was silently clamped to 20x, single-handedly pricing the leg $27/sh
@@ -558,7 +558,7 @@ def calc_rim(fin: dict, growth: dict) -> dict:
     return {"scenarios": scenarios, "fair_value": _avg(scenarios), "weight": 0.0, "has_scenarios": True}
 
 
-# -- NAV (book value adjusted for net debt per share) --------------------------
+# -- NAV (book value per share) ------------------------------------------------
 def calc_nav(fin: dict) -> dict:
     bvps = fin.get("book_value_per_share")
     shares = fin.get("shares_outstanding")

@@ -382,11 +382,11 @@ def evaluate(fin: dict) -> dict:
         ocf_ttm = fin.get("operating_cashflow")   # info fallback
     ebitda_ttm = fin.get("ebitda_ttm") or 0
 
-    # EARLY_GROWTH is *defined* by unprofitability (classifier rule 4: revenue growth
+    # EARLY_GROWTH is *defined* by unprofitability (classifier rule 3: revenue growth
     # > 20% AND eps/ebitda <= 0), so a trailing-FCF DCF is negative by construction for
     # exactly the names the tier exists to value — dragging the composite below zero and
     # declining a company its own EV/Sales leg prices fine (TEM: DCF -$47 vs EV/Sales
-    # +$29). Zero the leg and let EV/Sales + SOTP carry the tier (weights renormalize
+    # +$29). Zero the leg and let EV/Sales carry the tier (weights renormalize
     # over the surviving legs below). This also makes the pre-profit guard skip the tier
     # for the same reason FINANCIAL skips it: a zero DCF weight, nothing left to protect.
     if stock_type == "EARLY_GROWTH" and fcf_ttm is not None and fcf_ttm <= 0:
