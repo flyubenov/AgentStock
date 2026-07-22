@@ -75,16 +75,12 @@ def test_early_growth():
 
 
 def test_early_growth_weights_no_sotp():
-    # SOTP is EV/EBITDA-with-a-conglomerate-discount, and EARLY_GROWTH already zeroes
-    # ev_ebitda because these names' EBITDA is near-zero / SBC-depressed / unreliable.
-    # Re-admitting the same EBITDA basis through SOTP produced a degenerate below-book
-    # value for barely-positive-EBITDA names (CRWD: $59M EBITDA -> a $3.69 SOTP dragging
-    # the composite). The 0.25 is redistributed to dcf/ev_sales preserving their ratio.
+    # SOTP was removed entirely (dead code). EARLY_GROWTH's dcf/ev_sales still carry
+    # the tier at the redistributed ratio.
     res = classify({"sector": "Technology", "revenue_growth": 0.35, "eps_ttm": -1.2,
                     "ebitda_ttm": 10})
     w = res["method_weights"]
-    assert w["sotp"]["weight"] == 0.0
-    assert w["sotp"]["enabled"] is False
+    assert "sotp" not in w
     assert w["dcf"]["weight"] == pytest.approx(0.4667, abs=1e-4)
     assert w["ev_sales"]["weight"] == pytest.approx(0.5333, abs=1e-4)
 
@@ -143,7 +139,7 @@ def test_mid_cap_weights_shape():
     res = classify({"sector": "Technology", "eps_ttm": 5.0, "market_cap": 20_000_000_000})
     assert res["method_weights"]["dcf"]["weight"] == 0.45
     assert res["method_weights"]["ev_sales"]["weight"] == 0.15
-    assert res["method_weights"]["sotp"]["weight"] == 0.0
+    assert "sotp" not in res["method_weights"]
 
 
 def test_mega_cap_weights_shape():

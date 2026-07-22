@@ -185,14 +185,6 @@ def test_evaluate_declines_when_composite_nonpositive():
     assert result["price_vs_fair_value_pct"] is None
 
 
-def test_evaluate_sotp_flagged_approx():
-    # Conglomerate weights sotp + nav + ev_ebitda
-    fin = _large_cap_fin(industry="Conglomerates", book_value_per_share=20.0)
-    result = engine.evaluate(fin)
-    assert result["stock_type"] == "CONGLOMERATE"
-    assert result["fair_value_breakdown"]["sotp"]["is_approx"] is True
-
-
 def test_evaluate_pre_profit_guard_fires():
     # Deeply FCF-negative AND operations consume cash (OCF < 0) -> genuine burn,
     # declined as PRE_PROFIT (not a capex investor).

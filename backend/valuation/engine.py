@@ -110,7 +110,7 @@ FORWARD_TIERS = {"MEGA_CAP", "LARGE_CAP", "MID_CAP", "GROWTH"}
 
 # pe and ev_ebitda are dispatched explicitly (they take method-basis flags); the
 # maps cover the remaining methods with uniform signatures.
-_SINGLE_VALUE_FN = {"pb": m.calc_pb, "sotp": m.calc_sotp, "nav": m.calc_nav}
+_SINGLE_VALUE_FN = {"pb": m.calc_pb, "nav": m.calc_nav}
 # ddm is dispatched explicitly: its perpetuity is fed the SUSTAINABLE_CEIL-capped
 # growth (see evaluate), so it can't overshoot Gordon growth on a distorted name.
 _SCENARIO_FN = {
