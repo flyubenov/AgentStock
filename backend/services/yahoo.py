@@ -329,7 +329,7 @@ def extract_financials(info: dict) -> dict:
         "company_name": info.get("shortName") or info.get("longName"),
         "current_price": price,
         "market_cap": info.get("marketCap"),
-        "shares_outstanding": info.get("sharesOutstanding"),
+        "shares_outstanding": _effective_shares(info, price),
         "fcf_ttm": info.get("freeCashflow"),
         "net_debt": _net_debt(info),
         "ebitda_ttm": info.get("ebitda"),

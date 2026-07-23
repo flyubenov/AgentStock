@@ -127,3 +127,25 @@ def test_effective_shares_never_corrects_downward():
     # implied < reported -> keep reported (never introduce inflation).
     info = {"sharesOutstanding": 200_000_000, "marketCap": 5_000_000_000}
     assert _effective_shares(info, price=50.0) == 200_000_000  # implied 100M < 200M
+
+
+def test_extract_financials_corrects_multi_class_shares():
+    info = {
+        "symbol": "KVYO",
+        "currentPrice": 16.11,
+        "marketCap": 4_821_398_016,
+        "sharesOutstanding": 140_897_018,  # Class A only
+    }
+    fin = extract_financials(info)
+    assert fin["shares_outstanding"] == pytest.approx(4_821_398_016 / 16.11)
+
+
+def test_extract_financials_keeps_single_class_shares():
+    info = {
+        "symbol": "AAPL",
+        "currentPrice": 200.0,
+        "marketCap": 3_000_000_000_000,
+        "sharesOutstanding": 15_000_000_000,  # implied == reported
+    }
+    fin = extract_financials(info)
+    assert fin["shares_outstanding"] == 15_000_000_000
