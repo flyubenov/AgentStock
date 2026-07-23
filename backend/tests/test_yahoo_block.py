@@ -149,3 +149,28 @@ def test_extract_financials_keeps_single_class_shares():
     }
     fin = extract_financials(info)
     assert fin["shares_outstanding"] == 15_000_000_000
+
+
+def test_effective_shares_adopts_implied_when_reported_zero():
+    # A zero reported count is as unusable as None -> backfill from marketCap/price.
+    info = {"sharesOutstanding": 0, "marketCap": 5_000_000_000}
+    assert _effective_shares(info, price=50.0) == pytest.approx(100_000_000)
+
+
+def test_effective_shares_keeps_reported_at_exact_gate_boundary():
+    # implied == reported * 1.03 exactly: strict '>' gate keeps reported (no correction).
+    info = {"sharesOutstanding": 100_000_000, "marketCap": 103_000_000 * 100}
+    assert _effective_shares(info, price=100.0) == 100_000_000
+
+
+def test_extract_financials_uses_regular_market_price_fallback():
+    # When currentPrice is absent, extract_financials falls back to regularMarketPrice,
+    # and that fallback price must drive the share-count correction too.
+    info = {
+        "symbol": "KVYO",
+        "regularMarketPrice": 16.11,  # no currentPrice
+        "marketCap": 4_821_398_016,
+        "sharesOutstanding": 140_897_018,  # Class A only
+    }
+    fin = extract_financials(info)
+    assert fin["shares_outstanding"] == pytest.approx(4_821_398_016 / 16.11)
