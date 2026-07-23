@@ -1,12 +1,48 @@
 from __future__ import annotations
 import asyncio, json, os
+import time as _time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from models import TickerResult, DatabaseRow
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 _service = None
+
+# All Google Sheets I/O runs on THIS single-thread executor — never the default
+# multi-thread executor. googleapiclient is built on httplib2, which is NOT
+# thread-safe: the batch runs many _run_one tasks concurrently, and routing their
+# Sheets calls (2 upserts/ticker, ~10 API calls each) through the shared service on
+# the default pool let multiple threads hit the one httplib2 connection at once —
+# it corrupted the connection and froze the whole recalc after ~6 tickers. One
+# dedicated thread serializes every call so the shared client is only ever touched
+# by a single thread. It also smooths the request burst against the Sheets quota.
+_SHEETS_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="sheets")
+_SHEETS_MAX_RETRIES = int(os.getenv("SHEETS_MAX_RETRIES", "6"))
+
+
+async def _run_sheets(fn, *args):
+    """Run a blocking Sheets call on the dedicated single-thread executor."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(_SHEETS_EXECUTOR, fn, *args)
+
+
+def _execute(request):
+    """Execute a Sheets API request, backing off on quota (429) / transient (500,
+    503) errors so a full recalc self-throttles under the ~60-req/min per-user
+    limit instead of erroring out or hanging. Non-quota errors (403, 404, parse
+    errors) are raised immediately — retrying them is pointless."""
+    for attempt in range(_SHEETS_MAX_RETRIES):
+        try:
+            return request.execute()
+        except HttpError as e:
+            status = getattr(getattr(e, "resp", None), "status", None)
+            if status in (429, 500, 503) and attempt < _SHEETS_MAX_RETRIES - 1:
+                _time.sleep(min(2 ** attempt, 20))
+                continue
+            raise
 
 
 def _get_service():
@@ -24,24 +60,22 @@ def _sheet_id() -> str:
 
 async def read_tickers() -> list[str]:
     """Read ticker symbols from the 'Tickers' sheet, column A."""
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, _read_tickers_sync)
+    return await _run_sheets(_read_tickers_sync)
 
 
 def _read_tickers_sync() -> list[str]:
     svc = _get_service()
-    result = svc.spreadsheets().values().get(
+    result = _execute(svc.spreadsheets().values().get(
         spreadsheetId=_sheet_id(),
         range="Tickers!A:A",
-    ).execute()
+    ))
     rows = result.get("values", [])
     return [row[0].strip() for row in rows if row and row[0].strip() and row[0].strip().upper() != "TICKER"]
 
 
 async def upsert_result(result: TickerResult) -> None:
     """Upsert a TickerResult row into the 'Database' sheet."""
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, _upsert_sync, result)
+    await _run_sheets(_upsert_sync, result)
 
 
 _MODEL_COLS = ["dcf", "ev_ebitda", "ev_sales", "pe", "ddm", "rim", "pb", "sotp", "nav"]
@@ -81,9 +115,9 @@ def _upsert_sync(result: TickerResult) -> None:
     _ensure_database_sheet(svc, sheet_id)
 
     # Read existing data
-    existing = svc.spreadsheets().values().get(
+    existing = _execute(svc.spreadsheets().values().get(
         spreadsheetId=sheet_id, range="Database!A:A"
-    ).execute()
+    ))
     rows = existing.get("values", [])
 
     # Find row index (1-based, +1 for header)
@@ -97,45 +131,44 @@ def _upsert_sync(result: TickerResult) -> None:
 
     if target_row is None:
         # Append new row
-        svc.spreadsheets().values().append(
+        _execute(svc.spreadsheets().values().append(
             spreadsheetId=sheet_id,
             range="Database!A:A",
             valueInputOption="RAW",
             insertDataOption="INSERT_ROWS",
             body={"values": [new_row]},
-        ).execute()
+        ))
     else:
         # Overwrite existing row
-        svc.spreadsheets().values().update(
+        _execute(svc.spreadsheets().values().update(
             spreadsheetId=sheet_id,
             range=f"Database!A{target_row}",
             valueInputOption="RAW",
             body={"values": [new_row]},
-        ).execute()
+        ))
 
 
 async def read_database() -> list[DatabaseRow]:
     """Read all rows from the 'Database' sheet and return as DatabaseRow list."""
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, _read_database_sync)
+    return await _run_sheets(_read_database_sync)
 
 
 def _ensure_database_sheet(svc, sheet_id: str) -> None:
     """Create the 'Database' sheet tab if it doesn't exist."""
-    meta = svc.spreadsheets().get(spreadsheetId=sheet_id).execute()
+    meta = _execute(svc.spreadsheets().get(spreadsheetId=sheet_id))
     existing = [s["properties"]["title"] for s in meta.get("sheets", [])]
     if "Database" not in existing:
-        svc.spreadsheets().batchUpdate(
+        _execute(svc.spreadsheets().batchUpdate(
             spreadsheetId=sheet_id,
             body={"requests": [{"addSheet": {"properties": {"title": "Database"}}}]},
-        ).execute()
+        ))
         # Write headers on the new sheet
-        svc.spreadsheets().values().update(
+        _execute(svc.spreadsheets().values().update(
             spreadsheetId=sheet_id,
             range="Database!A1",
             valueInputOption="RAW",
             body={"values": [_DB_HEADERS]},
-        ).execute()
+        ))
 
 
 def _row_to_database_row(row: list) -> DatabaseRow:
@@ -164,10 +197,10 @@ def _read_database_sync() -> list[DatabaseRow]:
     svc = _get_service()
     sheet_id = _sheet_id()
     try:
-        result = svc.spreadsheets().values().get(
+        result = _execute(svc.spreadsheets().values().get(
             spreadsheetId=sheet_id,
             range="Database!A:Q",      # was A:P — now includes the Quality Score mirror
-        ).execute()
+        ))
     except Exception as e:
         if "Unable to parse range" in str(e) or "400" in str(e):
             _ensure_database_sheet(svc, sheet_id)

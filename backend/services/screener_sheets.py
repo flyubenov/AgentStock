@@ -2,7 +2,7 @@ from __future__ import annotations
 import asyncio, json, os
 from datetime import datetime, timezone
 from screener.models import ScreenerResult
-from services.sheets import _get_service, _sheet_id
+from services.sheets import _get_service, _sheet_id, _execute, _run_sheets
 
 # metric fields persisted, in column order (matches ScreenerMetrics scored + reference set)
 _METRIC_COLS = [
@@ -92,65 +92,65 @@ def _col_range() -> str:
 
 
 def _ensure_screener_sheet(svc, sheet_id: str) -> None:
-    meta = svc.spreadsheets().get(spreadsheetId=sheet_id).execute()
+    meta = _execute(svc.spreadsheets().get(spreadsheetId=sheet_id))
     props = {s["properties"]["title"]: s["properties"] for s in meta.get("sheets", [])}
     if _SCREENER_TAB not in props:
-        svc.spreadsheets().batchUpdate(
+        _execute(svc.spreadsheets().batchUpdate(
             spreadsheetId=sheet_id,
             body={"requests": [{"addSheet": {"properties": {"title": _SCREENER_TAB}}}]},
-        ).execute()
-        svc.spreadsheets().values().update(
+        ))
+        _execute(svc.spreadsheets().values().update(
             spreadsheetId=sheet_id, range=f"{_SCREENER_TAB}!A1",
             valueInputOption="RAW", body={"values": [_SCREENER_HEADERS]},
-        ).execute()
+        ))
         return
     # Tab exists — ensure row 1 is the header row. Repairs a tab created empty (or
     # populated before headers were ever written): without a header row the reader
     # skips the first data row via rows[1:] and the columns stay unlabelled.
-    first = svc.spreadsheets().values().get(
-        spreadsheetId=sheet_id, range=f"{_SCREENER_TAB}!1:1").execute().get("values", [])
+    first = _execute(svc.spreadsheets().values().get(
+        spreadsheetId=sheet_id, range=f"{_SCREENER_TAB}!1:1")).get("values", [])
     row1 = first[0] if first else []
     if row1 and row1[0] == _SCREENER_HEADERS[0]:
         if row1 != _SCREENER_HEADERS:
             # header row exists but is outdated (schema grew) — refresh it in place
-            svc.spreadsheets().values().update(
+            _execute(svc.spreadsheets().values().update(
                 spreadsheetId=sheet_id, range=f"{_SCREENER_TAB}!A1",
                 valueInputOption="RAW", body={"values": [_SCREENER_HEADERS]},
-            ).execute()
+            ))
         return
     if row1:
         # real data already sits in row 1 — insert a blank row above it so the
         # header write below doesn't overwrite that record
-        svc.spreadsheets().batchUpdate(
+        _execute(svc.spreadsheets().batchUpdate(
             spreadsheetId=sheet_id,
             body={"requests": [{"insertDimension": {
                 "range": {"sheetId": props[_SCREENER_TAB]["sheetId"],
                           "dimension": "ROWS", "startIndex": 0, "endIndex": 1},
                 "inheritFromBefore": False}}]},
-        ).execute()
-    svc.spreadsheets().values().update(
+        ))
+    _execute(svc.spreadsheets().values().update(
         spreadsheetId=sheet_id, range=f"{_SCREENER_TAB}!A1",
         valueInputOption="RAW", body={"values": [_SCREENER_HEADERS]},
-    ).execute()
+    ))
 
 
 def _mirror_quality_score(svc, sheet_id: str, ticker: str, score) -> None:
     # ensure the Database Q1 header, then update Q{row} for this ticker if present
-    svc.spreadsheets().values().update(
+    _execute(svc.spreadsheets().values().update(
         spreadsheetId=sheet_id, range=f"Database!{DATABASE_QSCORE_COL}1",
         valueInputOption="RAW", body={"values": [["Quality Score"]]},
-    ).execute()
-    existing = svc.spreadsheets().values().get(
-        spreadsheetId=sheet_id, range="Database!A:A").execute()
+    ))
+    existing = _execute(svc.spreadsheets().values().get(
+        spreadsheetId=sheet_id, range="Database!A:A"))
     rows = existing.get("values", [])
     for i, row in enumerate(rows):
         if row and row[0].strip().upper() == ticker.upper():
-            svc.spreadsheets().values().update(
+            _execute(svc.spreadsheets().values().update(
                 spreadsheetId=sheet_id,
                 range=f"Database!{DATABASE_QSCORE_COL}{i + 1}",
                 valueInputOption="RAW",
                 body={"values": [[_num(score)]]},
-            ).execute()
+            ))
             return
 
 
@@ -158,8 +158,8 @@ def _upsert_sync(r: ScreenerResult) -> None:
     svc = _get_service()
     sheet_id = _sheet_id()
     _ensure_screener_sheet(svc, sheet_id)
-    existing = svc.spreadsheets().values().get(
-        spreadsheetId=sheet_id, range=f"{_SCREENER_TAB}!A:A").execute()
+    existing = _execute(svc.spreadsheets().values().get(
+        spreadsheetId=sheet_id, range=f"{_SCREENER_TAB}!A:A"))
     rows = existing.get("values", [])
     target = None
     for i, row in enumerate(rows):
@@ -168,28 +168,27 @@ def _upsert_sync(r: ScreenerResult) -> None:
             break
     new_row = _result_to_row(r)
     if target is None:
-        svc.spreadsheets().values().append(
+        _execute(svc.spreadsheets().values().append(
             spreadsheetId=sheet_id, range=f"{_SCREENER_TAB}!A:A",
             valueInputOption="RAW", insertDataOption="INSERT_ROWS",
-            body={"values": [new_row]}).execute()
+            body={"values": [new_row]}))
     else:
-        svc.spreadsheets().values().update(
+        _execute(svc.spreadsheets().values().update(
             spreadsheetId=sheet_id, range=f"{_SCREENER_TAB}!A{target}",
-            valueInputOption="RAW", body={"values": [new_row]}).execute()
+            valueInputOption="RAW", body={"values": [new_row]}))
     _mirror_quality_score(svc, sheet_id, r.ticker, r.quality_score)
 
 
 async def upsert_screener_result(r: ScreenerResult) -> None:
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, _upsert_sync, r)
+    await _run_sheets(_upsert_sync, r)
 
 
 def _read_sync() -> list[ScreenerResult]:
     svc = _get_service()
     sheet_id = _sheet_id()
     try:
-        result = svc.spreadsheets().values().get(
-            spreadsheetId=sheet_id, range=_col_range()).execute()
+        result = _execute(svc.spreadsheets().values().get(
+            spreadsheetId=sheet_id, range=_col_range()))
     except Exception as e:
         if "Unable to parse range" in str(e):
             _ensure_screener_sheet(svc, sheet_id)
@@ -200,8 +199,7 @@ def _read_sync() -> list[ScreenerResult]:
 
 
 async def read_screener() -> list[ScreenerResult]:
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, _read_sync)
+    return await _run_sheets(_read_sync)
 
 
 async def read_screener_one(ticker: str) -> ScreenerResult | None:
