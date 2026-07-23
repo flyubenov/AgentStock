@@ -48,6 +48,7 @@ async def start_analysis(request: AnalyseRequest):
         "failed": 0,
         "results": [],
         "invalid": invalid_tickers,
+        "running": [],
     }
     asyncio.create_task(_run_job(job_id, valid_tickers, cancel_event))
     return {"job_id": job_id, "total": len(valid_tickers), "invalid": invalid_tickers}
@@ -69,16 +70,28 @@ async def recalculate_all():
     cancel_event = asyncio.Event()
     _cancel_events[job_id] = cancel_event
     _jobs[job_id] = {"status": "running", "total": len(tickers),
-                     "completed": 0, "failed": 0, "results": [], "invalid": []}
+                     "completed": 0, "failed": 0, "results": [], "invalid": [],
+                     "running": []}
     asyncio.create_task(_run_job(job_id, tickers, cancel_event))
     return {"job_id": job_id, "total": len(tickers)}
 
 
+def _drop_running(job: dict, ticker: str | None) -> None:
+    if ticker and ticker in job["running"]:
+        job["running"].remove(ticker)
+
+
 async def _run_job(job_id: str, tickers: list[str], cancel_event: asyncio.Event):
     job = _jobs[job_id]
+    job.setdefault("running", [])
     async for event in run_batch(tickers, job_id, cancel_event):
-        if event["type"] == "ticker_done":
+        if event["type"] == "ticker_start":
+            # Live "now evaluating" indicator: which tickers are in flight right now.
+            if event["ticker"] not in job["running"]:
+                job["running"].append(event["ticker"])
+        elif event["type"] == "ticker_done":
             result = event["result"]
+            _drop_running(job, result.get("ticker"))
             job["results"].append(result)
             # A ticker only counts as failed when BOTH pipelines failed; the two
             # evaluations are independent, so a good screener rescues a failed FV.
@@ -89,9 +102,11 @@ async def _run_job(job_id: str, tickers: list[str], cancel_event: asyncio.Event)
             else:
                 job["completed"] += 1
         elif event["type"] == "ticker_error":
+            _drop_running(job, event.get("ticker"))
             job["failed"] += 1
         elif event["type"] == "job_done":
             job["status"] = event["status"]
+            job["running"] = []
 
 
 @router.get("/stream/{job_id}")
@@ -117,6 +132,7 @@ async def stream_job(job_id: str):
                     "total": job["total"],
                     "completed": job["completed"],
                     "failed": job["failed"],
+                    "running": list(job.get("running", [])),
                 }),
             }
             if job["status"] in ("completed", "failed", "cancelled"):

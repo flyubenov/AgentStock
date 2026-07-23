@@ -1,6 +1,8 @@
+import os
 import time
 import yfinance as yf
 from functools import lru_cache
+from services.yf_pool import note_rate_limit
 
 try:
     from yfinance.exceptions import YFRateLimitError as _YFRateLimitError
@@ -8,6 +10,8 @@ except ImportError:
     _YFRateLimitError = None
 
 _RETRIES = 3
+# Hard network timeout on the price-history pulls (see services.yahoo._HISTORY_TIMEOUT).
+_HISTORY_TIMEOUT = float(os.getenv("YF_HISTORY_TIMEOUT", "30"))
 # seconds, multiplied by attempt number (3, 6 = 9s worst case). Kept short so a
 # rate-limited statement fetch releases its yf_pool worker quickly instead of holding
 # a thread for tens of seconds.
@@ -42,9 +46,11 @@ def _fetch_statement(ticker: str, attr: str) -> dict | None:
             df = getattr(yf.Ticker(ticker), attr)
             return _statement_to_dict(df)
         except Exception as e:
-            if _is_rate_limit(e) and attempt < _RETRIES - 1:
-                time.sleep(_BACKOFF * (attempt + 1))
-                continue
+            if _is_rate_limit(e):
+                note_rate_limit()  # let the batch orchestrator slow its pacing
+                if attempt < _RETRIES - 1:
+                    time.sleep(_BACKOFF * (attempt + 1))
+                    continue
             return None
     return None
 
@@ -67,7 +73,7 @@ def fetch_cashflow_annual(ticker: str) -> dict | None:
 @lru_cache(maxsize=8)
 def fetch_treasury_10y() -> float | None:
     try:
-        hist = yf.Ticker("^TNX").history(period="5d")
+        hist = yf.Ticker("^TNX").history(period="5d", timeout=_HISTORY_TIMEOUT)
         if hist is None or hist.empty:
             return None
         return float(hist["Close"].iloc[-1]) / 100.0  # ^TNX quotes the yield in percent (4.57 = 4.57%)
@@ -78,7 +84,7 @@ def fetch_treasury_10y() -> float | None:
 @lru_cache(maxsize=256)
 def fetch_price_monthly(ticker: str) -> tuple[float, ...]:
     try:
-        hist = yf.Ticker(ticker).history(period="6y", interval="1mo")
+        hist = yf.Ticker(ticker).history(period="6y", interval="1mo", timeout=_HISTORY_TIMEOUT)
         if hist is None or hist.empty:
             return tuple()
         return tuple(float(x) for x in hist["Close"].tolist() if x == x)

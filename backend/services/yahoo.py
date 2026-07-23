@@ -1,9 +1,10 @@
+import os
 import statistics
 import time
 import yfinance as yf
 from functools import lru_cache
 from datetime import date as _date
-from services.yf_pool import run_yf
+from services.yf_pool import run_yf, note_rate_limit
 
 EV_EBITDA_HISTORY_MIN_YEARS = 3
 
@@ -17,6 +18,10 @@ _RATE_LIMIT_RETRIES = 3
 # rate-limited fetch releases its pool worker quickly; the dedicated yf_pool already
 # contains the blast radius, this bounds how long a single fetch can hold a thread.
 _RATE_LIMIT_BACKOFF = 3.0
+# Hard network timeout on the price-history pull (the one yfinance call here that
+# accepts one). Without it a stuck socket holds a yf_pool worker indefinitely —
+# enough of those starve the pool and the whole batch freezes with no error.
+_HISTORY_TIMEOUT = float(os.getenv("YF_HISTORY_TIMEOUT", "30"))
 
 
 async def fetch_ticker_info(ticker: str) -> dict:
@@ -40,6 +45,8 @@ def _fetch_sync(ticker: str) -> dict:
                 or "rate" in str(e).lower()
                 or "too many" in str(e).lower()
             )
+            if is_rate_limit:
+                note_rate_limit()  # let the batch orchestrator slow its pacing
             if is_rate_limit and attempt < _RATE_LIMIT_RETRIES - 1:
                 time.sleep(_RATE_LIMIT_BACKOFF * (attempt + 1))
                 continue
@@ -75,6 +82,8 @@ def _fetch_cashflow_sync(ticker: str) -> dict | None:
                 or "rate" in str(e).lower()
                 or "too many" in str(e).lower()
             )
+            if is_rate_limit:
+                note_rate_limit()  # let the batch orchestrator slow its pacing
             if is_rate_limit and attempt < _RATE_LIMIT_RETRIES - 1:
                 time.sleep(_RATE_LIMIT_BACKOFF * (attempt + 1))
                 continue
@@ -107,6 +116,8 @@ def _fetch_quarterly_revenue_sync(ticker: str) -> tuple | None:
                 or "rate" in str(e).lower()
                 or "too many" in str(e).lower()
             )
+            if is_rate_limit:
+                note_rate_limit()  # let the batch orchestrator slow its pacing
             if is_rate_limit and attempt < _RATE_LIMIT_RETRIES - 1:
                 time.sleep(_RATE_LIMIT_BACKOFF * (attempt + 1))
                 continue
@@ -230,7 +241,7 @@ def _fetch_ev_ebitda_history_sync(ticker: str) -> dict | None:
         split_dates = [d.date() for d in tk.splits.index] if tk.splits is not None else []
         if statements_predate_split(latest_stmt, split_dates):
             return None
-        hist = tk.history(period="6y", interval="1mo")
+        hist = tk.history(period="6y", interval="1mo", timeout=_HISTORY_TIMEOUT)
         if hist is None or hist.empty:
             return None
         avg_close = hist["Close"].groupby(hist.index.year).mean()
@@ -265,7 +276,10 @@ def _fetch_ev_ebitda_history_sync(ticker: str) -> dict | None:
                 "revenue_growth": _statement_revenue_yoy(rows),
                 "op_income_growth": _statement_op_income_yoy(rows),
                 "net_income_growth": _statement_net_income_yoy(rows)}
-    except Exception:
+    except Exception as e:
+        msg = str(e).lower()
+        if "rate" in msg or "too many" in msg:
+            note_rate_limit()
         return None
 
 

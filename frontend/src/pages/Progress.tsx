@@ -12,7 +12,7 @@ export default function Progress() {
   const { jobId } = useParams<{ jobId: string }>()
   const navigate = useNavigate()
   const location = useLocation()
-  const { status, total, completed, failed, results, tickerStatuses, cancel } = useAnalysisStream(jobId ?? null)
+  const { status, total, completed, failed, results, running, tickerStatuses, cancel } = useAnalysisStream(jobId ?? null)
   const [sortKey, setSortKey] = useState<SortKey>('price_vs_fair_value_pct')
   const [sortAsc, setSortAsc] = useState(false)
 
@@ -63,6 +63,11 @@ export default function Progress() {
           {failed > 0 && <span className="text-red-400">{failed} failed</span>}
           {status === 'running' && <span className="text-blue-400 animate-pulse">Running...</span>}
         </div>
+        {status === 'running' && running.length > 0 && (
+          <div className="mt-3 text-xs text-blue-400 animate-pulse font-mono">
+            Now evaluating: {running.join(', ')}
+          </div>
+        )}
       </div>
 
       {allTickers.length > 0 && (

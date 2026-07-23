@@ -7,6 +7,7 @@ interface StreamState {
   completed: number
   failed: number
   results: TickerResult[]
+  running: string[]
   tickerStatuses: Record<string, 'queued' | 'running' | 'done' | 'failed'>
 }
 
@@ -19,6 +20,7 @@ export function useAnalysisStream(jobId: string | null) {
     completed: 0,
     failed: 0,
     results: [],
+    running: [],
     tickerStatuses: {},
   })
   const esRef = useRef<EventSource | null>(null)
@@ -39,7 +41,18 @@ export function useAnalysisStream(jobId: string | null) {
 
     es.addEventListener('status', (e) => {
       const data: Partial<StreamState> = JSON.parse(e.data)
-      setState(prev => ({ ...prev, ...data }))
+      setState(prev => {
+        const running = data.running ?? prev.running
+        // Mark the currently-in-flight tickers as 'running' so their chips pulse —
+        // but never override a ticker that already finished (done/failed wins).
+        const tickerStatuses = { ...prev.tickerStatuses }
+        for (const t of running) {
+          if (tickerStatuses[t] !== 'done' && tickerStatuses[t] !== 'failed') {
+            tickerStatuses[t] = 'running'
+          }
+        }
+        return { ...prev, ...data, running, tickerStatuses }
+      })
       if (data.status && ['completed', 'failed', 'cancelled'].includes(data.status)) {
         es.close()
       }
