@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch
-from services.yahoo import format_financial_block, extract_financials
+from services.yahoo import format_financial_block, extract_financials, _effective_shares
 
 _MOCK_INFO = {
     "symbol": "AAPL",
@@ -92,3 +92,38 @@ def test_real_fcf_falls_back_to_info_when_no_cashflow():
     assert real_fcf(None, 37.0) == 37.0
     empty = {"free_cash_flow": None, "operating_cash_flow": None, "capital_expenditure": None}
     assert real_fcf(empty, 37.0) == 37.0
+
+
+def test_effective_shares_corrects_multi_class_upward():
+    # KVYO-shape: sharesOutstanding is Class A only; marketCap capitalizes all classes.
+    info = {"sharesOutstanding": 140_897_018, "marketCap": 4_821_398_016}
+    result = _effective_shares(info, price=16.11)
+    assert result == pytest.approx(4_821_398_016 / 16.11)  # ~299.3M, not 140.9M
+
+
+def test_effective_shares_keeps_reported_within_tolerance():
+    # Single-class: implied (1.02x) is inside the 3% gate -> keep reported.
+    info = {"sharesOutstanding": 100_000_000, "marketCap": 102_000_000 * 100}
+    result = _effective_shares(info, price=100.0)
+    assert result == 100_000_000
+
+
+def test_effective_shares_keeps_reported_when_marketcap_missing():
+    info = {"sharesOutstanding": 100_000_000}
+    assert _effective_shares(info, price=100.0) == 100_000_000
+
+
+def test_effective_shares_keeps_reported_when_price_missing():
+    info = {"sharesOutstanding": 100_000_000, "marketCap": 5_000_000_000}
+    assert _effective_shares(info, price=None) == 100_000_000
+
+
+def test_effective_shares_adopts_implied_when_reported_missing():
+    info = {"sharesOutstanding": None, "marketCap": 5_000_000_000}
+    assert _effective_shares(info, price=50.0) == pytest.approx(100_000_000)
+
+
+def test_effective_shares_never_corrects_downward():
+    # implied < reported -> keep reported (never introduce inflation).
+    info = {"sharesOutstanding": 200_000_000, "marketCap": 5_000_000_000}
+    assert _effective_shares(info, price=50.0) == 200_000_000  # implied 100M < 200M
