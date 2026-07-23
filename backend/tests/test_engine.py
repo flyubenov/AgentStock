@@ -905,6 +905,65 @@ def test_non_operating_guard_does_not_preempt_the_distorted_earnings_path():
     assert s["realistic"] == pytest.approx(0.20)   # min(revenue_growth 0.261, cap 0.20)
 
 
+def _inflated_earnings_fin(**over):
+    """LYFT FY2025-shaped: a one-time ~$2.9B deferred-tax valuation-allowance release lifted
+    trailing EPS to 6.60 (forward 2.09) and printed +489% earnings growth, while revenue grew
+    only 14%. Forward P/E (7.02) sits far ABOVE trailing (2.22) because the market prices the
+    non-recurring gain away — the inverse of the depressed-trailing (AVGO) signal."""
+    fin = _growth_fin(revenue_growth=0.14, earnings_growth=4.89,
+                      eps_ttm=6.60, forward_eps=2.09,
+                      trailing_pe=2.22, forward_pe=7.02)
+    fin.update(over)
+    return fin
+
+
+def test_earnings_inflated_fires_on_one_time_trailing_gain():
+    # Positive earnings growth whose trailing base is a one-off (forward P/E far above
+    # trailing AND forward EPS below trailing) is the LYFT fingerprint.
+    assert engine._earnings_inflated(_inflated_earnings_fin()) is True
+
+
+def test_earnings_inflated_ignores_negative_growth_that_is_the_distorted_path():
+    # eg < 0 is _earnings_distorted's domain (acquisition amortization, ABBV/ETN), not this
+    # one. The two guards must partition on the sign of earnings growth, never collide.
+    assert engine._earnings_inflated(_inflated_earnings_fin(earnings_growth=-0.30)) is False
+
+
+def test_earnings_inflated_ignores_genuine_growers_with_rising_forward_eps():
+    # A real grower (MU-shape: eg 13.7, forward EPS far ABOVE trailing, forward P/E BELOW
+    # trailing) has feps>=teps, so the guard must not fire and steal its earnings signal.
+    assert engine._earnings_inflated(
+        _inflated_earnings_fin(forward_eps=12.0, trailing_pe=22.0, forward_pe=6.0)) is False
+
+
+def test_earnings_inflated_ignores_modest_forward_decline_below_the_ratio():
+    # Forward P/E only mildly above trailing (< DEPRESSED_PE_RATIO) is an ordinary soft year,
+    # not a base-distorting one-off -> keep the earnings source.
+    assert engine._earnings_inflated(
+        _inflated_earnings_fin(trailing_pe=6.0, forward_pe=7.02)) is False  # ratio 1.17
+
+
+def test_earnings_inflated_requires_both_pe_readings():
+    assert engine._earnings_inflated(_inflated_earnings_fin(trailing_pe=None)) is False
+    assert engine._earnings_inflated(_inflated_earnings_fin(forward_pe=None)) is False
+
+
+def test_growth_sourced_from_revenue_when_trailing_earnings_are_one_time_inflated():
+    # LYFT: +489% earnings growth is a non-recurring deferred-tax release, not a real rate.
+    # Sourcing it (capped to 0.20) would project a decade of 20% growth off a tax benefit;
+    # the guard re-sources from the 14% revenue growth instead.
+    s = engine.build_scenarios(_inflated_earnings_fin(), stock_type="GROWTH")
+    assert s["realistic"] == pytest.approx(0.14)   # min(revenue_growth 0.14, cap 0.20)
+
+
+def test_growth_keeps_earnings_source_for_a_real_grower_with_rising_forward_eps():
+    # feps>teps (forward earnings up) => not inflated => earnings growth (capped) stands.
+    s = engine.build_scenarios(
+        _inflated_earnings_fin(earnings_growth=0.30, forward_eps=12.0,
+                               trailing_pe=22.0, forward_pe=6.0), stock_type="GROWTH")
+    assert s["realistic"] == pytest.approx(0.20)   # 0.30 earnings growth, capped at 0.20
+
+
 def _pre_commercial_fin(**over):
     """ASTS-shaped: hyper-growth off a sub-floor revenue base, burning cash, with no
     other leg left standing — EV/Sales alone carries the valuation."""
