@@ -287,6 +287,36 @@ async def fetch_ev_ebitda_history(ticker: str) -> dict | None:
     return await run_yf(_fetch_ev_ebitda_history_sync, ticker.upper())
 
 
+# Below this divergence, market_cap/price and sharesOutstanding agree to rounding
+# (single-class names <=0.1%); above it a hidden share class is present (PLTR ~4.2%;
+# KVYO/GOOGL ~2.1x, where sharesOutstanding is the Class A float only). 3% clears
+# intraday market_cap/price staleness and sits below the smallest real multi-class gap.
+_SHARE_GATE_RATIO = 1.03
+
+
+def _effective_shares(info: dict, price: float | None) -> float | None:
+    """Fully-diluted share count for the per-share fair-value divide.
+
+    yfinance's sharesOutstanding returns only one class for multi-class companies
+    (typically the Class A float), while marketCap capitalizes every class. Dividing
+    an absolute equity value by the single-class count inflates per-share FV by
+    true_shares / reported_shares. Correct UPWARD ONLY and gated at _SHARE_GATE_RATIO:
+    adopt market_cap/price when it exceeds the reported count beyond the gate; else
+    keep the reported count (single-class names stay byte-identical). Falls back to
+    the reported count whenever market_cap or price is unavailable.
+    """
+    reported = info.get("sharesOutstanding")
+    market_cap = info.get("marketCap")
+    if not market_cap or not price:
+        return reported
+    implied = market_cap / price
+    if not reported or reported <= 0:
+        return implied
+    if implied > reported * _SHARE_GATE_RATIO:
+        return implied
+    return reported
+
+
 def extract_financials(info: dict) -> dict:
     """Normalise yfinance info dict to the fields our valuation scripts need."""
     price = info.get("currentPrice") or info.get("regularMarketPrice")
@@ -299,7 +329,7 @@ def extract_financials(info: dict) -> dict:
         "company_name": info.get("shortName") or info.get("longName"),
         "current_price": price,
         "market_cap": info.get("marketCap"),
-        "shares_outstanding": info.get("sharesOutstanding"),
+        "shares_outstanding": _effective_shares(info, price),
         "fcf_ttm": info.get("freeCashflow"),
         "net_debt": _net_debt(info),
         "ebitda_ttm": info.get("ebitda"),
