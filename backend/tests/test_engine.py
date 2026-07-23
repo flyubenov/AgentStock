@@ -964,6 +964,23 @@ def test_growth_keeps_earnings_source_for_a_real_grower_with_rising_forward_eps(
     assert s["realistic"] == pytest.approx(0.20)   # 0.30 earnings growth, capped at 0.20
 
 
+def test_inflated_earnings_with_no_revenue_growth_floors_not_falls_back_to_earnings():
+    # Edge: an inflated name missing revenue_growth must NOT fall back to the 489% earnings
+    # figure — the re-source (min(revenue_growth or 0, cap)) yields 0, floored to 0.02, the
+    # same as _earnings_distorted handles a missing revenue reading.
+    s = engine.build_scenarios(_inflated_earnings_fin(revenue_growth=None), stock_type="GROWTH")
+    assert s["realistic"] == pytest.approx(0.02)
+
+
+def test_inflated_earnings_ddm_path_respects_the_sustainable_ceiling():
+    # The DDM/perpetuity copy passes distorted_cap=SUSTAINABLE_CEIL. The guard's re-source
+    # (min(revenue_growth 0.14, SUSTAINABLE_CEIL)) must bound Gordon growth to the ceiling.
+    # Without the guard the else-branch would carry earnings growth to the 0.20 base here,
+    # so this pins that the re-source honours the perpetuity cap.
+    s = engine.build_scenarios(_inflated_earnings_fin(), distorted_cap=engine.SUSTAINABLE_CEIL)
+    assert s["realistic"] == pytest.approx(engine.SUSTAINABLE_CEIL)
+
+
 def _pre_commercial_fin(**over):
     """ASTS-shaped: hyper-growth off a sub-floor revenue base, burning cash, with no
     other leg left standing — EV/Sales alone carries the valuation."""
