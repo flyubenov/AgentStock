@@ -195,6 +195,38 @@ def _earnings_non_operating(fin: dict) -> bool:
     return ni_g is not None and ni_g > 0 and og is not None and og <= 0
 
 
+def _earnings_inflated(fin: dict) -> bool:
+    """GAAP earnings treated as one-time INFLATED: positive earnings growth whose trailing
+    base is a non-recurring gain (a deferred-tax valuation-allowance release, a litigation /
+    asset-sale gain, a cyclical peak), so the earnings-growth figure describes the one-off,
+    not the business. Growth is then sourced from revenue, like _earnings_distorted.
+
+    This is the inverse of models._normalized_forward_eps's depressed-trailing signal: THERE
+    trailing earnings understate (trailing P/E far ABOVE forward, AVGO post-VMware), and the
+    P/E leg swaps in forward EPS; HERE they overstate (forward P/E far above trailing) AND
+    the market prices forward EPS BELOW trailing. The DEPRESSED_PE_RATIO threshold is reused
+    for the mirrored ratio so no second knob is introduced.
+
+    LYFT FY2025: a ~$2.9B deferred-tax valuation-allowance release lifted trailing EPS to 6.60
+    (forward 2.09) and printed +489% earnings growth on 14% revenue growth. Without this guard
+    the else-branch would cap that 489% at 0.20 and project a decade of 20% growth off a
+    non-cash tax benefit. The two positive-earnings guards partition cleanly: forward earnings
+    BELOW trailing (feps < teps) is a one-off overstating the base; a real grower (MU: forward
+    EPS far above trailing, forward P/E below trailing) has feps >= teps and never fires.
+
+    Both requirements matter. feps < teps alone would catch a genuine soft year; the P/E-ratio
+    threshold demands the market price a decline far steeper than an ordinary soft patch, which
+    is the signature of a non-recurring trailing gain rather than an operating slip."""
+    eg = fin.get("earnings_growth")
+    if eg is None or eg <= 0:
+        return False
+    tpe, fpe = fin.get("trailing_pe"), fin.get("forward_pe")
+    if not (tpe and fpe and tpe > 0 and fpe / tpe > m.DEPRESSED_PE_RATIO):
+        return False
+    feps, teps = fin.get("forward_eps"), fin.get("eps_ttm")
+    return feps is not None and teps is not None and feps < teps
+
+
 def _ramp(g: float, lo: float, hi: float, at_lo: float, at_hi: float) -> float:
     """Flat floor -> linear ramp -> saturate, the shape _ev_ebitda_ceiling's g_frac uses.
     Returns at_lo for g <= lo, at_hi for g >= hi, linear in between."""
@@ -312,6 +344,12 @@ def build_scenarios(fin: dict, distorted_cap: float = 0.20,
         # the earnings figure does. The existing max(0.02, ...) floor keeps a declining
         # operating line from projecting negative growth.
         raw = fin["op_income_growth_stmt"]
+    elif _earnings_inflated(fin):
+        # Trailing earnings are one-time-inflated (LYFT's deferred-tax release), so the
+        # earnings-growth figure describes the one-off. Re-source from revenue like the
+        # distorted path. Placed AFTER _earnings_non_operating so the operating-line signal
+        # still wins when a statement reading is present; LYFT has none, so it lands here.
+        raw = min(fin.get("revenue_growth") or 0, distorted_cap)
     else:
         raw = (fin.get("earnings_growth") or fin.get("revenue_growth")
                or fin.get("revenue_growth_stmt") or 0.07)
