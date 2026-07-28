@@ -1050,19 +1050,25 @@ def test_build_scenarios_outpaces_does_not_fire_without_revenue_reading():
     assert s["realistic"] == pytest.approx(0.20)   # rev None -> guard False -> else caps 0.52 to 0.20
 
 
-def test_build_scenarios_inflated_precedence_beats_outpaces():
-    # LYFT is BOTH inflated (fpe/tpe>1.5, feps<teps) AND outpaces (eg 4.89 >> rev 0.14). The
-    # inflated guard is earlier in the chain and wins; both re-source from revenue here, so the
-    # value is identical, but this pins the precedence order so a future reorder can't regress it.
+def test_build_scenarios_lyft_inflated_path_intact_after_adding_outpaces_guard():
+    # Regression guard for THIS task: LYFT-shape matches BOTH positive-earnings fingerprints
+    # (inflated: fpe/tpe>1.5, feps<teps; and eg 4.89 >> rev 0.14). Adding the outpaces guard as
+    # the 4th branch must leave the existing inflated path's result intact — LYFT still sources
+    # revenue and lands at 0.14. (Both guards use the same re-source formula, so this pins that
+    # the VALUE is undisturbed, not which branch runs — precedence between two identical formulas
+    # is unobservable by design.)
     s = engine.build_scenarios(_inflated_earnings_fin(), stock_type="GROWTH")
-    assert s["realistic"] == pytest.approx(0.14)   # revenue growth via _earnings_inflated
+    assert s["realistic"] == pytest.approx(0.14)
 
 
-def test_build_scenarios_outpaces_inert_for_self_limiting_hypergrower():
-    # DDOG-shape: eg 1.04, rev 0.32 (above the cap). Whether or not the guard fires, revenue-
-    # sourced and earnings-sourced both cap to 0.20 -> realistic unchanged. Self-limiting.
-    fired = engine.build_scenarios(_outpaces_fin(earnings_growth=1.04, revenue_growth=0.32))
-    assert fired["realistic"] == pytest.approx(0.20)
+def test_build_scenarios_outpaces_inert_at_base_cap():
+    # Self-limiting at the base 0.20 cap: for a name NOT eligible for the elevated cap, a fired
+    # guard changes nothing — min(revenue 0.21, 0.20) == min(earnings 0.70, 0.20) == 0.20. A bare
+    # dict carries no cash-generative fields, so _cap_eligible is False and the cap stays 0.20.
+    # (Elevated-cap-eligible names in the 0.25 band are the documented deferred limitation, not
+    # this test.) The guard DOES fire here (0.70 > 0.21*3) yet the result equals not firing.
+    s = engine.build_scenarios({"earnings_growth": 0.70, "revenue_growth": 0.21})
+    assert s["realistic"] == pytest.approx(0.20)
 
 
 def _pre_commercial_fin(**over):

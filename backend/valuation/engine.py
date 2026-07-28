@@ -243,10 +243,15 @@ def _earnings_outpaces_revenue(fin: dict) -> bool:
 
     The revenue floor (>= GROWTH_TRUST_FLOOR) keeps this off flat-revenue recovery names,
     whose earnings spike is a depressed-base effect, not consolidation on a growing business
-    (HON/MMM/UNH). It also self-limits above the cap: once revenue growth exceeds the ~0.20
-    growth cap (DDOG/PLTR/GOOGL/MU), revenue-sourced == earnings-sourced == cap, so firing
-    changes nothing. It bites only in the 0.10 <= rev < ~0.20 band — a healthy double-digit
-    grower whose quarterly earnings run 3x+ its revenue (CRM post-Informatica, CSCO post-Splunk)."""
+    (HON/MMM/UNH). Above the cap it is self-limiting for names at the base GROWTH_CAP_BASE
+    (0.20): once revenue growth reaches 0.20, min(revenue, 0.20) == min(earnings, 0.20) == cap,
+    so firing changes nothing. Caveat: a cash-generative name eligible for the ELEVATED cap
+    (up to 0.25 via _cap_eligible) that fires the guard re-sources at distorted_cap (0.20) and
+    is therefore cut from the elevated cap down to 0.20 — a bounded <=5pp reduction. Empirically
+    no real name both fires (eg > 3x rev, rev >= 0.10) AND rides the elevated cap: the live sweep
+    moves only CRM and CSCO, both base-cap names with sub-0.20 revenue. So in practice it bites
+    the 0.10 <= rev < ~0.20 band — a healthy double-digit grower whose quarterly earnings run
+    3x+ its revenue (CRM post-Informatica, CSCO post-Splunk)."""
     eg = fin.get("earnings_growth")
     rg = fin.get("revenue_growth")
     return (eg is not None and eg > 0

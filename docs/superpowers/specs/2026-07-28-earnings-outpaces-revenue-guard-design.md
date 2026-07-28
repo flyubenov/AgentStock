@@ -139,9 +139,14 @@ The two-sided band is the whole point:
 - **Lower bound (floor 0.10):** excludes flat-revenue *recovery* names (HON/MMM/UNH),
   whose earnings jump is a depressed-base artifact, not consolidation on a growing top
   line. Sourcing those from ~0% revenue would wrongly crush them to the 0.02 floor.
-- **Upper bound (emergent from the ~0.20 cap):** genuine hyper-growers (DDOG, PLTR, MU,
-  GOOGL) have revenue growth above the cap, so revenue-sourced == earnings-sourced ==
-  cap. The guard is inert for them.
+- **Upper bound (emergent from the base 0.20 cap):** genuine hyper-growers (DDOG, PLTR, MU,
+  GOOGL) have revenue growth above the base cap, so revenue-sourced == earnings-sourced ==
+  cap and the guard is inert. Caveat: this exact equality holds at the base GROWTH_CAP_BASE
+  (0.20); a *cash-generative* name eligible for the elevated cap (up to 0.25) that fires the
+  guard re-sources at distorted_cap (0.20) and is cut from the elevated cap to 0.20 — a
+  bounded ≤5pp reduction. Empirically no real name both fires and rides the elevated cap (the
+  sweep moves only CRM/CSCO, both sub-0.20-revenue base-cap names), so this residual is a
+  documented, immaterial limitation, not a live effect.
 
 So it bites precisely on healthy-but-mature double-digit growers whose quarterly earnings
 run 3×+ their revenue — the acquisition-consolidation signature.
