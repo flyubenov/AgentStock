@@ -227,6 +227,33 @@ def _earnings_inflated(fin: dict) -> bool:
     return feps is not None and teps is not None and feps < teps
 
 
+def _earnings_outpaces_revenue(fin: dict) -> bool:
+    """GAAP earnings growth runs far ahead of revenue growth — the signature of a
+    just-consolidated acquisition, where acquired revenue/earnings land in the trailing
+    quarter and inflate the quarterly-YoY earnings figure into a one-time step change,
+    not a rate the business compounds. Growth is re-sourced from revenue, like
+    _earnings_distorted / _earnings_inflated.
+
+    The exact mirror of models._forward_target_pe's divergence re-sourcing: THERE revenue
+    outpaces earnings 3x (a tiny noisy quarterly earnings print on a fast grower, HOOD) and
+    the PEG target sources growth from revenue; HERE earnings outpace revenue 3x and the
+    realistic leg sources growth from revenue. Both operands are the quarterly-YoY info
+    figures, so the comparison is like-with-like, and both reused thresholds
+    (GROWTH_TRUST_FLOOR, GROWTH_REVENUE_RATIO) carry over unchanged — no second knob.
+
+    The revenue floor (>= GROWTH_TRUST_FLOOR) keeps this off flat-revenue recovery names,
+    whose earnings spike is a depressed-base effect, not consolidation on a growing business
+    (HON/MMM/UNH). It also self-limits above the cap: once revenue growth exceeds the ~0.20
+    growth cap (DDOG/PLTR/GOOGL/MU), revenue-sourced == earnings-sourced == cap, so firing
+    changes nothing. It bites only in the 0.10 <= rev < ~0.20 band — a healthy double-digit
+    grower whose quarterly earnings run 3x+ its revenue (CRM post-Informatica, CSCO post-Splunk)."""
+    eg = fin.get("earnings_growth")
+    rg = fin.get("revenue_growth")
+    return (eg is not None and eg > 0
+            and rg is not None and rg >= m.GROWTH_TRUST_FLOOR
+            and eg > rg * m.GROWTH_REVENUE_RATIO)
+
+
 def _ramp(g: float, lo: float, hi: float, at_lo: float, at_hi: float) -> float:
     """Flat floor -> linear ramp -> saturate, the shape _ev_ebitda_ceiling's g_frac uses.
     Returns at_lo for g <= lo, at_hi for g >= hi, linear in between."""

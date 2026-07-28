@@ -981,6 +981,45 @@ def test_inflated_earnings_ddm_path_respects_the_sustainable_ceiling():
     assert s["realistic"] == pytest.approx(engine.SUSTAINABLE_CEIL)
 
 
+def _outpaces_fin(**over):
+    """CRM-shaped: quarterly-YoY earnings growth (0.522, inflated by just-consolidated
+    Informatica revenue) runs ~4x the ~13% revenue growth. A step change in the size of
+    the business from the acquired quarter, not a rate the business compounds."""
+    fin = _growth_fin(earnings_growth=0.522, revenue_growth=0.133)
+    fin.update(over)
+    return fin
+
+
+def test_earnings_outpaces_revenue_fires_on_acquisition_consolidation_shape():
+    # eg>0, rev>=floor 0.10, eg > rev*3.0 (0.522 > 0.133*3 = 0.399) -> the CRM fingerprint.
+    assert engine._earnings_outpaces_revenue(_outpaces_fin()) is True
+
+
+def test_earnings_outpaces_revenue_excluded_below_revenue_floor():
+    # HON/MMM/UNH-shape: a big earnings jump on flat revenue is a depressed-base recovery,
+    # NOT consolidation on a growing top line. rev < GROWTH_TRUST_FLOOR must not fire, or the
+    # re-source would crush a recovering name to the 0.02 floor off its ~0% revenue.
+    assert engine._earnings_outpaces_revenue(_outpaces_fin(revenue_growth=0.043)) is False
+
+
+def test_earnings_outpaces_revenue_excluded_when_ratio_not_met():
+    # A normal fast grower whose earnings lead revenue by less than 3x (eg 0.30 vs rev 0.13,
+    # ratio 2.26) is real operating growth -> keep the earnings source.
+    assert engine._earnings_outpaces_revenue(_outpaces_fin(earnings_growth=0.30)) is False
+
+
+def test_earnings_outpaces_revenue_excluded_at_exact_ratio_boundary():
+    # Strict '>' : eg exactly == rev*3.0 does NOT fire (0.399 == 0.133*3).
+    assert engine._earnings_outpaces_revenue(_outpaces_fin(earnings_growth=0.399)) is False
+
+
+def test_earnings_outpaces_revenue_requires_both_readings_and_positive_earnings():
+    assert engine._earnings_outpaces_revenue(_outpaces_fin(earnings_growth=None)) is False
+    assert engine._earnings_outpaces_revenue(_outpaces_fin(revenue_growth=None)) is False
+    # eg <= 0 is _earnings_distorted's domain, never this guard.
+    assert engine._earnings_outpaces_revenue(_outpaces_fin(earnings_growth=-0.30)) is False
+
+
 def _pre_commercial_fin(**over):
     """ASTS-shaped: hyper-growth off a sub-floor revenue base, burning cash, with no
     other leg left standing — EV/Sales alone carries the valuation."""
