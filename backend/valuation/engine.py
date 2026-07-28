@@ -227,6 +227,38 @@ def _earnings_inflated(fin: dict) -> bool:
     return feps is not None and teps is not None and feps < teps
 
 
+def _earnings_outpaces_revenue(fin: dict) -> bool:
+    """GAAP earnings growth runs far ahead of revenue growth — the signature of a
+    just-consolidated acquisition, where acquired revenue/earnings land in the trailing
+    quarter and inflate the quarterly-YoY earnings figure into a one-time step change,
+    not a rate the business compounds. Growth is re-sourced from revenue, like
+    _earnings_distorted / _earnings_inflated.
+
+    The exact mirror of models._forward_target_pe's divergence re-sourcing: THERE revenue
+    outpaces earnings 3x (a tiny noisy quarterly earnings print on a fast grower, HOOD) and
+    the PEG target sources growth from revenue; HERE earnings outpace revenue 3x and the
+    realistic leg sources growth from revenue. Both operands are the quarterly-YoY info
+    figures, so the comparison is like-with-like, and both reused thresholds
+    (GROWTH_TRUST_FLOOR, GROWTH_REVENUE_RATIO) carry over unchanged — no second knob.
+
+    The revenue floor (>= GROWTH_TRUST_FLOOR) keeps this off flat-revenue recovery names,
+    whose earnings spike is a depressed-base effect, not consolidation on a growing business
+    (HON/MMM/UNH). Above the cap it is self-limiting for names at the base GROWTH_CAP_BASE
+    (0.20): once revenue growth reaches 0.20, min(revenue, 0.20) == min(earnings, 0.20) == cap,
+    so firing changes nothing. Caveat: a cash-generative name eligible for the ELEVATED cap
+    (up to 0.25 via _cap_eligible) that fires the guard re-sources at distorted_cap (0.20) and
+    is therefore cut from the elevated cap down to 0.20 — a bounded <=5pp reduction. Empirically
+    no real name both fires (eg > 3x rev, rev >= 0.10) AND rides the elevated cap: the live sweep
+    moves only CRM and CSCO, both base-cap names with sub-0.20 revenue. So in practice it bites
+    the 0.10 <= rev < ~0.20 band — a healthy double-digit grower whose quarterly earnings run
+    3x+ its revenue (CRM post-Informatica, CSCO post-Splunk)."""
+    eg = fin.get("earnings_growth")
+    rg = fin.get("revenue_growth")
+    return (eg is not None and eg > 0
+            and rg is not None and rg >= m.GROWTH_TRUST_FLOOR
+            and eg > rg * m.GROWTH_REVENUE_RATIO)
+
+
 def _ramp(g: float, lo: float, hi: float, at_lo: float, at_hi: float) -> float:
     """Flat floor -> linear ramp -> saturate, the shape _ev_ebitda_ceiling's g_frac uses.
     Returns at_lo for g <= lo, at_hi for g >= hi, linear in between."""
@@ -349,6 +381,13 @@ def build_scenarios(fin: dict, distorted_cap: float = 0.20,
         # earnings-growth figure describes the one-off. Re-source from revenue like the
         # distorted path. Placed AFTER _earnings_non_operating so the operating-line signal
         # still wins when a statement reading is present; LYFT has none, so it lands here.
+        raw = min(fin.get("revenue_growth") or 0, distorted_cap)
+    elif _earnings_outpaces_revenue(fin):
+        # Quarterly earnings growth runs 3x+ ahead of revenue (CRM post-Informatica, CSCO
+        # post-Splunk): a just-consolidated acquisition inflates the trailing-quarter YoY
+        # earnings into a one-time step change, not a compounding rate. Re-source from revenue
+        # like the distorted / inflated paths. Placed LAST so _earnings_inflated still wins for
+        # a one-time trailing gain (LYFT) and _earnings_non_operating for a flat operating line.
         raw = min(fin.get("revenue_growth") or 0, distorted_cap)
     else:
         raw = (fin.get("earnings_growth") or fin.get("revenue_growth")

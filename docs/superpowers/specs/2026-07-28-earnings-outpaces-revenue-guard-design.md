@@ -139,9 +139,14 @@ The two-sided band is the whole point:
 - **Lower bound (floor 0.10):** excludes flat-revenue *recovery* names (HON/MMM/UNH),
   whose earnings jump is a depressed-base artifact, not consolidation on a growing top
   line. Sourcing those from ~0% revenue would wrongly crush them to the 0.02 floor.
-- **Upper bound (emergent from the ~0.20 cap):** genuine hyper-growers (DDOG, PLTR, MU,
-  GOOGL) have revenue growth above the cap, so revenue-sourced == earnings-sourced ==
-  cap. The guard is inert for them.
+- **Upper bound (emergent from the base 0.20 cap):** genuine hyper-growers (DDOG, PLTR, MU,
+  GOOGL) have revenue growth above the base cap, so revenue-sourced == earnings-sourced ==
+  cap and the guard is inert. Caveat: this exact equality holds at the base GROWTH_CAP_BASE
+  (0.20); a *cash-generative* name eligible for the elevated cap (up to 0.25) that fires the
+  guard re-sources at distorted_cap (0.20) and is cut from the elevated cap to 0.20 — a
+  bounded ≤5pp reduction. Empirically no real name both fires and rides the elevated cap (the
+  sweep moves only CRM/CSCO, both sub-0.20-revenue base-cap names), so this residual is a
+  documented, immaterial limitation, not a live effect.
 
 So it bites precisely on healthy-but-mature double-digit growers whose quarterly earnings
 run 3×+ their revenue — the acquisition-consolidation signature.
@@ -165,6 +170,12 @@ Exactly **two** names move — both recent large acquirers — and both move *do
 less undervalued / more overvalued), which is the correct direction. CSCO is an accepted
 correct second catch: the guard treats Splunk consolidation identically to CRM's
 Informatica, on the divergence signal itself, not on any acquisition-specific input.
+
+> **Live-verified after implementation (2026-07-29):** the shipped guard reproduces this
+> direction and neighborhood — CRM $497.78 → **$331.46** (+204% → +82.6%), CSCO $84.12 →
+> **$61.64**. The small deltas from the table above are day-over-day yfinance drift (growth
+> rates and price both move), not a logic difference; the canaries were confirmed provably
+> non-firing (IREN/NBIS `earnings_growth` null; KLAC eg 0.118 vs rev 0.115, ratio ≪ 3).
 
 ## Tests (for the implementation plan / TDD phase)
 

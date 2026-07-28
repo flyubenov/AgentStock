@@ -61,6 +61,22 @@ export default function Database() {
     }
   }
 
+  const removeOne = async (ticker: string, name?: string | null) => {
+    const label = name ? `${ticker} (${name})` : ticker
+    if (!confirm(`Delete ${label} from the database?\n\nIts Fair Value and Screener records are removed permanently and it will no longer be recalculated.`)) return
+    setBusy(ticker)
+    try {
+      const res = await fetch(`${API}/api/database/${ticker}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (data.error) setError(data.error)
+      else setResults(prev => prev.filter(r => r.ticker !== ticker))
+    } catch {
+      setError(`Failed to delete ${ticker}. Is the backend running?`)
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const recalcEverything = async () => {
     setRecalcAll(true)
     try {
@@ -155,7 +171,7 @@ export default function Database() {
                   <td className="py-2 px-4 text-right text-xs text-slate-600">
                     {r.last_evaluated ? new Date(r.last_evaluated).toLocaleDateString() : '—'}
                   </td>
-                  <td className="py-2 px-2 text-right">
+                  <td className="py-2 px-2 text-right whitespace-nowrap">
                     <button
                       onClick={() => recalcOne(r.ticker)}
                       disabled={busy === r.ticker}
@@ -163,6 +179,14 @@ export default function Database() {
                       className="text-xs text-slate-500 hover:text-blue-400 disabled:opacity-50"
                     >
                       {busy === r.ticker ? '…' : '↻'}
+                    </button>
+                    <button
+                      onClick={() => removeOne(r.ticker, r.company_name)}
+                      disabled={busy === r.ticker}
+                      title="Delete from database — stops it being recalculated"
+                      className="ml-3 text-xs text-slate-600 hover:text-red-400 disabled:opacity-50"
+                    >
+                      🗑
                     </button>
                   </td>
                 </tr>

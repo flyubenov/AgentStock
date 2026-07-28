@@ -21,7 +21,9 @@ def _large_cap_fin(**over):
 
 
 def test_build_scenarios_capped():
-    s = engine.build_scenarios({"earnings_growth": 0.56, "revenue_growth": 0.10})
+    # eg 0.28 exceeds the 0.20 cap but stays below rev*3 (0.30), so this exercises capping,
+    # NOT the _earnings_outpaces_revenue guard (which would re-source to revenue 0.10).
+    s = engine.build_scenarios({"earnings_growth": 0.28, "revenue_growth": 0.10})
     assert s["realistic"] == 0.20             # base capped at 0.20 (unchanged)
     # band: g = info revenue growth 0.10 (at the floor) -> up 0.05 -> opt 0.25, clipped by
     # the 0.35 default ceiling; the old corroboration gate no longer collapses it to the cap.
@@ -507,8 +509,11 @@ def test_build_scenarios_corroborated_compounder_above_magnitude_band():
 
 
 def test_build_scenarios_statement_growth_preferred_over_info():
-    # info 0.30 would give 0.2125; statement 0.70 wins -> 0.25
-    s = engine.build_scenarios(_hypergrower_fin(revenue_growth_stmt=0.70, revenue_growth=0.30))
+    # info 0.30 would give cap 0.2125; statement 0.70 wins -> cap 0.25. earnings_growth 0.85
+    # sits above the cap (so realistic == cap) but below info-rev*3 (0.90), keeping the
+    # _earnings_outpaces_revenue guard inert so this isolates the cap-source mechanism.
+    s = engine.build_scenarios(_hypergrower_fin(revenue_growth_stmt=0.70, revenue_growth=0.30,
+                                                earnings_growth=0.85))
     assert s["realistic"] == pytest.approx(0.25)
 
 
@@ -979,6 +984,91 @@ def test_inflated_earnings_ddm_path_respects_the_sustainable_ceiling():
     # so this pins that the re-source honours the perpetuity cap.
     s = engine.build_scenarios(_inflated_earnings_fin(), distorted_cap=engine.SUSTAINABLE_CEIL)
     assert s["realistic"] == pytest.approx(engine.SUSTAINABLE_CEIL)
+
+
+def _outpaces_fin(**over):
+    """CRM-shaped: quarterly-YoY earnings growth (0.522, inflated by just-consolidated
+    Informatica revenue) runs ~4x the ~13% revenue growth. A step change in the size of
+    the business from the acquired quarter, not a rate the business compounds."""
+    fin = _growth_fin(earnings_growth=0.522, revenue_growth=0.133)
+    fin.update(over)
+    return fin
+
+
+def test_earnings_outpaces_revenue_fires_on_acquisition_consolidation_shape():
+    # eg>0, rev>=floor 0.10, eg > rev*3.0 (0.522 > 0.133*3 = 0.399) -> the CRM fingerprint.
+    assert engine._earnings_outpaces_revenue(_outpaces_fin()) is True
+
+
+def test_earnings_outpaces_revenue_excluded_below_revenue_floor():
+    # HON/MMM/UNH-shape: a big earnings jump on flat revenue is a depressed-base recovery,
+    # NOT consolidation on a growing top line. rev < GROWTH_TRUST_FLOOR must not fire, or the
+    # re-source would crush a recovering name to the 0.02 floor off its ~0% revenue.
+    assert engine._earnings_outpaces_revenue(_outpaces_fin(revenue_growth=0.043)) is False
+
+
+def test_earnings_outpaces_revenue_excluded_when_ratio_not_met():
+    # A normal fast grower whose earnings lead revenue by less than 3x (eg 0.30 vs rev 0.13,
+    # ratio 2.26) is real operating growth -> keep the earnings source.
+    assert engine._earnings_outpaces_revenue(_outpaces_fin(earnings_growth=0.30)) is False
+
+
+def test_earnings_outpaces_revenue_excluded_at_exact_ratio_boundary():
+    # Strict '>' : eg exactly == rev*3.0 does NOT fire (0.399 == 0.133*3).
+    assert engine._earnings_outpaces_revenue(_outpaces_fin(earnings_growth=0.399)) is False
+
+
+def test_earnings_outpaces_revenue_requires_both_readings_and_positive_earnings():
+    assert engine._earnings_outpaces_revenue(_outpaces_fin(earnings_growth=None)) is False
+    assert engine._earnings_outpaces_revenue(_outpaces_fin(revenue_growth=None)) is False
+    # eg <= 0 is _earnings_distorted's domain, never this guard.
+    assert engine._earnings_outpaces_revenue(_outpaces_fin(earnings_growth=-0.30)) is False
+
+
+def test_build_scenarios_sources_revenue_when_earnings_outpace_revenue():
+    # CRM: +52.2% quarterly earnings growth is Informatica consolidation, not a rate. Capping
+    # it to 0.20 projects a decade of 20% growth off a 13% top line; the guard re-sources the
+    # realistic leg from revenue growth (0.133) instead.
+    s = engine.build_scenarios(_outpaces_fin(), stock_type="GROWTH")
+    assert s["realistic"] == pytest.approx(0.133)   # min(revenue_growth 0.133, cap 0.20)
+
+
+def test_build_scenarios_outpaces_ddm_path_respects_sustainable_ceiling():
+    # _outpaces_fin() defaults (eg 0.522, rev 0.133) fire the guard (0.522 > 0.133*3);
+    # revenue 0.133 exceeds SUSTAINABLE_CEIL so the re-source pins to the ceiling.
+    s = engine.build_scenarios(_outpaces_fin(), distorted_cap=engine.SUSTAINABLE_CEIL)
+    assert s["realistic"] == pytest.approx(engine.SUSTAINABLE_CEIL)
+
+
+def test_build_scenarios_outpaces_does_not_fire_without_revenue_reading():
+    # Unlike _earnings_inflated (which fires on P/E conditions alone and then re-sources
+    # min(revenue or 0, cap) -> 0.02 when revenue is missing), THIS guard REQUIRES a revenue
+    # reading to fire (rg is not None). With revenue None it cannot fire, so the else-branch
+    # caps the 0.52 earnings figure to 0.20 -> realistic 0.20. This pins that the guard needs
+    # revenue present and does not misfire on a missing reading.
+    s = engine.build_scenarios(_outpaces_fin(revenue_growth=None), stock_type="GROWTH")
+    assert s["realistic"] == pytest.approx(0.20)   # rev None -> guard False -> else caps 0.52 to 0.20
+
+
+def test_build_scenarios_lyft_inflated_path_intact_after_adding_outpaces_guard():
+    # Regression guard for THIS task: LYFT-shape matches BOTH positive-earnings fingerprints
+    # (inflated: fpe/tpe>1.5, feps<teps; and eg 4.89 >> rev 0.14). Adding the outpaces guard as
+    # the 4th branch must leave the existing inflated path's result intact — LYFT still sources
+    # revenue and lands at 0.14. (Both guards use the same re-source formula, so this pins that
+    # the VALUE is undisturbed, not which branch runs — precedence between two identical formulas
+    # is unobservable by design.)
+    s = engine.build_scenarios(_inflated_earnings_fin(), stock_type="GROWTH")
+    assert s["realistic"] == pytest.approx(0.14)
+
+
+def test_build_scenarios_outpaces_inert_at_base_cap():
+    # Self-limiting at the base 0.20 cap: for a name NOT eligible for the elevated cap, a fired
+    # guard changes nothing — min(revenue 0.21, 0.20) == min(earnings 0.70, 0.20) == 0.20. A bare
+    # dict carries no cash-generative fields, so _cap_eligible is False and the cap stays 0.20.
+    # (Elevated-cap-eligible names in the 0.25 band are the documented deferred limitation, not
+    # this test.) The guard DOES fire here (0.70 > 0.21*3) yet the result equals not firing.
+    s = engine.build_scenarios({"earnings_growth": 0.70, "revenue_growth": 0.21})
+    assert s["realistic"] == pytest.approx(0.20)
 
 
 def _pre_commercial_fin(**over):
