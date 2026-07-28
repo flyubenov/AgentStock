@@ -148,10 +148,13 @@ def test_build_scenarios_sources_revenue_when_earnings_outpace_revenue():
 
 
 def test_build_scenarios_outpaces_ddm_path_respects_sustainable_ceiling():
-    # The DDM/perpetuity copy passes distorted_cap=SUSTAINABLE_CEIL; the re-source
-    # min(revenue_growth, SUSTAINABLE_CEIL) must bound Gordon growth like the sibling guards.
-    s = engine.build_scenarios(_outpaces_fin(revenue_growth=0.40),
-                               distorted_cap=engine.SUSTAINABLE_CEIL)
+    # The DDM/perpetuity copy passes distorted_cap=SUSTAINABLE_CEIL; when the guard fires the
+    # re-source min(revenue_growth, SUSTAINABLE_CEIL) must bound Gordon growth like the siblings.
+    # Use _outpaces_fin() DEFAULTS (eg 0.522, rev 0.133) so the guard actually fires (0.522 >
+    # 0.133*3); revenue 0.133 exceeds SUSTAINABLE_CEIL, so the re-source pins to the ceiling.
+    # (Do NOT raise revenue_growth here: at rev 0.40 the default eg 0.522 no longer outpaces
+    # 3x, so the guard would not fire and the test would assert nothing about it.)
+    s = engine.build_scenarios(_outpaces_fin(), distorted_cap=engine.SUSTAINABLE_CEIL)
     assert s["realistic"] == pytest.approx(engine.SUSTAINABLE_CEIL)
 
 
@@ -165,19 +168,25 @@ def test_build_scenarios_outpaces_does_not_fire_without_revenue_reading():
     assert s["realistic"] == pytest.approx(0.20)   # rev None -> guard False -> else caps 0.52 to 0.20
 
 
-def test_build_scenarios_inflated_precedence_beats_outpaces():
-    # LYFT is BOTH inflated (fpe/tpe>1.5, feps<teps) AND outpaces (eg 4.89 >> rev 0.14). The
-    # inflated guard is earlier in the chain and wins; both re-source from revenue here, so the
-    # value is identical, but this pins the precedence order so a future reorder can't regress it.
+def test_build_scenarios_lyft_inflated_path_intact_after_adding_outpaces_guard():
+    # Regression guard for THIS task: LYFT-shape matches BOTH positive-earnings fingerprints
+    # (inflated: fpe/tpe>1.5, feps<teps; and eg 4.89 >> rev 0.14). Adding the outpaces guard as
+    # the 4th branch must leave the existing inflated path's result intact — LYFT still sources
+    # revenue and lands at 0.14. (Both guards use the same re-source formula, so this pins that
+    # the VALUE is undisturbed, not which branch runs — precedence between two identical formulas
+    # is unobservable by design.)
     s = engine.build_scenarios(_inflated_earnings_fin(), stock_type="GROWTH")
-    assert s["realistic"] == pytest.approx(0.14)   # revenue growth via _earnings_inflated
+    assert s["realistic"] == pytest.approx(0.14)
 
 
-def test_build_scenarios_outpaces_inert_for_self_limiting_hypergrower():
-    # DDOG-shape: eg 1.04, rev 0.32 (above the cap). Whether or not the guard fires, revenue-
-    # sourced and earnings-sourced both cap to 0.20 -> realistic unchanged. Self-limiting.
-    fired = engine.build_scenarios(_outpaces_fin(earnings_growth=1.04, revenue_growth=0.32))
-    assert fired["realistic"] == pytest.approx(0.20)
+def test_build_scenarios_outpaces_inert_at_base_cap():
+    # Self-limiting at the base 0.20 cap: for a name NOT eligible for the elevated cap, a fired
+    # guard changes nothing — min(revenue 0.21, 0.20) == min(earnings 0.70, 0.20) == 0.20. A bare
+    # dict carries no cash-generative fields, so _cap_eligible is False and the cap stays 0.20.
+    # (Elevated-cap-eligible names in the 0.25 band are the documented deferred limitation, not
+    # this test.) The guard DOES fire here (0.70 > 0.21*3) yet the result equals not firing.
+    s = engine.build_scenarios({"earnings_growth": 0.70, "revenue_growth": 0.21})
+    assert s["realistic"] == pytest.approx(0.20)
 ```
 
 - [ ] **Step 2: Run the new behavior tests to verify they fail**
@@ -204,10 +213,13 @@ In `backend/valuation/engine.py`, in `build_scenarios`, add the new branch after
 Run: `cd backend && python -m pytest tests/test_engine.py -k "outpaces or inflated_precedence" -v`
 Expected: PASS.
 
-- [ ] **Step 5: Run the full engine suite to catch the incidentally-tripping fixture**
+- [ ] **Step 5: Run the full engine suite to catch the incidentally-tripping fixtures**
 
 Run: `cd backend && python -m pytest tests/test_engine.py -v`
-Expected: exactly ONE pre-existing failure — `test_build_scenarios_capped`. Its fixture `{"earnings_growth": 0.56, "revenue_growth": 0.10}` is the guard's target shape (0.56 > 0.10×3 = 0.30, rev at the 0.10 floor), so `realistic` is now re-sourced to 0.10 instead of the asserted 0.20.
+Expected: exactly TWO pre-existing failures — `test_build_scenarios_capped` and `test_build_scenarios_statement_growth_preferred_over_info`. Both are synthetic fixtures whose (eg, info-revenue) pair happens to match the guard's target shape; Steps 6–6b fix each. If ANY OTHER existing test fails, STOP and report — the guard's real-world blast radius is CRM/CSCO only, so a third synthetic fixture tripping is a signal to reconcile, not to patch.
+
+  - `test_build_scenarios_capped`: fixture `{"earnings_growth": 0.56, "revenue_growth": 0.10}` — 0.56 > 0.10×3 = 0.30, rev at the 0.10 floor → `realistic` re-sourced to 0.10 instead of the asserted 0.20.
+  - `test_build_scenarios_statement_growth_preferred_over_info`: `_hypergrower_fin(revenue_growth_stmt=0.70, revenue_growth=0.30)` carries the helper's default `earnings_growth=1.13`; 1.13 > info-rev 0.30×3 = 0.90 → guard fires, re-sources to `min(0.30, 0.20)=0.20` instead of the asserted 0.25 (the elevated cap). See Step 6b.
 
 - [ ] **Step 6: Fix the `test_build_scenarios_capped` fixture**
 
@@ -227,10 +239,28 @@ def test_build_scenarios_capped():
     assert s["pessimistic"] == pytest.approx(0.16)
 ```
 
+- [ ] **Step 6b: Fix the `test_build_scenarios_statement_growth_preferred_over_info` fixture**
+
+This test's purpose is to verify the growth **cap source** prefers statement revenue (0.70 → cap 0.25) over info revenue (0.30 → cap 0.2125) — a mechanism unrelated to the new guard. It trips only because the shared `_hypergrower_fin` default `earnings_growth=1.13` outpaces the low info revenue (0.30) by 3×+. Lower `earnings_growth` to 0.85: still a hypergrower and still ≥ the cap (so `realistic` still pins to the cap, preserving the assertion), but below the 3× ratio (0.85 < 0.30×3 = 0.90) so the guard stays inert and the test isolates the cap-source mechanism it exists for. Do NOT change `revenue_growth`/`revenue_growth_stmt` (their divergence is the point of the test), and do NOT touch the guard.
+
+In `backend/tests/test_engine.py`, change `test_build_scenarios_statement_growth_preferred_over_info`:
+
+```python
+def test_build_scenarios_statement_growth_preferred_over_info():
+    # info 0.30 would give cap 0.2125; statement 0.70 wins -> cap 0.25. earnings_growth 0.85
+    # sits above the cap (so realistic == cap) but below info-rev*3 (0.90), keeping the
+    # _earnings_outpaces_revenue guard inert so this isolates the cap-source mechanism.
+    s = engine.build_scenarios(_hypergrower_fin(revenue_growth_stmt=0.70, revenue_growth=0.30,
+                                                earnings_growth=0.85))
+    assert s["realistic"] == pytest.approx(0.25)
+```
+
+> **Known deferred limitation (do not fix here):** when the guard fires on *any* cash-generative name eligible for the elevated cap — i.e. `_cap_eligible` with revenue growth high enough (≳0.28) to saturate `_growth_cap` toward 0.25 — it re-sources at `distorted_cap=0.20`, cutting the elevated cap down to 0.20 (a bounded ≤5pp over-correction). This is broader than a narrow "0.20–0.25 info-revenue band": it applies to any elevated-cap-eligible grower that also fires the guard. It is nonetheless immaterial in practice because no real name does *both* — the 37-ticker live sweep moves only CRM/CSCO, both base-cap names with sub-0.20 revenue (a name at the elevated cap has revenue growth well above the 3× ratio's biting range, so it doesn't fire). Fixing it would mean mixing revenue bases or special-casing the elevated cap on the normal path while keeping `distorted_cap=SUSTAINABLE_CEIL` on the DDM path — divergence from the `_earnings_distorted`/`_earnings_inflated` siblings, for zero real-world benefit. Recorded in the ledger; the final review triages it.
+
 - [ ] **Step 7: Run the full engine suite green**
 
 Run: `cd backend && python -m pytest tests/test_engine.py -v`
-Expected: PASS (all engine tests, including the amended `test_build_scenarios_capped`).
+Expected: PASS (all engine tests, including the amended `test_build_scenarios_capped` and `test_build_scenarios_statement_growth_preferred_over_info`).
 
 - [ ] **Step 8: Commit**
 
@@ -240,8 +270,10 @@ git commit -m "feat(valuation): re-source growth from revenue when earnings outp
 
 Wire _earnings_outpaces_revenue into build_scenarios as the 4th (last) growth-source
 guard, so CRM/Informatica and CSCO/Splunk consolidation no longer projects an inflated
-quarterly earnings-growth as a decade-long organic rate. Adjust test_build_scenarios_capped
-fixture (eg 0.56->0.28) so it still exercises capping without tripping the new guard."
+quarterly earnings-growth as a decade-long organic rate. Adjust two synthetic fixtures
+that incidentally match the guard shape so they keep testing their own mechanism:
+test_build_scenarios_capped (eg 0.56->0.28) and
+test_build_scenarios_statement_growth_preferred_over_info (eg 1.13->0.85)."
 ```
 
 ---
