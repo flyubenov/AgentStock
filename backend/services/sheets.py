@@ -153,6 +153,65 @@ async def read_database() -> list[DatabaseRow]:
     return await _run_sheets(_read_database_sync)
 
 
+def _tab_gid(svc, sheet_id: str, tab: str) -> int | None:
+    """Numeric sheetId of a tab by title, or None when the tab doesn't exist."""
+    meta = _execute(svc.spreadsheets().get(spreadsheetId=sheet_id))
+    for s in meta.get("sheets", []):
+        props = s.get("properties", {})
+        if props.get("title") == tab:
+            return props.get("sheetId")
+    return None
+
+
+def _delete_ticker_row_sync(tab: str, ticker: str) -> bool:
+    """Remove the row whose column A holds `ticker` from `tab`.
+
+    Deletes the row DIMENSION rather than clearing its values: the readers walk
+    rows positionally (`rows[1:]`, index-into-columns), so a cleared-but-present
+    row would come back as a blank record instead of disappearing."""
+    svc = _get_service()
+    sheet_id = _sheet_id()
+    gid = _tab_gid(svc, sheet_id, tab)
+    if gid is None:
+        return False
+
+    rows = _execute(svc.spreadsheets().values().get(
+        spreadsheetId=sheet_id, range=f"{tab}!A:A",
+    )).get("values", [])
+
+    target = None
+    for i, row in enumerate(rows):
+        if row and row[0].strip().upper() == ticker.upper():
+            target = i          # 0-based — deleteDimension indexes from 0
+            break
+    if target is None:
+        return False
+
+    _execute(svc.spreadsheets().batchUpdate(
+        spreadsheetId=sheet_id,
+        body={"requests": [{"deleteDimension": {"range": {
+            "sheetId": gid, "dimension": "ROWS",
+            "startIndex": target, "endIndex": target + 1,
+        }}}]},
+    ))
+    return True
+
+
+async def delete_ticker_row(tab: str, ticker: str) -> bool:
+    """Delete a ticker's row from `tab`. True when a row was actually removed."""
+    return await _run_sheets(_delete_ticker_row_sync, tab, ticker)
+
+
+async def delete_database_row(ticker: str) -> bool:
+    return await delete_ticker_row("Database", ticker)
+
+
+async def delete_watchlist_row(ticker: str) -> bool:
+    """Drop the ticker from the 'Tickers' input list too — otherwise the next
+    Sheets-driven run re-adds the row the user just deleted."""
+    return await delete_ticker_row("Tickers", ticker)
+
+
 def _ensure_database_sheet(svc, sheet_id: str) -> None:
     """Create the 'Database' sheet tab if it doesn't exist."""
     meta = _execute(svc.spreadsheets().get(spreadsheetId=sheet_id))

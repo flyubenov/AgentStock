@@ -2,7 +2,9 @@ from __future__ import annotations
 import asyncio, json, os
 from datetime import datetime, timezone
 from screener.models import ScreenerResult
-from services.sheets import _get_service, _sheet_id, _execute, _run_sheets
+from services.sheets import (
+    _get_service, _sheet_id, _execute, _run_sheets, delete_ticker_row,
+)
 
 # metric fields persisted, in column order (matches ScreenerMetrics scored + reference set)
 _METRIC_COLS = [
@@ -207,3 +209,9 @@ async def read_screener_one(ticker: str) -> ScreenerResult | None:
         if r.ticker.upper() == ticker.upper():
             return r
     return None
+
+
+async def delete_screener_row(ticker: str) -> bool:
+    """Remove a ticker's row from the Screener tab. The Database tab's mirrored
+    quality score goes with that tab's own row — see `delete_database_row`."""
+    return await delete_ticker_row(_SCREENER_TAB, ticker)
