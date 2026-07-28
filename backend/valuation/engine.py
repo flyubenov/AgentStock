@@ -377,6 +377,13 @@ def build_scenarios(fin: dict, distorted_cap: float = 0.20,
         # distorted path. Placed AFTER _earnings_non_operating so the operating-line signal
         # still wins when a statement reading is present; LYFT has none, so it lands here.
         raw = min(fin.get("revenue_growth") or 0, distorted_cap)
+    elif _earnings_outpaces_revenue(fin):
+        # Quarterly earnings growth runs 3x+ ahead of revenue (CRM post-Informatica, CSCO
+        # post-Splunk): a just-consolidated acquisition inflates the trailing-quarter YoY
+        # earnings into a one-time step change, not a compounding rate. Re-source from revenue
+        # like the distorted / inflated paths. Placed LAST so _earnings_inflated still wins for
+        # a one-time trailing gain (LYFT) and _earnings_non_operating for a flat operating line.
+        raw = min(fin.get("revenue_growth") or 0, distorted_cap)
     else:
         raw = (fin.get("earnings_growth") or fin.get("revenue_growth")
                or fin.get("revenue_growth_stmt") or 0.07)
