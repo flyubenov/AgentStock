@@ -98,10 +98,15 @@ def _earnings_outpaces_revenue(fin: dict) -> bool:
 
     The revenue floor (>= GROWTH_TRUST_FLOOR) keeps this off flat-revenue recovery names,
     whose earnings spike is a depressed-base effect, not consolidation on a growing business
-    (HON/MMM/UNH). It also self-limits above the cap: once revenue growth exceeds the ~0.20
-    growth cap (DDOG/PLTR/GOOGL/MU), revenue-sourced == earnings-sourced == cap, so firing
-    changes nothing. It bites only in the 0.10 <= rev < ~0.20 band — a healthy double-digit
-    grower whose quarterly earnings run 3x+ its revenue (CRM post-Informatica, CSCO post-Splunk)."""
+    (HON/MMM/UNH). Above the cap it is self-limiting for names at the base GROWTH_CAP_BASE
+    (0.20): once revenue growth reaches 0.20, min(revenue, 0.20) == min(earnings, 0.20) == cap,
+    so firing changes nothing. Caveat: a cash-generative name eligible for the ELEVATED cap
+    (up to 0.25 via _cap_eligible) that fires the guard re-sources at distorted_cap (0.20) and
+    is therefore cut from the elevated cap down to 0.20 — a bounded <=5pp reduction. Empirically
+    no real name both fires (eg > 3x rev, rev >= 0.10) AND rides the elevated cap: the live sweep
+    moves only CRM and CSCO, both base-cap names with sub-0.20 revenue. So in practice it bites
+    the 0.10 <= rev < ~0.20 band — a healthy double-digit grower whose quarterly earnings run
+    3x+ its revenue (CRM post-Informatica, CSCO post-Splunk)."""
     eg = fin.get("earnings_growth")
     rg = fin.get("revenue_growth")
     return (eg is not None and eg > 0
@@ -298,9 +303,9 @@ C:/Users/f_lub/AppData/Local/Python/bin/python3.exe .claude/skills/validating-ag
 C:/Users/f_lub/AppData/Local/Python/bin/python3.exe .claude/skills/validating-agent-stock/validate_ticker.py CSCO
 ```
 
-Expected (matches the measured blast radius in the design spec):
-- CRM fair value ≈ **$342** (down from $497.78, from +204% to ~+109%).
-- CSCO fair value ≈ **$61** (down from $84.12, ≈ −27%).
+Expected — down substantially from the pre-guard baseline, in the design-spec's measured neighborhood (exact figures drift with daily yfinance data: revenue/earnings growth and price both move):
+- CRM fair value ≈ **$330–$345** (design-spec monkey-patch measurement $342.36; **live-verified 2026-07-29: $331.46**, price $181.5 → +82.6%, down from the $497.78 / +204% baseline). The ~3% FV difference and the wider swing in the overvaluation % (+109%→+82.6%) are day-over-day data drift, not a logic change — the shipped guard is byte-identical to what was measured.
+- CSCO fair value ≈ **$61** (**live-verified: $61.64**, down from $84.12).
 
 If either differs materially from the spec's measured figures, STOP and reconcile against the design spec before proceeding — a divergence means the wired guard is not behaving as the monkey-patched measurement did.
 

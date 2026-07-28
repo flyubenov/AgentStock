@@ -171,6 +171,12 @@ less undervalued / more overvalued), which is the correct direction. CSCO is an 
 correct second catch: the guard treats Splunk consolidation identically to CRM's
 Informatica, on the divergence signal itself, not on any acquisition-specific input.
 
+> **Live-verified after implementation (2026-07-29):** the shipped guard reproduces this
+> direction and neighborhood — CRM $497.78 → **$331.46** (+204% → +82.6%), CSCO $84.12 →
+> **$61.64**. The small deltas from the table above are day-over-day yfinance drift (growth
+> rates and price both move), not a logic difference; the canaries were confirmed provably
+> non-firing (IREN/NBIS `earnings_growth` null; KLAC eg 0.118 vs rev 0.115, ratio ≪ 3).
+
 ## Tests (for the implementation plan / TDD phase)
 
 Pure-guard unit tests on synthetic `fin` dicts + `build_scenarios`/`evaluate`:
