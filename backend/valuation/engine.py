@@ -469,6 +469,17 @@ def evaluate(fin: dict) -> dict:
         ocf_ttm = fin.get("operating_cashflow")   # info fallback
     ebitda_ttm = fin.get("ebitda_ttm") or 0
 
+    # Severe forward-EPS trough (LITE signature): reuse rebased_dcf_base's guarded detector
+    # (severe forward>=2.5x-trailing ratio + impossible-margin + only-help). When the capex
+    # reroute below fires for such a name, the trailing EBITDA it would project is itself
+    # trough-distorted, so the reroute inverts onto the trustworthy forward-P/E anchor (see
+    # both reroute branches). Gated on forward tiers: the reroute's P/E leg is valued off the
+    # FORWARD multiple only for FORWARD_TIERS (calc_pe(forward=is_forward_tier)); a non-forward
+    # tier (e.g. a CYCLICAL Energy trough) would otherwise invert onto a TRAILING P/E — the
+    # depressed trough EPS — which is not the forward anchor the inversion assumes. None-safe:
+    # False for the IREN-type reroute names whose forward EPS is flat or below trailing.
+    trough_rebase = stock_type in FORWARD_TIERS and m.rebased_dcf_base(fin) is not None
+
     # EARLY_GROWTH is *defined* by unprofitability (classifier rule 3: revenue growth
     # > 20% AND eps/ebitda <= 0), so a trailing-FCF DCF is negative by construction for
     # exactly the names the tier exists to value — dragging the composite below zero and
@@ -494,7 +505,9 @@ def evaluate(fin: dict) -> dict:
             # bitcoin fair-value gains) — so EPS is excluded from the gate and trusted
             # for only 15% of the value.
             weights = {mid: 0.0 for mid in m.ALL_METHODS}
-            weights["ev_ebitda"], weights["pe"] = 0.85, 0.15
+            # Severe forward-EPS trough inverts the premise (see trough_rebase): forward P/E
+            # is the anchor, trailing EBITDA is the distorted signal -> lean onto P/E (LITE).
+            weights["ev_ebitda"], weights["pe"] = (0.15, 0.85) if trough_rebase else (0.85, 0.15)
         else:
             return {
                 "ticker": fin.get("ticker") or "",
@@ -518,7 +531,8 @@ def evaluate(fin: dict) -> dict:
     if (weights.get("dcf", 0) > 0 and fcf_ttm is not None and fcf_ttm >= 0
             and ebitda_ttm > 0 and fcf_ttm < FCF_EBITDA_FLOOR * ebitda_ttm):
         weights = {mid: 0.0 for mid in m.ALL_METHODS}
-        weights["ev_ebitda"], weights["pe"] = 0.70, 0.30
+        # Same trough inversion as the negative-FCF branch: forward P/E is the anchor.
+        weights["ev_ebitda"], weights["pe"] = (0.30, 0.70) if trough_rebase else (0.70, 0.30)
 
     is_growth = stock_type == "GROWTH"
     is_forward_tier = stock_type in FORWARD_TIERS

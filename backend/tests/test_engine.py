@@ -231,6 +231,55 @@ def test_evaluate_negative_fcf_reroutes_when_cash_generative():
         assert result["fair_value_breakdown"]["pe"]["weight"] == pytest.approx(0.15)
 
 
+def test_evaluate_negative_fcf_reroute_inverts_split_on_severe_trough():
+    # LITE pattern: the capex reroute fires (FCF<0, EBITDA>0, OCF>0), but the name is ALSO
+    # in a severe forward-EPS trough (forward >= 2.5x trailing) -> the trailing EBITDA is the
+    # trough-distorted signal and forward P/E is the trustworthy anchor, so the 0.85/0.15
+    # EV/EBITDA-heavy split INVERTS to 0.15/0.85 P/E-heavy.
+    fin = _large_cap_fin(market_cap=16_000_000_000, shares_outstanding=100_000_000,
+                         fcf_ttm=-1_130_000_000, revenue_ttm=757_000_000,
+                         operating_cashflow=246_000_000, ebitda_ttm=286_000_000,
+                         eps_ttm=0.77, forward_eps=2.50, trailing_pe=26.0, forward_pe=8.0,
+                         revenue_growth=0.40)
+    result = engine.evaluate(fin)
+    assert result["status"] == "completed"
+    assert "dcf" not in result["fair_value_breakdown"]
+    assert result["fair_value_breakdown"]["ev_ebitda"]["weight"] == pytest.approx(0.15)
+    assert result["fair_value_breakdown"]["pe"]["weight"] == pytest.approx(0.85)
+
+
+def test_evaluate_positive_fcf_reroute_inverts_split_on_severe_trough():
+    # AMZN-shaped thin-FCF reroute (0.70/0.30) that is ALSO a severe forward-EPS trough
+    # -> inverts to 0.30/0.70 P/E-heavy (forward P/E is the trustworthy anchor).
+    fin = _large_cap_fin(fcf_ttm=7_695_000_000, ebitda_ttm=155_860_000_000,
+                         revenue_ttm=742_000_000_000, eps_ttm=7.0, forward_eps=18.0,
+                         trailing_pe=27.0, forward_pe=10.0, revenue_growth=0.30)
+    result = engine.evaluate(fin)
+    assert result["status"] == "completed"
+    assert "dcf" not in result["fair_value_breakdown"]
+    assert result["fair_value_breakdown"]["ev_ebitda"]["weight"] == pytest.approx(0.30)
+    assert result["fair_value_breakdown"]["pe"]["weight"] == pytest.approx(0.70)
+
+
+def test_evaluate_reroute_trough_inversion_only_on_forward_tiers():
+    # A CYCLICAL name (Energy) can reach the negative-FCF reroute and clear the severe-trough
+    # detector (forward 3x trailing on an EPS recovery), but its P/E leg is TRAILING (only
+    # forward tiers value P/E forward). Inverting onto a trailing/trough-depressed P/E would
+    # contradict the fix's "forward P/E is the anchor" premise -> the inversion must NOT fire;
+    # the split stays 0.85/0.15. (Low revenue_growth keeps it out of the GROWTH tier.)
+    fin = _large_cap_fin(sector="Energy", industry="Oil & Gas E&P",
+                         market_cap=40_000_000_000, shares_outstanding=1_000_000_000,
+                         fcf_ttm=-2_000_000_000, revenue_ttm=10_000_000_000,
+                         operating_cashflow=1_500_000_000, ebitda_ttm=3_000_000_000,
+                         eps_ttm=1.0, forward_eps=3.0, revenue_growth=0.05,
+                         dividend_yield=0.0, payout_ratio=0.0, trailing_pe=30.0)
+    result = engine.evaluate(fin)
+    assert result["stock_type"] == "CYCLICAL"
+    assert result["fair_value_breakdown"]["ev_ebitda"]["weight"] == pytest.approx(0.85)
+    if "pe" in result["fair_value_breakdown"]:
+        assert result["fair_value_breakdown"]["pe"]["weight"] == pytest.approx(0.15)
+
+
 def test_evaluate_negative_fcf_declines_when_ebitda_nonpositive():
     # OCF > 0 but EBITDA <= 0 -> no operating-profit anchor for a multiple -> decline.
     fin = _large_cap_fin(market_cap=16_000_000_000, fcf_ttm=-1_130_000_000,
@@ -266,6 +315,8 @@ def test_evaluate_capex_distorted_positive_fcf_reroutes_off_dcf():
     assert result["status"] == "completed"
     assert "dcf" not in result["fair_value_breakdown"]     # DCF anchored to the residual is dropped
     assert "ev_ebitda" in result["fair_value_breakdown"]
+    # No forward_eps in this fixture -> not a trough -> the split stays EV/EBITDA-heavy 0.70/0.30.
+    assert result["fair_value_breakdown"]["ev_ebitda"]["weight"] == pytest.approx(0.70)
 
 
 def test_evaluate_capex_reroute_not_fired_for_healthy_conversion():
