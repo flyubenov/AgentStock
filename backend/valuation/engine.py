@@ -4,7 +4,7 @@ from valuation.classifier import classify
 from valuation import models as m
 from services.yahoo import (
     fetch_ticker_info, extract_financials, fetch_ticker_cashflow, real_fcf,
-    fetch_ev_ebitda_history, fetch_quarterly_revenue,
+    fetch_ev_ebitda_history, fetch_quarterly_revenue, _effective_shares,
 )
 from models import TickerResult
 
@@ -366,6 +366,16 @@ def build_scenarios(fin: dict, distorted_cap: float = 0.20,
                 cap = _growth_cap(g, EG_CAP_CEIL, EG_CAP_SLOPE)
         elif _cap_eligible(fin):
             cap = _growth_cap(g)
+    else:
+        # DDM / perpetuity path: distorted_cap (SUSTAINABLE_CEIL) is the ceiling the
+        # docstring promises Gordon growth can't overshoot. Guard branches already pin
+        # raw to it via min(revenue_growth, distorted_cap), but the else branch below
+        # sources from earnings_growth — which for a name that trips no guard but has a
+        # garbage-high trailing figure (NKE's 428% low-base recovery artifact, PEP)
+        # would otherwise be bounded only by GROWTH_CAP_BASE (0.20), pushing g to the
+        # 0.09 Gordon clamp and exploding the DDM leg. Bind cap to distorted_cap so the
+        # perpetuity is capped at SUSTAINABLE_CEIL regardless of the growth source.
+        cap = distorted_cap
     if _earnings_distorted(fin):
         raw = min(fin.get("revenue_growth") or 0, distorted_cap)
     elif _earnings_non_operating(fin):
@@ -700,6 +710,15 @@ async def run(ticker: str) -> TickerResult:
         # guard reads as "unknown" and leaves the growth source alone.
         fin["op_income_growth_stmt"] = hist.get("op_income_growth")
         fin["net_income_growth_stmt"] = hist.get("net_income_growth")
+        # Dual-class subsidiaries (MBLY: Intel-held Class B) can report BOTH marketCap
+        # and sharesOutstanding on a single class, so extract_financials' market_cap/price
+        # check is blind to the hidden class. The statement Ordinary Shares total exposes
+        # it — fold it into the same upward-only, gated correction (no extra round-trip;
+        # rides this fetch's balance sheet).
+        bs_shares = hist.get("ordinary_shares")
+        if bs_shares:
+            fin["shares_outstanding"] = _effective_shares(
+                info, fin.get("current_price"), bs_shares)
 
     data = evaluate(fin)
     data["last_evaluated"] = datetime.now(timezone.utc).isoformat()

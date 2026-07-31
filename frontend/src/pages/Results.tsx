@@ -3,7 +3,7 @@ import { useParams, useLocation, Link } from 'react-router-dom'
 import type { TickerResult } from '../types'
 import { fvGapColor, fvGapLabel, qualityScoreColor } from '../types'
 
-type SortKey = 'fair_value' | 'price_vs_fair_value_pct' | 'ticker'
+type SortKey = 'fair_value' | 'price_vs_fair_value_pct' | 'ticker' | 'quality_score'
 
 export default function Results() {
   const { jobId } = useParams()
@@ -12,9 +12,12 @@ export default function Results() {
   const [sortKey, setSortKey] = useState<SortKey>('price_vs_fair_value_pct')
   const [sortAsc, setSortAsc] = useState(false)
 
+  const sortVal = (r: TickerResult): string | number | null | undefined =>
+    sortKey === 'quality_score' ? r.screener?.quality_score : r[sortKey]
+
   const sorted = [...results].sort((a, b) => {
-    const av = a[sortKey] ?? (sortAsc ? Infinity : -Infinity)
-    const bv = b[sortKey] ?? (sortAsc ? Infinity : -Infinity)
+    const av = sortVal(a) ?? (sortAsc ? Infinity : -Infinity)
+    const bv = sortVal(b) ?? (sortAsc ? Infinity : -Infinity)
     return sortAsc ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1)
   })
 
@@ -61,7 +64,7 @@ export default function Results() {
               <th className="text-left py-2 px-4 cursor-pointer hover:text-slate-300" onClick={() => toggleSort('ticker')}>Ticker</th>
               <th className="text-left py-2">Company</th>
               <th className="text-left py-2 px-2">Stock Type</th>
-              <th className="text-right py-2 px-2">Quality</th>
+              <th className="text-right py-2 px-2 cursor-pointer hover:text-slate-300" onClick={() => toggleSort('quality_score')}>Quality</th>
               <th className="text-right py-2 px-2 cursor-pointer hover:text-slate-300" onClick={() => toggleSort('fair_value')}>Fair Value</th>
               <th className="text-right py-2 px-2">Price</th>
               <th className="text-right py-2 px-4 cursor-pointer hover:text-slate-300" onClick={() => toggleSort('price_vs_fair_value_pct')}>FV Gap%</th>
