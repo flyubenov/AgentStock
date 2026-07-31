@@ -366,6 +366,16 @@ def build_scenarios(fin: dict, distorted_cap: float = 0.20,
                 cap = _growth_cap(g, EG_CAP_CEIL, EG_CAP_SLOPE)
         elif _cap_eligible(fin):
             cap = _growth_cap(g)
+    else:
+        # DDM / perpetuity path: distorted_cap (SUSTAINABLE_CEIL) is the ceiling the
+        # docstring promises Gordon growth can't overshoot. Guard branches already pin
+        # raw to it via min(revenue_growth, distorted_cap), but the else branch below
+        # sources from earnings_growth — which for a name that trips no guard but has a
+        # garbage-high trailing figure (NKE's 428% low-base recovery artifact, PEP)
+        # would otherwise be bounded only by GROWTH_CAP_BASE (0.20), pushing g to the
+        # 0.09 Gordon clamp and exploding the DDM leg. Bind cap to distorted_cap so the
+        # perpetuity is capped at SUSTAINABLE_CEIL regardless of the growth source.
+        cap = distorted_cap
     if _earnings_distorted(fin):
         raw = min(fin.get("revenue_growth") or 0, distorted_cap)
     elif _earnings_non_operating(fin):

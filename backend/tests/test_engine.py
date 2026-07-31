@@ -71,6 +71,21 @@ def test_build_scenarios_positive_earnings_unchanged():
     assert s["realistic"] == pytest.approx(0.08)
 
 
+def test_build_scenarios_positive_earnings_ddm_path_respects_sustainable_ceiling():
+    # NKE: a garbage-high trailing earnings_growth (428%, a low-base recovery artifact)
+    # with no guard firing (earnings positive, so _earnings_distorted needs eg<0; the
+    # inflated/outpaces/non-operating guards need fields this fin lacks) landed in the
+    # else branch, where the DDM/perpetuity copy (distorted_cap=SUSTAINABLE_CEIL) was
+    # bounded only by GROWTH_CAP_BASE (0.20). That pushed Gordon growth to the 0.09
+    # clamp and exploded the DDM leg (NKE FV +110%, PEP +118%). The perpetuity path must
+    # cap the realistic rate at SUSTAINABLE_CEIL regardless of the growth source, not
+    # only when a guard re-sources from revenue.
+    s = engine.build_scenarios({"earnings_growth": 4.28, "revenue_growth": -0.011},
+                               distorted_cap=engine.SUSTAINABLE_CEIL)
+    assert s["realistic"] == pytest.approx(engine.SUSTAINABLE_CEIL)
+    assert s["optimistic"] == pytest.approx(engine.SUSTAINABLE_CEIL + 0.05)
+
+
 def test_pick_ev_uses_ebitda_when_margin_healthy():
     weights = {"ev_ebitda": 0.20, "ev_sales": 0.20}
     fin = {"ebitda_ttm": 100, "revenue_ttm": 1000}  # 10% margin > 8%
