@@ -163,6 +163,29 @@ def test_effective_shares_keeps_reported_at_exact_gate_boundary():
     assert _effective_shares(info, price=100.0) == 100_000_000
 
 
+def test_effective_shares_corrects_from_balance_sheet_when_marketcap_undercounts():
+    # MBLY-shape: yfinance marketCap AND sharesOutstanding both count only one share
+    # class, so implied == reported and the marketCap path can't see the hidden class.
+    # The balance sheet still carries the full multi-class total (Intel's Class B).
+    info = {"sharesOutstanding": 252_419_583, "marketCap": int(252_419_583 * 7.94)}
+    result = _effective_shares(info, price=7.94, balance_sheet_shares=814_748_862)
+    assert result == 814_748_862
+
+
+def test_effective_shares_never_corrects_downward_from_balance_sheet():
+    # Upward-only: a balance-sheet count below the reported total is never adopted.
+    info = {"sharesOutstanding": 300_000_000, "marketCap": 300_000_000 * 10}
+    result = _effective_shares(info, price=10.0, balance_sheet_shares=250_000_000)
+    assert result == 300_000_000
+
+
+def test_effective_shares_keeps_reported_when_balance_sheet_within_tolerance():
+    # Single-class: balance-sheet total agrees with reported inside the 3% gate.
+    info = {"sharesOutstanding": 100_000_000, "marketCap": 100_000_000 * 50}
+    result = _effective_shares(info, price=50.0, balance_sheet_shares=101_000_000)
+    assert result == 100_000_000
+
+
 def test_extract_financials_uses_regular_market_price_fallback():
     # When currentPrice is absent, extract_financials falls back to regularMarketPrice,
     # and that fallback price must drive the share-count correction too.

@@ -220,6 +220,22 @@ def _statement_net_income_yoy(rows: list[dict]) -> float | None:
     return _statement_yoy(rows, "net_income")
 
 
+def _latest_ordinary_shares(bs) -> float | None:
+    """Newest non-null total share count from the balance sheet (all classes).
+
+    'Ordinary Shares Number' / 'Share Issued' carry every class, unlike info's
+    single-class sharesOutstanding. Returns the most recent positive value, or None."""
+    for label in ("Ordinary Shares Number", "Share Issued"):
+        if label not in bs.index:
+            continue
+        row = bs.loc[label]
+        for col in sorted(bs.columns, reverse=True):
+            v = row.get(col)
+            if v is not None and v == v and v > 0:  # not None, not NaN, positive
+                return float(v)
+    return None
+
+
 @lru_cache(maxsize=256)
 def _fetch_ev_ebitda_history_sync(ticker: str) -> dict | None:
     """Reconstruct annual EV/EBITDA = (avg price * shares + net debt) / EBITDA from
@@ -275,7 +291,11 @@ def _fetch_ev_ebitda_history_sync(ticker: str) -> dict | None:
         return {"multiple": median, "ebitda": latest_statement_ebitda(rows),
                 "revenue_growth": _statement_revenue_yoy(rows),
                 "op_income_growth": _statement_op_income_yoy(rows),
-                "net_income_growth": _statement_net_income_yoy(rows)}
+                "net_income_growth": _statement_net_income_yoy(rows),
+                # Full multi-class share total (all classes) — lets engine.run correct a
+                # dual-class subsidiary whose info marketCap AND sharesOutstanding both
+                # undercount (MBLY). Rides this fetch's balance sheet; no extra round-trip.
+                "ordinary_shares": _latest_ordinary_shares(bs)}
     except Exception as e:
         msg = str(e).lower()
         if "rate" in msg or "too many" in msg:
@@ -294,27 +314,41 @@ async def fetch_ev_ebitda_history(ticker: str) -> dict | None:
 _SHARE_GATE_RATIO = 1.03
 
 
-def _effective_shares(info: dict, price: float | None) -> float | None:
+def _effective_shares(info: dict, price: float | None,
+                      balance_sheet_shares: float | None = None) -> float | None:
     """Fully-diluted share count for the per-share fair-value divide.
 
     yfinance's sharesOutstanding returns only one class for multi-class companies
     (typically the Class A float), while marketCap capitalizes every class. Dividing
     an absolute equity value by the single-class count inflates per-share FV by
-    true_shares / reported_shares. Correct UPWARD ONLY and gated at _SHARE_GATE_RATIO:
-    adopt market_cap/price when it exceeds the reported count beyond the gate; else
-    keep the reported count (single-class names stay byte-identical). Falls back to
-    the reported count whenever market_cap or price is unavailable.
+    true_shares / reported_shares. Correct UPWARD ONLY and gated at _SHARE_GATE_RATIO
+    against two independent full-class estimates, keeping the largest:
+
+      * market_cap / price — catches the case where marketCap capitalizes every class
+        (KVYO/GOOGL: sharesOutstanding is the Class A float only);
+      * balance_sheet_shares — the statement Ordinary Shares / Share Issued total,
+        which catches the case where marketCap ALSO undercounts. MBLY (Mobileye, an
+        Intel dual-class subsidiary) reports both marketCap and sharesOutstanding on
+        the ~252M Class A count, so market_cap/price == reported and the first path
+        is blind; only the 814.7M balance-sheet total exposes Intel's Class B, and
+        without it every per-share leg divided whole-company value by ~31% of the
+        shares (FV +193%). Rides the existing EV/EBITDA-history balance-sheet fetch
+        (see engine.run) rather than paying its own yfinance round-trip.
+
+    Single-class names stay byte-identical (both estimates sit inside the gate).
+    Falls back to the reported count whenever an estimate is unavailable.
     """
     reported = info.get("sharesOutstanding")
+    best = reported if (reported and reported > 0) else None
     market_cap = info.get("marketCap")
-    if not market_cap or not price:
-        return reported
-    implied = market_cap / price
-    if not reported or reported <= 0:
-        return implied
-    if implied > reported * _SHARE_GATE_RATIO:
-        return implied
-    return reported
+    if market_cap and price:
+        implied = market_cap / price
+        if best is None or implied > best * _SHARE_GATE_RATIO:
+            best = implied
+    if balance_sheet_shares:
+        if best is None or balance_sheet_shares > best * _SHARE_GATE_RATIO:
+            best = balance_sheet_shares
+    return best if best is not None else reported
 
 
 def extract_financials(info: dict) -> dict:

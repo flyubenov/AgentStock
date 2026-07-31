@@ -4,7 +4,7 @@ from valuation.classifier import classify
 from valuation import models as m
 from services.yahoo import (
     fetch_ticker_info, extract_financials, fetch_ticker_cashflow, real_fcf,
-    fetch_ev_ebitda_history, fetch_quarterly_revenue,
+    fetch_ev_ebitda_history, fetch_quarterly_revenue, _effective_shares,
 )
 from models import TickerResult
 
@@ -710,6 +710,15 @@ async def run(ticker: str) -> TickerResult:
         # guard reads as "unknown" and leaves the growth source alone.
         fin["op_income_growth_stmt"] = hist.get("op_income_growth")
         fin["net_income_growth_stmt"] = hist.get("net_income_growth")
+        # Dual-class subsidiaries (MBLY: Intel-held Class B) can report BOTH marketCap
+        # and sharesOutstanding on a single class, so extract_financials' market_cap/price
+        # check is blind to the hidden class. The statement Ordinary Shares total exposes
+        # it — fold it into the same upward-only, gated correction (no extra round-trip;
+        # rides this fetch's balance sheet).
+        bs_shares = hist.get("ordinary_shares")
+        if bs_shares:
+            fin["shares_outstanding"] = _effective_shares(
+                info, fin.get("current_price"), bs_shares)
 
     data = evaluate(fin)
     data["last_evaluated"] = datetime.now(timezone.utc).isoformat()
