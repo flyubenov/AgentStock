@@ -4,7 +4,7 @@
 
 **Goal:** Let the user save and load named watchlists on the Database screen, where a watchlist is a saved, dynamically-reapplied column-filter definition persisted to Google Sheets.
 
-**Architecture:** A watchlist = a name + a serialized copy of the grid's `Filters` object, stored as opaque JSON in a new `Watchlists` Sheets tab. Backend gains a `Watchlist` model, a `watchlist_sheets.py` service (cloned from `screener_sheets.py`'s pattern), and a `routers/watchlists.py` with GET/PUT/DELETE. Frontend gains a small `lib/watchlists.ts` (types + API client) and a header control in `Database.tsx` that saves the active filter and reloads a saved one.
+**Architecture:** A watchlist = a name + a serialized copy of the grid's `Filters` object, stored as opaque JSON in a new `Watchlists` Sheets tab. Backend gains a `Watchlist` model, a `watchlist_sheets.py` service (cloned from `screener_sheets.py`'s pattern), and a `routers/watchlists.py` with GET/PUT/DELETE. Frontend gains a small `lib/watchlists.ts` (types + API client) and a header control in `Database.tsx` that saves the active filter and reloads a saved one. The plan also scopes the existing **Recalculate All** button: when a filter is active (or a watchlist is selected), it recalculates only the tickers currently shown; with no filter active it recalculates the whole database as before.
 
 **Tech Stack:** Backend — Python, FastAPI, `pytest`, Google Sheets API (via existing `services/sheets.py` helpers). Frontend — React + TypeScript + Vite + TailwindCSS.
 
@@ -851,6 +851,195 @@ git commit -m "feat(watchlists): Database header control to save/load/delete wat
 
 ---
 
+### Task 6: Backend — optional scoped tickers on `/api/recalculate-all`
+
+**Files:**
+- Modify: `backend/routers/analysis.py:63-76` (the `recalculate_all` endpoint)
+- Test: `backend/tests/test_analysis_endpoints.py` (append)
+
+**Interfaces:**
+- Consumes: existing `read_database`, `_run_job`, `_jobs`, `_cancel_events` machinery in `analysis.py`.
+- Produces (for Task 7): `POST /api/recalculate-all` now accepts an **optional** JSON body `{"tickers": [...]}`.
+  - Body present with a non-empty `tickers` → recalc exactly those (upper-cased, blanks dropped, de-duplicated, order preserved); `read_database` is NOT called.
+  - Body absent, or `tickers` null/empty → recalc every Database row (unchanged behavior).
+  - Returns `{"job_id", "total"}` as before; `{"error": ...}` when the resulting list is empty.
+
+- [ ] **Step 1: Write the failing tests**
+
+Append to `backend/tests/test_analysis_endpoints.py`:
+
+```python
+def test_recalculate_all_scoped_to_body_tickers_skips_database():
+    """A body with tickers recalculates exactly those and never reads the DB."""
+    from unittest.mock import patch, AsyncMock
+    import routers.analysis as analysis
+    with patch("routers.analysis.read_database", new=AsyncMock()) as read_db, \
+         patch("routers.analysis._run_job", new=AsyncMock()):
+        resp = client.post("/api/recalculate-all", json={"tickers": ["aapl", " msft "]})
+    body = resp.json()
+    assert resp.status_code == 200
+    assert body["total"] == 2 and "job_id" in body
+    read_db.assert_not_awaited()                       # scoped path: DB untouched
+    analysis._cancel_events.pop(body["job_id"], None)
+    analysis._jobs.pop(body["job_id"], None)
+
+
+def test_recalculate_all_scoped_normalizes_and_dedupes():
+    from unittest.mock import patch, AsyncMock
+    import routers.analysis as analysis
+    with patch("routers.analysis._run_job", new=AsyncMock()):
+        resp = client.post("/api/recalculate-all",
+                          json={"tickers": ["AAPL", "aapl", " ", "MSFT"]})
+    body = resp.json()
+    assert body["total"] == 2                          # AAPL, MSFT (deduped, blank dropped)
+    analysis._cancel_events.pop(body["job_id"], None)
+    analysis._jobs.pop(body["job_id"], None)
+
+
+def test_recalculate_all_empty_body_tickers_falls_back_to_database():
+    """An empty tickers list behaves like no scope: recalc the whole DB."""
+    from unittest.mock import patch, AsyncMock
+    from models import DatabaseRow
+    import routers.analysis as analysis
+    rows = [DatabaseRow(ticker="AAPL"), DatabaseRow(ticker="MSFT")]
+    with patch("routers.analysis.read_database", new=AsyncMock(return_value=rows)), \
+         patch("routers.analysis._run_job", new=AsyncMock()):
+        resp = client.post("/api/recalculate-all", json={"tickers": []})
+    body = resp.json()
+    assert body["total"] == 2
+    analysis._cancel_events.pop(body["job_id"], None)
+    analysis._jobs.pop(body["job_id"], None)
+```
+
+> The existing `test_recalculate_all_starts_job` (no body → total 2 from the DB) and `test_recalculate_all_empty_database` must keep passing — they cover the unscoped path.
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `cd backend && python -m pytest tests/test_analysis_endpoints.py -v`
+Expected: the three new tests FAIL (the endpoint takes no body, so `total` reflects the DB read, and `read_database` is awaited on the scoped test).
+
+- [ ] **Step 3: Implement the optional body**
+
+In `backend/routers/analysis.py`, add a request model near the top (after the `router = APIRouter()` line):
+
+```python
+from pydantic import BaseModel
+
+
+class RecalcRequest(BaseModel):
+    tickers: list[str] | None = None
+```
+
+Replace the `recalculate_all` endpoint (lines 63-76) with:
+
+```python
+@router.post("/recalculate-all")
+async def recalculate_all(req: RecalcRequest | None = None):
+    if req and req.tickers:
+        seen: set[str] = set()
+        tickers: list[str] = []
+        for t in req.tickers:
+            u = t.strip().upper()
+            if u and u not in seen:
+                seen.add(u)
+                tickers.append(u)
+    else:
+        rows = await read_database()
+        tickers = [r.ticker.strip().upper() for r in rows if r.ticker and r.ticker.strip()]
+    if not tickers:
+        return {"error": "No tickers to recalculate"}
+    job_id = str(uuid.uuid4())
+    cancel_event = asyncio.Event()
+    _cancel_events[job_id] = cancel_event
+    _jobs[job_id] = {"status": "running", "total": len(tickers),
+                     "completed": 0, "failed": 0, "results": [], "invalid": [],
+                     "running": []}
+    asyncio.create_task(_run_job(job_id, tickers, cancel_event))
+    return {"job_id": job_id, "total": len(tickers)}
+```
+
+- [ ] **Step 4: Run the tests to verify they pass**
+
+Run: `cd backend && python -m pytest tests/test_analysis_endpoints.py -v`
+Expected: all pass, including the two pre-existing recalculate-all tests.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add backend/routers/analysis.py backend/tests/test_analysis_endpoints.py
+git commit -m "feat(recalc): accept optional scoped tickers on /api/recalculate-all"
+```
+
+---
+
+### Task 7: Frontend — scope the Recalculate button to the shown tickers
+
+**Files:**
+- Modify: `frontend/src/pages/Database.tsx`
+
+**Interfaces:**
+- Consumes: Task 6's optional-body endpoint; the existing `anyActive` flag and `sorted` array in `Database.tsx`.
+- Produces: user-facing scoped-recalc behavior. No downstream consumers.
+
+Because selecting a watchlist sets the filters (Task 5), `anyActive` already means "a filter is applied **or** a watchlist is selected" — the exact condition for scoping. No separate watchlist check is needed.
+
+- [ ] **Step 1: Send the shown tickers when a filter is active**
+
+In `Database.tsx`, replace the body of `recalcEverything` (the `fetch` call) so it posts the filtered tickers when `anyActive`:
+
+```ts
+const recalcEverything = async () => {
+  setRecalcAll(true)
+  try {
+    const scoped = anyActive ? { tickers: sorted.map(r => r.ticker) } : null
+    const res = await fetch(`${API}/api/recalculate-all`, {
+      method: 'POST',
+      ...(scoped
+        ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(scoped) }
+        : {}),
+    })
+    const data = await res.json()
+    if (data.error) setError(data.error)
+    else if (data.job_id) navigate(`/progress/${data.job_id}`, { state: { total: data.total } })
+  } catch {
+    setError('Failed to start recalculate-all. Is the backend running?')
+  } finally {
+    setRecalcAll(false)
+  }
+}
+```
+
+- [ ] **Step 2: Make the button label reflect the scope**
+
+In the "Recalculate All" button (the one bound to `recalcEverything`), change the label expression:
+
+```tsx
+{recalcAll ? 'Starting…' : anyActive ? `Recalculate ${sorted.length} shown` : 'Recalculate All'}
+```
+
+(Optionally widen the button's `title` similarly; not required.)
+
+- [ ] **Step 3: Type-check and lint**
+
+Run: `cd frontend && npm run build && npm run lint`
+Expected: build succeeds, lint clean.
+
+- [ ] **Step 4: Manual verification (run the app)**
+
+With backend + frontend running:
+1. No filter → button reads "Recalculate All"; clicking recalculates everything (progress `total` = full DB count).
+2. Apply a filter (or select a watchlist) → button reads "Recalculate N shown"; clicking recalculates only those N (progress `total` = N).
+3. Clear the filter → button returns to "Recalculate All".
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add frontend/src/pages/Database.tsx
+git commit -m "feat(recalc): scope Recalculate button to filtered/watchlist tickers"
+```
+
+---
+
 ## Self-Review Notes
 
 **Spec coverage:**
@@ -862,6 +1051,7 @@ git commit -m "feat(watchlists): Database header control to save/load/delete wat
 - Unique name / overwrite → Task 2 case-insensitive upsert; Task 5 overwrite confirm. ✓
 - Tolerate missing/garbage blob keys → Task 1 `_parse_filter` + Task 5 `deserializeFilters` per-field defaults. ✓
 - Backend TDD; frontend tsc+lint+manual → reflected per task. ✓
+- Scoped recalculate (filter/watchlist → shown tickers only; no filter → whole DB) → Task 6 (optional body, unscoped fallback preserved) + Task 7 (`anyActive` predicate + dynamic label). ✓ *(Extends beyond the original watchlist spec — folded in at user request; see the spec addendum.)*
 
 **Deviation from spec:** the delete UX is "select then Delete" (native `<select>` + Delete button) instead of a per-row 🗑 in a custom dropdown — noted in Task 5. Same capability, less code. Flag for the reviewer.
 

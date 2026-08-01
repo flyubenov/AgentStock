@@ -166,9 +166,26 @@ Database — 12 of 240 records   [ Watchlist: Cheap quality ▾ ]  [ Save as… 
   `tsc` type-check + eslint + a manual run of the app (save a filter, reload the page,
   re-select the watchlist, confirm the grid filters, delete it).
 
+## Addendum — scoped Recalculate All (added 2026-08-01)
+
+Folded in alongside watchlists. Today the **Recalculate All** button always recomputes
+every ticker in the Database tab, ignoring any applied filter. New behavior:
+
+- **Filter applied or watchlist selected** → recalculate **only the tickers currently
+  shown**.
+- **No filter active / no watchlist selected** → recalculate the **entire database**
+  (unchanged).
+
+Since selecting a watchlist sets the grid filters, the single predicate `anyActive`
+("any filter dimension is set") captures both cases. Implementation: `POST
+/api/recalculate-all` gains an **optional** `{"tickers": [...]}` body — present ⇒ scope
+to those, absent/empty ⇒ whole DB. The frontend sends the shown tickers when
+`anyActive` and relabels the button "Recalculate N shown". Backend change is TDD.
+
 ## Out of scope (YAGNI)
 
 - Row checkbox multi-select (superseded by filter-only selection).
 - Renaming the pre-existing `delete_watchlist_row` misnomer.
 - Sharing/exporting watchlists, ordering, or folders.
-- Any change to the valuation/screener pipeline.
+- Any change to the valuation/screener pipeline (scoped recalc reuses the existing
+  batch job; it does not alter scoring/valuation logic).
