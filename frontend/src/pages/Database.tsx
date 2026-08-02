@@ -371,7 +371,13 @@ export default function Database() {
   const recalcEverything = async () => {
     setRecalcAll(true)
     try {
-      const res = await fetch(`${API}/api/recalculate-all`, { method: 'POST' })
+      const scoped = anyActive ? { tickers: sorted.map(r => r.ticker) } : null
+      const res = await fetch(`${API}/api/recalculate-all`, {
+        method: 'POST',
+        ...(scoped
+          ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(scoped) }
+          : {}),
+      })
       const data = await res.json()
       if (data.error) setError(data.error)
       else if (data.job_id) navigate(`/progress/${data.job_id}`, { state: { total: data.total } })
@@ -436,7 +442,7 @@ export default function Database() {
             disabled={recalcAll}
             className="text-sm text-slate-300 hover:text-white border border-[#1e1e2a] px-3 py-1.5 rounded disabled:opacity-50"
           >
-            {recalcAll ? 'Starting…' : 'Recalculate All'}
+            {recalcAll ? 'Starting…' : anyActive ? `Recalculate ${sorted.length} shown` : 'Recalculate All'}
           </button>
           <button
             onClick={load}
