@@ -32,3 +32,9 @@ class JobStatus(BaseModel):
     failed: int
     status: Literal["running", "completed", "failed", "cancelled"]
     results: list[TickerResult] = []
+
+
+class Watchlist(BaseModel):
+    name: str
+    filter: dict = {}     # opaque serialized Filters blob (frontend owns the shape)
+    created: str = ""

@@ -4,6 +4,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import type { TickerResult } from '../types'
 import { fvGapColor, qualityScoreColor } from '../types'
+import { fetchWatchlists, saveWatchlist, deleteWatchlist } from '../lib/watchlists'
+import type { Watchlist, SerializedFilters } from '../lib/watchlists'
 
 const API = 'http://localhost:8000'
 
@@ -29,6 +31,20 @@ const EMPTY_FILTERS: Filters = {
   quality: { min: null, max: null },
   gap: { min: null, max: null },
 }
+
+const serializeFilters = (f: Filters): SerializedFilters => ({
+  tickers: [...f.tickers].sort(),
+  stockTypes: [...f.stockTypes].sort(),
+  quality: f.quality,
+  gap: f.gap,
+})
+
+const deserializeFilters = (s: Partial<SerializedFilters> | undefined): Filters => ({
+  tickers: new Set(s?.tickers ?? []),
+  stockTypes: new Set(s?.stockTypes ?? []),
+  quality: s?.quality ?? { min: null, max: null },
+  gap: s?.gap ?? { min: null, max: null },
+})
 
 const rangeActive = (r: NumRange) => r.min != null || r.max != null
 
@@ -201,6 +217,8 @@ export default function Database() {
   const [sortAsc, setSortAsc] = useState(false)
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
   const [openFilter, setOpenFilter] = useState<ColKey | null>(null)
+  const [watchlists, setWatchlists] = useState<Watchlist[]>([])
+  const [activeWatchlist, setActiveWatchlist] = useState<string>('')  // '' = (none)
   const navigate = useNavigate()
 
   const toggleFilter = (k: ColKey) => setOpenFilter(prev => (prev === k ? null : k))
@@ -237,7 +255,49 @@ export default function Database() {
     gap: rangeActive(filters.gap),
   }
   const anyActive = Object.values(colActive).some(Boolean)
-  const clearAll = () => setFilters(EMPTY_FILTERS)
+  const clearAll = () => { setFilters(EMPTY_FILTERS); setActiveWatchlist('') }
+
+  const loadWatchlists = async () => {
+    try {
+      setWatchlists(await fetchWatchlists())
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load watchlists')
+    }
+  }
+
+  const selectWatchlist = (name: string) => {
+    setActiveWatchlist(name)
+    if (!name) { setFilters(EMPTY_FILTERS); return }
+    const wl = watchlists.find(w => w.name === name)
+    if (wl) setFilters(deserializeFilters(wl.filter))
+  }
+
+  const saveCurrentAsWatchlist = async () => {
+    if (!anyActive) { setError('Apply a filter before saving a watchlist.'); return }
+    const name = window.prompt('Watchlist name')?.trim()
+    if (!name) return
+    const exists = watchlists.some(w => w.name.toLowerCase() === name.toLowerCase())
+    if (exists && !confirm(`Overwrite the existing watchlist "${name}"?`)) return
+    try {
+      await saveWatchlist(name, serializeFilters(filters))
+      await loadWatchlists()
+      setActiveWatchlist(name)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save watchlist')
+    }
+  }
+
+  const deleteActiveWatchlist = async () => {
+    if (!activeWatchlist) return
+    if (!confirm(`Delete watchlist "${activeWatchlist}"?`)) return
+    try {
+      await deleteWatchlist(activeWatchlist)
+      setActiveWatchlist('')
+      await loadWatchlists()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete watchlist')
+    }
+  }
 
   const rowMatches = (r: TickerResult): boolean => {
     if (filters.tickers.size && !filters.tickers.has(r.ticker)) return false
@@ -278,6 +338,7 @@ export default function Database() {
   }
 
   useEffect(() => { load() }, [])
+  useEffect(() => { loadWatchlists() }, [])
 
   const recalcOne = async (ticker: string) => {
     setBusy(ticker)
@@ -308,9 +369,19 @@ export default function Database() {
   }
 
   const recalcEverything = async () => {
+    if (anyActive && sorted.length === 0) {
+      setError('No rows shown to recalculate.')
+      return
+    }
     setRecalcAll(true)
     try {
-      const res = await fetch(`${API}/api/recalculate-all`, { method: 'POST' })
+      const scoped = anyActive ? { tickers: sorted.map(r => r.ticker) } : null
+      const res = await fetch(`${API}/api/recalculate-all`, {
+        method: 'POST',
+        ...(scoped
+          ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(scoped) }
+          : {}),
+      })
       const data = await res.json()
       if (data.error) setError(data.error)
       else if (data.job_id) navigate(`/progress/${data.job_id}`, { state: { total: data.total } })
@@ -336,6 +407,32 @@ export default function Database() {
           Database — {anyActive ? `${sorted.length} of ${results.length}` : results.length} records
         </h1>
         <div className="flex items-center gap-2">
+          <select
+            value={activeWatchlist}
+            onChange={e => selectWatchlist(e.target.value)}
+            title="Load a saved watchlist"
+            className="text-sm bg-[#16161e] text-slate-300 border border-[#1e1e2a] px-2 py-1.5 rounded focus:outline-none focus:border-blue-500"
+          >
+            <option value="">Watchlist… (none)</option>
+            {watchlists.map(w => (
+              <option key={w.name} value={w.name}>{w.name}</option>
+            ))}
+          </select>
+          <button
+            onClick={saveCurrentAsWatchlist}
+            className="text-sm text-slate-300 hover:text-white border border-[#1e1e2a] px-3 py-1.5 rounded"
+          >
+            Save as…
+          </button>
+          {activeWatchlist && (
+            <button
+              onClick={deleteActiveWatchlist}
+              title={`Delete watchlist "${activeWatchlist}"`}
+              className="text-sm text-slate-500 hover:text-red-400 border border-[#1e1e2a] px-3 py-1.5 rounded"
+            >
+              Delete
+            </button>
+          )}
           {anyActive && (
             <button
               onClick={clearAll}
@@ -349,7 +446,7 @@ export default function Database() {
             disabled={recalcAll}
             className="text-sm text-slate-300 hover:text-white border border-[#1e1e2a] px-3 py-1.5 rounded disabled:opacity-50"
           >
-            {recalcAll ? 'Starting…' : 'Recalculate All'}
+            {recalcAll ? 'Starting…' : anyActive ? `Recalculate ${sorted.length} shown` : 'Recalculate All'}
           </button>
           <button
             onClick={load}

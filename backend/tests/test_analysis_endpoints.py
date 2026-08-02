@@ -41,3 +41,39 @@ def test_recalculate_all_empty_database():
     with patch("routers.analysis.read_database", new=AsyncMock(return_value=[])):
         resp = client.post("/api/recalculate-all")
     assert resp.json().get("error")
+
+
+def test_recalculate_all_scoped_to_body_tickers_skips_database():
+    """A body with tickers recalculates exactly those and never reads the DB."""
+    with patch("routers.analysis.read_database", new=AsyncMock()) as read_db, \
+         patch("routers.analysis._run_job", new=AsyncMock()):
+        resp = client.post("/api/recalculate-all", json={"tickers": ["aapl", " msft "]})
+    body = resp.json()
+    assert resp.status_code == 200
+    assert body["total"] == 2 and "job_id" in body
+    read_db.assert_not_awaited()                       # scoped path: DB untouched
+    analysis._cancel_events.pop(body["job_id"], None)
+    analysis._jobs.pop(body["job_id"], None)
+
+
+def test_recalculate_all_scoped_normalizes_and_dedupes():
+    with patch("routers.analysis._run_job", new=AsyncMock()):
+        resp = client.post("/api/recalculate-all",
+                          json={"tickers": ["AAPL", "aapl", " ", "MSFT"]})
+    body = resp.json()
+    assert body["total"] == 2                          # AAPL, MSFT (deduped, blank dropped)
+    analysis._cancel_events.pop(body["job_id"], None)
+    analysis._jobs.pop(body["job_id"], None)
+
+
+def test_recalculate_all_empty_body_tickers_falls_back_to_database():
+    """An empty tickers list behaves like no scope: recalc the whole DB."""
+    from models import DatabaseRow
+    rows = [DatabaseRow(ticker="AAPL"), DatabaseRow(ticker="MSFT")]
+    with patch("routers.analysis.read_database", new=AsyncMock(return_value=rows)), \
+         patch("routers.analysis._run_job", new=AsyncMock()):
+        resp = client.post("/api/recalculate-all", json={"tickers": []})
+    body = resp.json()
+    assert body["total"] == 2
+    analysis._cancel_events.pop(body["job_id"], None)
+    analysis._jobs.pop(body["job_id"], None)
