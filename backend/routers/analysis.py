@@ -1,6 +1,7 @@
 from __future__ import annotations
 import asyncio, json, uuid
 from fastapi import APIRouter
+from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 from models import AnalyseRequest
 from services.yahoo import validate_ticker
@@ -8,6 +9,10 @@ from services.sheets import read_tickers, read_database
 from orchestrator.batch import run_batch, _run_one
 
 router = APIRouter()
+
+
+class RecalcRequest(BaseModel):
+    tickers: list[str] | None = None
 
 _jobs: dict[str, dict] = {}
 _cancel_events: dict[str, asyncio.Event] = {}
@@ -61,11 +66,20 @@ async def recalculate_one(ticker: str):
 
 
 @router.post("/recalculate-all")
-async def recalculate_all():
-    rows = await read_database()
-    tickers = [r.ticker.strip().upper() for r in rows if r.ticker and r.ticker.strip()]
+async def recalculate_all(req: RecalcRequest | None = None):
+    if req and req.tickers:
+        seen: set[str] = set()
+        tickers: list[str] = []
+        for t in req.tickers:
+            u = t.strip().upper()
+            if u and u not in seen:
+                seen.add(u)
+                tickers.append(u)
+    else:
+        rows = await read_database()
+        tickers = [r.ticker.strip().upper() for r in rows if r.ticker and r.ticker.strip()]
     if not tickers:
-        return {"error": "No tickers in the database to recalculate"}
+        return {"error": "No tickers to recalculate"}
     job_id = str(uuid.uuid4())
     cancel_event = asyncio.Event()
     _cancel_events[job_id] = cancel_event
