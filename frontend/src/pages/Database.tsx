@@ -369,6 +369,10 @@ export default function Database() {
   }
 
   const recalcEverything = async () => {
+    if (anyActive && sorted.length === 0) {
+      setError('No rows shown to recalculate.')
+      return
+    }
     setRecalcAll(true)
     try {
       const scoped = anyActive ? { tickers: sorted.map(r => r.ticker) } : null
