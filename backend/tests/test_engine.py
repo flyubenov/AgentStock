@@ -976,6 +976,66 @@ def test_non_operating_guard_does_not_preempt_the_distorted_earnings_path():
     assert s["realistic"] == pytest.approx(0.20)   # min(revenue_growth 0.261, cap 0.20)
 
 
+def _understated_growth_fin(**over):
+    """NXT-shaped: quarterly earnings_growth (2.9%) sits below BOTH annual statement
+    earnings lines (net income +15.1%, operating income +9.1%) while forward EPS rises
+    (5.80 > 3.87). The quarterly print is an understated single-quarter outlier, not a
+    real slowdown. Mirror of _non_operating_growth_fin but earnings understated LOW."""
+    fin = _large_cap_fin(market_cap=13_800_000_000, shares_outstanding=151_653_265,
+                         current_price=89.87, revenue_ttm=3_630_307_072,
+                         fcf_ttm=513_634_000, operating_cashflow=562_911_000,
+                         ebitda_ttm=745_852_032, eps_ttm=3.87, forward_eps=5.79648,
+                         net_debt=-1_213_897_984, trailing_pe=23.22, forward_pe=15.50,
+                         dividend_rate=0, dividend_yield=0, payout_ratio=0,
+                         revenue_growth=0.082, earnings_growth=0.029,
+                         revenue_growth_stmt=0.203, net_income_growth_stmt=0.151,
+                         op_income_growth_stmt=0.091)
+    fin.update(over)
+    return fin
+
+
+def test_earnings_understated_fires_on_low_quarterly_vs_annual():
+    # Quarterly eg below BOTH annual lines, forward EPS rising -> understated.
+    assert engine._earnings_understated(_understated_growth_fin()) is True
+
+
+def test_earnings_understated_requires_both_annual_lines_above_eg():
+    # If either annual line is at/below the quarterly eg, the quarterly print is NOT a
+    # low outlier — the annual trajectory does not corroborate it. Must not fire.
+    assert engine._earnings_understated(
+        _understated_growth_fin(op_income_growth_stmt=0.029)) is False   # op == eg
+    assert engine._earnings_understated(
+        _understated_growth_fin(net_income_growth_stmt=0.020)) is False   # ni < eg
+
+
+def test_earnings_understated_requires_positive_annual_lines():
+    # A negative annual line is a decline signal, not an understated grower. Must not fire.
+    assert engine._earnings_understated(
+        _understated_growth_fin(op_income_growth_stmt=-0.05)) is False
+
+
+def test_earnings_understated_requires_positive_quarterly_eg():
+    # eg <= 0 is handled by the distorted/decline paths, not this guard.
+    assert engine._earnings_understated(
+        _understated_growth_fin(earnings_growth=0.0)) is False
+    assert engine._earnings_understated(
+        _understated_growth_fin(earnings_growth=-0.1)) is False
+
+
+def test_earnings_understated_requires_forward_eps_above_trailing():
+    # Forward EPS must corroborate the upward re-source. feps <= teps -> do not fire.
+    assert engine._earnings_understated(
+        _understated_growth_fin(forward_eps=3.80)) is False   # < eps_ttm 3.87
+
+
+def test_earnings_understated_false_when_statement_lines_missing():
+    # No statement reading (fetch bailed to None) is "unknown", leave the source alone.
+    assert engine._earnings_understated(
+        _understated_growth_fin(net_income_growth_stmt=None)) is False
+    assert engine._earnings_understated(
+        _understated_growth_fin(op_income_growth_stmt=None)) is False
+
+
 def _inflated_earnings_fin(**over):
     """LYFT FY2025-shaped: a one-time ~$2.9B deferred-tax valuation-allowance release lifted
     trailing EPS to 6.60 (forward 2.09) and printed +489% earnings growth, while revenue grew
