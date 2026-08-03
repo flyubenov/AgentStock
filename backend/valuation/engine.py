@@ -424,6 +424,13 @@ def build_scenarios(fin: dict, distorted_cap: float = 0.20,
         # like the distorted / inflated paths. Placed LAST so _earnings_inflated still wins for
         # a one-time trailing gain (LYFT) and _earnings_non_operating for a flat operating line.
         raw = min(fin.get("revenue_growth") or 0, distorted_cap)
+    elif _earnings_understated(fin):
+        # Quarterly earnings_growth is an understated outlier below both annual statement
+        # earnings lines (NFLX, NXT). Re-source from min(ni, op) — the lower annual line,
+        # the SAME quantity the detector fires on, so the correction is self-limiting (its
+        # size equals the gap). The lower line is conservative and immune to a depressed
+        # trailing EPS inflating a forward-implied rate (the AVGO risk of an earlier design).
+        raw = min(fin["net_income_growth_stmt"], fin["op_income_growth_stmt"])
     else:
         raw = (fin.get("earnings_growth") or fin.get("revenue_growth")
                or fin.get("revenue_growth_stmt") or 0.07)

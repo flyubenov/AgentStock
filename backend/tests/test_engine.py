@@ -1036,6 +1036,53 @@ def test_earnings_understated_false_when_statement_lines_missing():
         _understated_growth_fin(op_income_growth_stmt=None)) is False
 
 
+def test_build_scenarios_understated_resources_from_min_annual_line():
+    # eg 0.029 is understated; re-source realistic base to min(ni 0.151, op 0.091) = 0.091,
+    # which is below the cap so it passes through the max(0.02, min(raw, cap)) clamp intact.
+    s = engine.build_scenarios(_understated_growth_fin(), stock_type="MID_CAP")
+    assert s["realistic"] == pytest.approx(0.091)
+
+
+def test_build_scenarios_understated_takes_lower_of_the_two_lines():
+    # min(ni, op): when op is the higher line, ni (the lower) is chosen.
+    s = engine.build_scenarios(
+        _understated_growth_fin(net_income_growth_stmt=0.07, op_income_growth_stmt=0.12),
+        stock_type="MID_CAP")
+    assert s["realistic"] == pytest.approx(0.07)
+
+
+def test_build_scenarios_understated_clamped_by_cap():
+    # A high min(ni,op) is still bounded by the normal growth cap (NFLX: min 0.261 -> 0.20).
+    # revenue_growth_stmt is set low so the cash-generative elevated cap (_growth_cap ramps
+    # 0.20->0.25 on revenue growth) stays at the 0.20 base and the clamp is a clean literal.
+    s = engine.build_scenarios(
+        _understated_growth_fin(net_income_growth_stmt=0.261, op_income_growth_stmt=0.279,
+                                revenue_growth_stmt=0.05),
+        stock_type="MID_CAP")
+    assert s["realistic"] == pytest.approx(0.20)
+
+
+def test_build_scenarios_understated_does_not_fire_keeps_earnings_source():
+    # When the guard does not fire (op == eg), the old else-branch behaviour holds:
+    # realistic sources from earnings_growth 0.029 (not the annual lines).
+    s = engine.build_scenarios(
+        _understated_growth_fin(op_income_growth_stmt=0.029), stock_type="MID_CAP")
+    assert s["realistic"] == pytest.approx(0.029)
+
+
+def test_build_scenarios_outpaces_revenue_still_wins_over_understated():
+    # Precedence: _earnings_outpaces_revenue is checked first. A fin that trips it must be
+    # handled there (re-source from revenue), never reaching the understated branch. Build a
+    # fin where eg outpaces revenue 3x AND both annual lines exceed eg: outpaces must win.
+    fin = _understated_growth_fin(earnings_growth=0.40, revenue_growth=0.10,
+                                  net_income_growth_stmt=0.50, op_income_growth_stmt=0.50)
+    # sanity: both guards' predicates are individually satisfiable here
+    assert engine._earnings_outpaces_revenue(fin) is True
+    s = engine.build_scenarios(fin, stock_type="MID_CAP")
+    # outpaces re-sources from revenue 0.10, NOT min(ni,op) 0.50
+    assert s["realistic"] == pytest.approx(0.10)
+
+
 def _inflated_earnings_fin(**over):
     """LYFT FY2025-shaped: a one-time ~$2.9B deferred-tax valuation-allowance release lifted
     trailing EPS to 6.60 (forward 2.09) and printed +489% earnings growth, while revenue grew
