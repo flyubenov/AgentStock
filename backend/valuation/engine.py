@@ -259,6 +259,36 @@ def _earnings_outpaces_revenue(fin: dict) -> bool:
             and eg > rg * m.GROWTH_REVENUE_RATIO)
 
 
+def _earnings_understated(fin: dict) -> bool:
+    """Quarterly info `earnings_growth` is an understated outlier below the company's
+    OWN annual statement trajectory — the mirror of _earnings_non_operating (which fires
+    when earnings OVERSTATE the operating business). Fires when a low single-quarter YoY
+    print would drag the multi-year projection below both annual earnings lines while
+    forward EPS is rising. Growth is then re-sourced from min(ni, op) in build_scenarios.
+
+    Gateless statement-corroboration (no numeric gap threshold): the "both annual lines
+    exceed the quarterly eg" test is the sole discriminator — a live 20-name sweep isolates
+    exactly {NFLX, NXT}. Like-with-like ANNUAL + both-lines-agree discipline from
+    _earnings_non_operating: THERE ni>0 & op<=0 (overstated); HERE eg < both ni,op (>0)
+    (understated). feps>teps validates the upward re-source (analyst corroboration).
+
+    Unlike `_earnings_non_operating`, this deliberately tests the quarterly
+    `earnings_growth` against the annual lines: the both-lines-agree corroboration plus
+    a 20-name live sweep (not like-with-like basis) bounds it, and the re-source is
+    upward-only and forward-EPS-gated."""
+    eg = fin.get("earnings_growth")
+    if eg is None or eg <= 0:
+        return False
+    ni = fin.get("net_income_growth_stmt")
+    op = fin.get("op_income_growth_stmt")
+    if ni is None or op is None or ni <= 0 or op <= 0:
+        return False
+    feps, teps = fin.get("forward_eps"), fin.get("eps_ttm")
+    if feps is None or teps is None or feps <= teps:
+        return False
+    return ni > eg and op > eg
+
+
 def _ramp(g: float, lo: float, hi: float, at_lo: float, at_hi: float) -> float:
     """Flat floor -> linear ramp -> saturate, the shape _ev_ebitda_ceiling's g_frac uses.
     Returns at_lo for g <= lo, at_hi for g >= hi, linear in between."""
@@ -399,6 +429,13 @@ def build_scenarios(fin: dict, distorted_cap: float = 0.20,
         # like the distorted / inflated paths. Placed LAST so _earnings_inflated still wins for
         # a one-time trailing gain (LYFT) and _earnings_non_operating for a flat operating line.
         raw = min(fin.get("revenue_growth") or 0, distorted_cap)
+    elif _earnings_understated(fin):
+        # Quarterly earnings_growth is an understated outlier below both annual statement
+        # earnings lines (NFLX, NXT). Re-source from min(ni, op) — the lower annual line,
+        # the SAME quantity the detector fires on, so the correction is self-limiting (its
+        # size equals the gap). The lower line is conservative and immune to a depressed
+        # trailing EPS inflating a forward-implied rate (the AVGO risk of an earlier design).
+        raw = min(fin["net_income_growth_stmt"], fin["op_income_growth_stmt"])
     else:
         raw = (fin.get("earnings_growth") or fin.get("revenue_growth")
                or fin.get("revenue_growth_stmt") or 0.07)

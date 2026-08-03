@@ -976,6 +976,113 @@ def test_non_operating_guard_does_not_preempt_the_distorted_earnings_path():
     assert s["realistic"] == pytest.approx(0.20)   # min(revenue_growth 0.261, cap 0.20)
 
 
+def _understated_growth_fin(**over):
+    """NXT-shaped: quarterly earnings_growth (2.9%) sits below BOTH annual statement
+    earnings lines (net income +15.1%, operating income +9.1%) while forward EPS rises
+    (5.80 > 3.87). The quarterly print is an understated single-quarter outlier, not a
+    real slowdown. Mirror of _non_operating_growth_fin but earnings understated LOW."""
+    fin = _large_cap_fin(market_cap=13_800_000_000, shares_outstanding=151_653_265,
+                         current_price=89.87, revenue_ttm=3_630_307_072,
+                         fcf_ttm=513_634_000, operating_cashflow=562_911_000,
+                         ebitda_ttm=745_852_032, eps_ttm=3.87, forward_eps=5.79648,
+                         net_debt=-1_213_897_984, trailing_pe=23.22, forward_pe=15.50,
+                         dividend_rate=0, dividend_yield=0, payout_ratio=0,
+                         revenue_growth=0.082, earnings_growth=0.029,
+                         revenue_growth_stmt=0.203, net_income_growth_stmt=0.151,
+                         op_income_growth_stmt=0.091)
+    fin.update(over)
+    return fin
+
+
+def test_earnings_understated_fires_on_low_quarterly_vs_annual():
+    # Quarterly eg below BOTH annual lines, forward EPS rising -> understated.
+    assert engine._earnings_understated(_understated_growth_fin()) is True
+
+
+def test_earnings_understated_requires_both_annual_lines_above_eg():
+    # If either annual line is at/below the quarterly eg, the quarterly print is NOT a
+    # low outlier — the annual trajectory does not corroborate it. Must not fire.
+    assert engine._earnings_understated(
+        _understated_growth_fin(op_income_growth_stmt=0.029)) is False   # op == eg
+    assert engine._earnings_understated(
+        _understated_growth_fin(net_income_growth_stmt=0.020)) is False   # ni < eg
+
+
+def test_earnings_understated_requires_positive_annual_lines():
+    # A negative annual line is a decline signal, not an understated grower. Must not fire.
+    assert engine._earnings_understated(
+        _understated_growth_fin(op_income_growth_stmt=-0.05)) is False
+
+
+def test_earnings_understated_requires_positive_quarterly_eg():
+    # eg <= 0 is handled by the distorted/decline paths, not this guard.
+    assert engine._earnings_understated(
+        _understated_growth_fin(earnings_growth=0.0)) is False
+    assert engine._earnings_understated(
+        _understated_growth_fin(earnings_growth=-0.1)) is False
+
+
+def test_earnings_understated_requires_forward_eps_above_trailing():
+    # Forward EPS must corroborate the upward re-source. feps <= teps -> do not fire.
+    assert engine._earnings_understated(
+        _understated_growth_fin(forward_eps=3.80)) is False   # < eps_ttm 3.87
+
+
+def test_earnings_understated_false_when_statement_lines_missing():
+    # No statement reading (fetch bailed to None) is "unknown", leave the source alone.
+    assert engine._earnings_understated(
+        _understated_growth_fin(net_income_growth_stmt=None)) is False
+    assert engine._earnings_understated(
+        _understated_growth_fin(op_income_growth_stmt=None)) is False
+
+
+def test_build_scenarios_understated_resources_from_min_annual_line():
+    # eg 0.029 is understated; re-source realistic base to min(ni 0.151, op 0.091) = 0.091,
+    # which is below the cap so it passes through the max(0.02, min(raw, cap)) clamp intact.
+    s = engine.build_scenarios(_understated_growth_fin(), stock_type="MID_CAP")
+    assert s["realistic"] == pytest.approx(0.091)
+
+
+def test_build_scenarios_understated_takes_lower_of_the_two_lines():
+    # min(ni, op): when op is the higher line, ni (the lower) is chosen.
+    s = engine.build_scenarios(
+        _understated_growth_fin(net_income_growth_stmt=0.07, op_income_growth_stmt=0.12),
+        stock_type="MID_CAP")
+    assert s["realistic"] == pytest.approx(0.07)
+
+
+def test_build_scenarios_understated_clamped_by_cap():
+    # A high min(ni,op) is still bounded by the normal growth cap (NFLX: min 0.261 -> 0.20).
+    # revenue_growth_stmt is set low so the cash-generative elevated cap (_growth_cap ramps
+    # 0.20->0.25 on revenue growth) stays at the 0.20 base and the clamp is a clean literal.
+    s = engine.build_scenarios(
+        _understated_growth_fin(net_income_growth_stmt=0.261, op_income_growth_stmt=0.279,
+                                revenue_growth_stmt=0.05),
+        stock_type="MID_CAP")
+    assert s["realistic"] == pytest.approx(0.20)
+
+
+def test_build_scenarios_understated_does_not_fire_keeps_earnings_source():
+    # When the guard does not fire (op == eg), the old else-branch behaviour holds:
+    # realistic sources from earnings_growth 0.029 (not the annual lines).
+    s = engine.build_scenarios(
+        _understated_growth_fin(op_income_growth_stmt=0.029), stock_type="MID_CAP")
+    assert s["realistic"] == pytest.approx(0.029)
+
+
+def test_build_scenarios_outpaces_revenue_still_wins_over_understated():
+    # Precedence: _earnings_outpaces_revenue is checked first. A fin that trips it must be
+    # handled there (re-source from revenue), never reaching the understated branch. Build a
+    # fin where eg outpaces revenue 3x AND both annual lines exceed eg: outpaces must win.
+    fin = _understated_growth_fin(earnings_growth=0.40, revenue_growth=0.10,
+                                  net_income_growth_stmt=0.50, op_income_growth_stmt=0.50)
+    # sanity: both guards' predicates are individually satisfiable here
+    assert engine._earnings_outpaces_revenue(fin) is True
+    s = engine.build_scenarios(fin, stock_type="MID_CAP")
+    # outpaces re-sources from revenue 0.10, NOT min(ni,op) 0.50
+    assert s["realistic"] == pytest.approx(0.10)
+
+
 def _inflated_earnings_fin(**over):
     """LYFT FY2025-shaped: a one-time ~$2.9B deferred-tax valuation-allowance release lifted
     trailing EPS to 6.60 (forward 2.09) and printed +489% earnings growth, while revenue grew
