@@ -270,7 +270,12 @@ def _earnings_understated(fin: dict) -> bool:
     exceed the quarterly eg" test is the sole discriminator — a live 20-name sweep isolates
     exactly {NFLX, NXT}. Like-with-like ANNUAL + both-lines-agree discipline from
     _earnings_non_operating: THERE ni>0 & op<=0 (overstated); HERE eg < both ni,op (>0)
-    (understated). feps>teps validates the upward re-source (analyst corroboration)."""
+    (understated). feps>teps validates the upward re-source (analyst corroboration).
+
+    Unlike `_earnings_non_operating`, this deliberately tests the quarterly
+    `earnings_growth` against the annual lines: the both-lines-agree corroboration plus
+    a 20-name live sweep (not like-with-like basis) bounds it, and the re-source is
+    upward-only and forward-EPS-gated."""
     eg = fin.get("earnings_growth")
     if eg is None or eg <= 0:
         return False
