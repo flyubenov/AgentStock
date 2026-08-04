@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-const API = 'http://localhost:8000'
+import { API_BASE as API } from '../lib/api'
 
 export default function Home() {
   const [tickers, setTickers] = useState('')

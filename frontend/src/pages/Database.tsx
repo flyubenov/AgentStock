@@ -7,7 +7,7 @@ import { fvGapColor, qualityScoreColor } from '../types'
 import { fetchWatchlists, saveWatchlist, deleteWatchlist } from '../lib/watchlists'
 import type { Watchlist, SerializedFilters } from '../lib/watchlists'
 
-const API = 'http://localhost:8000'
+import { API_BASE as API } from '../lib/api'
 
 type SortKey = 'quality' | 'fair_value' | 'price_vs_fair_value_pct'
 

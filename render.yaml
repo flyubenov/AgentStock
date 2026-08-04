@@ -1,0 +1,41 @@
+# Render Blueprint — deploys BOTH the backend (Python web service) and the
+# frontend (static site) from this one repo on the free tier.
+# Import via Render dashboard -> "New" -> "Blueprint" -> pick this repo.
+# NOTE: the backend free plan spins down after ~15 min idle (cold start on the
+# next request, and the in-memory yfinance/recalc pools reset). Bump `plan` to
+# `starter` (~$7/mo) for always-on.
+services:
+  # ---- Backend: FastAPI on uvicorn -----------------------------------------
+  - type: web
+    name: agentstock-backend
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      - key: GOOGLE_SHEETS_ID          # your spreadsheet id
+        sync: false
+      - key: GOOGLE_SHEETS_CREDS_JSON  # paste the full service-account JSON
+        sync: false
+      - key: CORS_ORIGINS              # e.g. https://agentstock-frontend.onrender.com
+        sync: false
+
+  # ---- Frontend: Vite static build -----------------------------------------
+  - type: web
+    name: agentstock-frontend
+    runtime: static
+    rootDir: frontend
+    plan: free
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_BASE             # the backend URL, e.g. https://agentstock-backend.onrender.com
+        sync: false

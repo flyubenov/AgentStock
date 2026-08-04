@@ -48,8 +48,16 @@ def _execute(request):
 def _get_service():
     global _service
     if _service is None:
-        creds_path = os.environ.get("GOOGLE_SHEETS_CREDS_PATH", "./credentials/service_account.json")
-        creds = service_account.Credentials.from_service_account_file(creds_path, scopes=SCOPES)
+        # Cloud hosts (Cloud Run / Railway / Render) can't ship the gitignored key
+        # file, so accept the raw service-account JSON via env var; fall back to the
+        # on-disk file for local dev (GOOGLE_SHEETS_CREDS_PATH, default ./credentials/).
+        creds_json = os.environ.get("GOOGLE_SHEETS_CREDS_JSON")
+        if creds_json:
+            creds = service_account.Credentials.from_service_account_info(
+                json.loads(creds_json), scopes=SCOPES)
+        else:
+            creds_path = os.environ.get("GOOGLE_SHEETS_CREDS_PATH", "./credentials/service_account.json")
+            creds = service_account.Credentials.from_service_account_file(creds_path, scopes=SCOPES)
         _service = build("sheets", "v4", credentials=creds)
     return _service
 

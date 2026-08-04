@@ -5,7 +5,7 @@ import { fvBadgeClass, fvGapLabel } from '../types'
 import FairValuePanel from '../components/FairValuePanel'
 import ScreenerPanel from '../components/ScreenerPanel'
 
-const API = 'http://localhost:8000'
+import { API_BASE as API } from '../lib/api'
 
 export default function TickerDetail() {
   const location = useLocation()

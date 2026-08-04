@@ -1,4 +1,4 @@
-const API = 'http://localhost:8000'
+import { API_BASE as API } from './api'
 
 export type NumRange = { min: number | null; max: number | null }
 

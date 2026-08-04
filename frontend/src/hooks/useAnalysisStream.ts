@@ -11,7 +11,7 @@ interface StreamState {
   tickerStatuses: Record<string, 'queued' | 'running' | 'done' | 'failed'>
 }
 
-const API = 'http://localhost:8000'
+import { API_BASE as API } from '../lib/api'
 
 export function useAnalysisStream(jobId: string | null) {
   const [state, setState] = useState<StreamState>({

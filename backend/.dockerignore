@@ -1,0 +1,11 @@
+# Keep the image small and never bake secrets in.
+credentials/
+jobs/
+tests/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.env
+*.env
