@@ -1,0 +1,19 @@
+---
+name: scenario-growth-band
+description: opt==real collapse for capped hyper-growers fixed with a growth/size/quality/leverage-coupled ramp-and-saturate scenario band reusing the EV/EBITDA-ceiling shape
+metadata: 
+  node_type: memory
+  type: project
+  originSessionId: 2f2d9d71-070c-4977-9b2e-84fd7e230aed
+  modified: 2026-07-21T20:43:20.676Z
+---
+
+DONE + MERGED to master (no-ff merge `8d74e14`, 2026-07-21): `build_scenarios` (engine.py) collapsed `optimistic == realistic` for capped hyper-growers (PLTR), giving a fair value (average of three legs) with false precision and no real bull case. Replaced the old corroboration gate (`GROWTH_OPT_HEADROOM` + `CORROBORATED_GROWTH_CEIL`, both deleted) with a **growth-coupled ramp-and-saturate band** that lifts the shape from `_ev_ebitda_ceiling` (models.py) — flat floor → linear ramp coupled to a growth signal → saturating cap — into a shared `engine._ramp(g, lo, hi, at_lo, at_hi)`. See [[pltr-fade-band-relief]] (that branch's deferred "capped hyper-growers collapse opt==real" gap is what this closed).
+
+**Construction** (realistic leg UNCHANGED): optimistic/pessimistic are asymmetric offsets off realistic sized by `_ramp` on `_band_growth_signal(fin)` (same rate the realistic leg uses, so `_earnings_distorted`/`_earnings_non_operating` guards govern the bull leg too — BWXT can't sneak non-operating growth through optimistic). Optimistic bounded by `_opt_ceil` (type/size/quality/leverage-coupled saturating ceiling): EARLY_GROWTH 0.50, MEGA (≥$1T) 0.28 HARD cap (quality can't lift, mirrors `_ev_ebitda_ceiling`'s mega top), LARGE ($150B–$1T) 0.32→0.35 on FCF/EBITDA conversion via `_quality_frac` (a copy of `_ev_ebitda_ceiling`'s conversion ramp), default 0.35. DDM path excluded (flat floor offsets) — output byte-identical because `calc_ddm` caps every scenario at DISCOUNT_RATE−0.01=0.09 and `ddm_growth` feeds only `calc_ddm`.
+
+**Leverage temper (the key gotcha, commit `0bd54ba`):** the flat EARLY 0.50 ceiling flipped **CRWV** live SELL→BUY ($62→$88), undoing [[crwv-funding-gap-bridge]] — a net-debt-funded burner got the same cash-funded bull case as net-cash NBIS, and the bull-leg EV lift outran `exit_net_debt`'s additive funding claim. Fix: `_leverage_frac` (net_debt/market_cap, floored at 0; absent net_debt / non-positive mktcap / net cash → 0.0) ramps the EARLY ceiling 0.50→0.35 (`SCEN_OPT_CEIL_EARLY_LEVERED`) across `SCEN_LEVERAGE_LO..HI` (0.20..0.60), via `_ramp` with a DESCENDING pair. CRWV → $62.07/−22% SELL (net debt 82% of mktcap → full temper); NBIS keeps 0.50 + $68.66/+41.5% (net cash → frac 0). **CRWV was NOT in the 12-name validation basket — the flip was caught only as a late blast-radius check. Always sweep a levered burner (CRWV) into the basket when touching an EARLY_GROWTH / bull-case path.**
+
+**Live effect table** (reproduced exactly): PLTR +7.4%, NBIS +41.5%, IREN +15.0%, NVDA −3.8%, ANET +1.1%; AAPL/KO/BWXT/KLAC inert; MSFT −0.2%, SNPS −0.9%, JPM +2.7%; CRWV −0.6% (holds SELL). 339 tests pass. Whole-branch opus review: **0 Critical / 0 Important**, 4 Minor all resolved (`66077fa`): `_quality_frac` divisor-guard parity restored; the levered-saturated-EARLY `opt==real` corner (needs simultaneous >140% growth AND >60% leverage, no live name) documented in `_opt_ceil` as an intended *binding economic ceiling* (rejected a universal `base+floor` because it would breach the MEGA/LARGE hard caps); net_debt-absent→untempered documented as a data dependency.
+
+**Lessons** (also written into the validating-agent-stock skill's new "Reuse an existing pattern before inventing one" section): reuse an existing pattern before inventing one — the EV/EBITDA-ceiling shape was the template, and reuse is why the review was clean; when you copy a helper, copy its guards; re-derive constants after correcting an input and check the extremes; a dynamic ceiling can flip a levered name — temper by the same signal the neighbor already uses.

@@ -1,0 +1,19 @@
+---
+name: opfi-rim-roe-cap-gap
+description: OPFI FV/Quality validated as SOUND (left as-is); logs the RIM-lacks-ROE-cap asymmetry as a known gap + a TODO to brainstorm a proper ROE-fade for RIM
+metadata: 
+  node_type: memory
+  type: project
+  originSessionId: b5a02239-c606-41f1-85c3-1d321ae001c2
+  modified: 2026-07-22T20:44:06.722Z
+---
+
+Validated OPFI (OppFi, subprime installment lender, FINANCIAL tier) on 2026-07-22. **No code change — both numbers left as-is** by user decision; two gaps logged for later.
+
+**FV $12.10 / +31% "undervalued" — DEFENSIBLE, left as-is.** Driven by the book/ROE legs (P/B 0.35 + RIM 0.45 = 80% weight); P/E leg is inert (`eps×trailing_pe ≈ price`, so it's just `price×0.9 = $8.32`). It is NOT a data bug: OPFI is an Up-C company that collapsed to a single share class in April 2026, so yfinance is messy, but the errors OFFSET — yfinance understates book (`bvps $2.862` vs real YE2025 equity $308.9M / ~86.2M sh ≈ **$3.58**) which pushes the legs down, while it overstates ROE (RIM's `eps/bvps = 2.03/2.862 = 70.9%` vs real GAAP `$146M/$308.9M ≈ 47%`, adjusted 51.5%) which pushes RIM up. Rebuilding the composite on *consistent real inputs* still lands ~$12.1–12.8. So the +31% is a faithful read of a genuinely high-ROE (~47%) lender at ~2.6× real book / ~5× earnings; what the quant model can't see is the regulatory tail (state APR caps on ~160% APR loans) that keeps the market at ~5×. Model limitation, not a bug.
+
+**KNOWN GAP — RIM applies no ROE cap, P/B does.** `calc_pb` (models.py:531) caps `roe = min(roe, ROE_PB_CAP_MULT(3.0) × coe)` = 25.5% for FINANCIALS "so a distorted, unsustainable ROE can't run the multiple away" — but `calc_rim` (models.py:546) uses raw `roe = eps/bvps` UNCAPPED, and RIM is the highest-weighted leg. Mirroring the cap into RIM: RIM $14.99→$5.96, **composite $12.10→$8.03** on raw inputs (or ~$9.63 on corrected inputs) — flips BUY→fair. Blast radius: cap only binds FINANCIAL names with `eps/bvps > 25.5%`; normal banks (JPM ~15%) never touch it; **AXP is the canary** (~30% ROE — modest haircut, and P/B already caps it identically). FV-only, Quality unaffected. NOT implemented — flat-capping a *real* 47% ROE at 25.5% is arguably too blunt (see below).
+
+**TODO — brainstorm a proper ROE-fade for RIM** (superpowers:brainstorming). The RIM implementation holds `(roe − coe)` FLAT for all 10 years and even grows book at g — no fade. Standard RIM fades ROE toward COE. A fade is the more correct fix than a flat cap (it would let a real 47% ROE contribute early but decay, instead of hard-clipping to 25.5%). Design forks to weigh: fade rate/half-life, whether to fade to COE or to a sector-sustainable ROE, reuse of an existing decay pattern (`_fade_hold_years` shape?). New mechanism ⇒ brainstorm, not a normal-session mirror. See [[app-serves-persisted-rows-not-live-compute]], [[financial-coe-growth-pb]].
+
+**Quality 9.7 (highest ever) — SOUND, left as-is.** Section II 10.0 (roic 94%/rote 45%/spread 83%), I 9.0 (held down by revenue_cagr 9.65% despite eps_cagr 170% low-base artifact), IV 10.0 (shares_cagr −32% buybacks, insider own 60.5%, shareholder_yield 6%). Even stripping the distorted inputs the score barely moves — ROTE 45% alone maxes Section II. The score faithfully measures *fundamentals*, which ARE exceptional; it is structurally blind to durability/regulatory risk, so "9.7 = best in universe" overstates durability vs a moat compounder at 9.0. LATENT GAP (inconsequential here, worth noting): ROIC is structurally meaningless for a lender (same rationale that excludes FCF/OCF/leverage for FINANCIALS in scoring.py) yet 3 of Section II's 4 metrics are ROIC-derived and NOT excluded — ROTE happens to carry OPFI to 10.0 anyway, so no OPFI impact, but a lower-ROTE lender could be flattered by a distorted 90%+ ROIC.

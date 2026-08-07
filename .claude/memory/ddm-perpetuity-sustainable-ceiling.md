@@ -1,0 +1,21 @@
+---
+name: ddm-perpetuity-sustainable-ceiling
+description: "DDM Gordon-growth explosion — SUSTAINABLE_CEIL wasn't enforced on build_scenarios' else branch, so a no-guard name with garbage-high earnings_growth (NKE 428% artifact) pushed perpetuity g to the 0.09 clamp; fixed by binding cap to distorted_cap on the DDM path"
+metadata: 
+  node_type: memory
+  type: project
+  originSessionId: 5c3e84e7-23c2-497e-86dd-20715dc979f7
+  modified: 2026-07-31T10:09:07.216Z
+---
+
+Validated **NKE** on 2026-07-31 (DIVIDEND tier). FV **$88.76 / +110%** was NOT a defensible center — a **DDM Gordon-growth near-singularity**. The DDM leg alone was **$160.88** (weight 0.40 = $64 of the $89 composite) while every other leg (dcf $49.70, pe $38.06, pb $24.67) sat near the $42 price.
+
+**BUG (fixed, option A):** `SUSTAINABLE_CEIL = 0.039` is meant to bound the DDM/perpetuity growth (the `build_scenarios` docstring says so). But it only bounded `base` inside the **guard branches** (`min(revenue_growth, distorted_cap)`). NKE trips **no guard** — its `earnings_growth` is +428% (a low-base recovery artifact; real revenue −1.1%, real NI −3.4%), so `_earnings_distorted` (needs eg<0), `_earnings_inflated`/`_earnings_non_operating`/`_earnings_outpaces_revenue` all return False — so it fell to the `else` branch: `raw = earnings_growth = 4.28`, and `base = min(4.28, cap)` where **`cap = GROWTH_CAP_BASE = 0.20`, not SUSTAINABLE_CEIL** (the elevated-cap block at line 360 only runs when `distorted_cap >= GROWTH_CAP_BASE`, false for the DDM path). DDM g → 0.20 → `calc_ddm` clamps to `DISCOUNT_RATE − 0.01 = 0.09` → denominator `0.10 − 0.09 = 0.01` → `1.64 × 1.09 / 0.01 × MOS(0.9) = $160.88`.
+
+**FIX:** added an `else: cap = distorted_cap` to the cap-selection block in `engine.build_scenarios` (the perpetuity path, `distorted_cap < GROWTH_CAP_BASE`), so the else-branch base is capped at SUSTAINABLE_CEIL regardless of growth source — **reuses the existing constant, no new knob**. Guard branches are unaffected (their `raw` is already ≤ distorted_cap). Default-path (`distorted_cap=0.20`) legs are unaffected (the `else` only fires for the DDM copy). TDD: RED test `test_build_scenarios_positive_earnings_ddm_path_respects_sustainable_ceiling` (positive earnings, no guard, DDM path → realistic must == SUSTAINABLE_CEIL; was 0.20). **395 tests pass** (394 + 1). **COMMITTED to branch `optimizations` @ `46ac953`** (NOT merged to master). Inline Opus-subagent review 0 Crit/0 Imp/0 Minor — also confirmed a bonus: the `else` now bounds the previously-UNBOUNDED `_earnings_non_operating` DDM path (`raw = op_income_growth_stmt`), so a dividend name with op-growth >3.9% can no longer explode there either.
+
+**Blast radius = DIVIDEND tier only, 3 names corrected DOWN:** NKE $88.76→**$49.75** (+110%→+17.6%), **PEP $305.22→$164.41** (+118%→+17.3%, was silently just as broken), MCD $247.15→$218.19 (−8%→−18.7%). Unchanged (growth already ≤ ceiling or guard-bounded): PG $77.81, VZ $41.43. Canaries **byte-identical**: KLAC $93.79 / NBIS $59.61 / IREN $23.99 (non-DIVIDEND → ddm weight 0, fix can't reach). KO/JNJ classify LARGE_CAP (no DDM leg) — untouched.
+
+**KNOWN RESIDUAL (option A, user-accepted):** the fix caps the *realistic* base at 0.039, but the flat DDM offset still adds `SCEN_UP_FLOOR = 0.05` → optimistic g = 0.089 → the Gordon denominator (0.011) still near-singular, so the optimistic DDM scenario re-inflates (~$146 for NKE) and the DDM leg averages ~$63 rather than a fully-clean ~$25. Composite $49.75 is defensible so the user chose (A) over (B) [cap ALL three DDM scenarios at SUSTAINABLE_CEIL → NKE $34.46 / −18.5%, but collapses opt=real=pess to a point, reintroducing the false-precision [[scenario-growth-band]] removed]. **Deferred proper fix:** give the bounded perpetuity a SMALL dispersion that never approaches `r` (a design decision — would need a brainstorm). See [[distorted-earnings-dual-cap]] (which introduced the DDM-keeps-SUSTAINABLE_CEIL intent this enforces), [[earnings-outpaces-revenue-guard]] / [[lyft-earnings-inflated-guard]] (the guard branches that were already bounding their DDM correctly).
+
+**Quality 6.2 — not examined in depth; the fix is FV-only** (DDM/scenario growth doesn't feed the screener).
