@@ -1,0 +1,26 @@
+---
+name: earnings-outpaces-revenue-guard
+description: "DONE + MERGED to master (no-ff 889aed2) — CRM acquisition-consolidation growth-source guard; SDD-executed, opus review 0 Crit/0 Imp"
+metadata: 
+  node_type: memory
+  type: project
+  originSessionId: 45b0a16a-226b-47eb-b989-1392f5abc24c
+  modified: 2026-07-28T21:32:19.398Z
+---
+
+**STATUS: DONE + MERGED to master (no-ff `889aed2`), 2026-07-29.** Executed via subagent-driven-development. Full suite 394 passed; final whole-branch opus review 0 Critical / 0 Important. Live-verified: CRM $497.78→**$331.46** (+204%→+82.6%), CSCO $84.12→**$61.64**; canaries IREN/NBIS/KLAC provably non-firing → byte-identical. The same no-ff merge ALSO carried an UNRELATED pre-existing feature at the user's request — `DELETE /database/{ticker}` (removes a ticker from Database/Screener/Tickers tabs, commit `5e6c56a`); not part of the guard. **Execution lessons:** fixture audit checked helper DEFAULTS but missed per-test OVERRIDES → a 2nd synthetic fixture tripped the guard; plan also had a DDM-test bug (`_outpaces_fin(revenue_growth=0.40)` stopped the guard firing). Reviewer caught two over-claiming test comments (the "self-limiting/inert" fixture was actually `_cap_eligible`→cut 0.25→0.20; the precedence test can't detect a reorder since both guards share the identical re-source formula) → corrected. **DEFERRED LIMITATION (design, non-blocking):** a cash-generative name eligible for the elevated cap that fires the guard is cut ≤5pp (re-sources at distorted_cap 0.20 like its siblings); no real name both fires AND rides the elevated cap (CRM/CSCO-only, both sub-0.20-revenue base-cap). See [[dual-class-share-count-fix]], [[lyft-earnings-inflated-guard]], [[scenario-growth-band]].
+
+---
+ORIGINAL DESIGN NOTES (as approved/executed):
+
+Validating CRM (Salesforce) surfaced a real FV artifact: `build_scenarios` sources the realistic growth rate from a quarterly-YoY `earnings_growth` (0.522) inflated by just-consolidated Informatica revenue, capped to ~0.20 vs the true ~13% revenue rate → CRM live FV **$497.78 / +204%**. The three existing growth-source guards don't cover it (`_earnings_distorted` needs eg<0; `_earnings_non_operating` needs a flat/declining statement operating line; `_earnings_inflated` needs fpe/tpe>1.5 AND feps<teps — CRM's earnings are real/recurring).
+
+**Approved design** (statement-divergence, option 1 — no new IO, no new knob). Spec COMMITTED to master @`b1d252f`: `docs/superpowers/specs/2026-07-28-earnings-outpaces-revenue-guard-design.md`.
+
+New guard `_earnings_outpaces_revenue(fin)` in `backend/valuation/engine.py`, added as the **4th `elif`** in `build_scenarios` AFTER `_earnings_inflated` (precedence keeps LYFT on `_earnings_inflated`). Fires when: `eg is not None and eg>0` AND `rg is not None and rg >= m.GROWTH_TRUST_FLOOR` (0.10) AND `eg > rg * m.GROWTH_REVENUE_RATIO` (3.0). Both constants REUSED from `models.py:72-73` (the exact mirror of `_forward_target_pe`, which re-sources when REVENUE outpaces earnings 3×). Reference them `m.`-prefixed like `_earnings_inflated` does for `m.DEPRESSED_PE_RATIO`. When fired: `raw = min(fin.get("revenue_growth") or 0, distorted_cap)` — byte-identical to `_earnings_distorted`/`_earnings_inflated`, so DDM (distorted_cap=SUSTAINABLE_CEIL) stays bounded. Optimistic leg untouched (`_band_growth_signal` never reads earnings_growth).
+
+**Measured blast radius** (monkey-patched into build_scenarios only): CRM $497.78→$342.36 (−31.2%, +204%→+109%), CSCO $84.12→$61.45 (−27.0%) — both recent large acquirers, both correctly move DOWN. All else byte-identical: DDOG/GOOGL/PLTR/MU (self-limiting, rev≥cap), HON/MMM/UNH (floor excludes, rev<0.10), LYFT (precedence), KLAC/NBIS/IREN/AAPL/NVDA/ANET/V.
+
+**Fixture audit for the plan (DONE):** only ONE existing test trips the new guard — `test_engine.py::test_build_scenarios_capped` uses eg=0.56, rev=0.10 (the guard's exact target shape). Fix: change eg 0.56→0.28 (still >cap so min(0.28,0.20)=0.20 holds, but 0.28 < rev×3=0.30 so it doesn't fire; band unchanged since g=rev 0.10). All other fixtures safe: `_hypergrower_fin` (1.13 vs 0.59×3=1.77 no), `_growth_fin` default (0.30 vs 0.12×3=0.36 no), `_non_operating`/`_inflated` protected by precedence, `_large_cap_fin`/positive-earnings tests fail the 0.10 floor.
+
+**RESUME POINT:** implementation plan WRITTEN + self-reviewed: `docs/superpowers/plans/2026-07-28-earnings-outpaces-revenue-guard.md`. 3 tasks: (1) TDD the pure predicate `_earnings_outpaces_revenue` + 5 unit tests (fires / floor-excludes / ratio-excludes / exact-boundary / requires-both-present); (2) wire the 4th elif into build_scenarios + 5 behavior tests (re-sources revenue, DDM SUSTAINABLE_CEIL, guard-doesnt-fire-without-revenue asserts 0.20 NOT 0.02 [intended asymmetry vs `_earnings_inflated` which fires on P/E alone], precedence vs inflated, self-limiting inert DDOG-shape) + FIX `test_build_scenarios_capped` (eg 0.56→0.28); (3) full pytest + live re-validate CRM≈$342 / CSCO≈$61 / IREN·NBIS·KLAC byte-identical. NOT YET IMPLEMENTED — no engine.py code written; awaiting execution-mode choice (subagent-driven vs inline). Related: [[lyft-earnings-inflated-guard]], [[scenario-growth-band]], [[hood-pe-growth-source-fix]].
