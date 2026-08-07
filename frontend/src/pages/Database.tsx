@@ -3,26 +3,27 @@ import { createPortal } from 'react-dom'
 import { Link, useNavigate } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import type { TickerResult } from '../types'
-import { fvGapColor, qualityScoreColor } from '../types'
+import { fvGapColor, qualityScoreColor, riskRewardColor, riskRewardRatio } from '../types'
 import { fetchWatchlists, saveWatchlist, deleteWatchlist } from '../lib/watchlists'
 import type { Watchlist, SerializedFilters } from '../lib/watchlists'
 
 import { API_BASE as API } from '../lib/api'
 
-type SortKey = 'quality' | 'fair_value' | 'price_vs_fair_value_pct'
+type SortKey = 'quality' | 'fair_value' | 'price_vs_fair_value_pct' | 'risk_reward'
 
 // ---- Filtering -------------------------------------------------------------
 
 /** Sentinel checkbox value representing a null stock_type. */
 const NONE = '(none)'
 
-type ColKey = 'ticker' | 'stockType' | 'quality' | 'gap'
+type ColKey = 'ticker' | 'stockType' | 'quality' | 'gap' | 'riskReward'
 type NumRange = { min: number | null; max: number | null }
 type Filters = {
   tickers: Set<string>
   stockTypes: Set<string>
   quality: NumRange
   gap: NumRange
+  riskReward: NumRange
 }
 
 const EMPTY_FILTERS: Filters = {
@@ -30,6 +31,7 @@ const EMPTY_FILTERS: Filters = {
   stockTypes: new Set(),
   quality: { min: null, max: null },
   gap: { min: null, max: null },
+  riskReward: { min: null, max: null },
 }
 
 const serializeFilters = (f: Filters): SerializedFilters => ({
@@ -37,6 +39,7 @@ const serializeFilters = (f: Filters): SerializedFilters => ({
   stockTypes: [...f.stockTypes].sort(),
   quality: f.quality,
   gap: f.gap,
+  riskReward: f.riskReward,
 })
 
 const deserializeFilters = (s: Partial<SerializedFilters> | undefined): Filters => ({
@@ -44,6 +47,7 @@ const deserializeFilters = (s: Partial<SerializedFilters> | undefined): Filters 
   stockTypes: new Set(s?.stockTypes ?? []),
   quality: s?.quality ?? { min: null, max: null },
   gap: s?.gap ?? { min: null, max: null },
+  riskReward: s?.riskReward ?? { min: null, max: null },
 })
 
 const rangeActive = (r: NumRange) => r.min != null || r.max != null
@@ -253,6 +257,7 @@ export default function Database() {
     stockType: filters.stockTypes.size > 0,
     quality: rangeActive(filters.quality),
     gap: rangeActive(filters.gap),
+    riskReward: rangeActive(filters.riskReward),
   }
   const anyActive = Object.values(colActive).some(Boolean)
   const clearAll = () => { setFilters(EMPTY_FILTERS); setActiveWatchlist('') }
@@ -304,11 +309,13 @@ export default function Database() {
     if (filters.stockTypes.size && !filters.stockTypes.has(r.stock_type ?? NONE)) return false
     if (!inRange(r.quality_score, filters.quality)) return false
     if (!inRange(r.price_vs_fair_value_pct, filters.gap)) return false
+    if (!inRange(riskRewardRatio(r), filters.riskReward)) return false
     return true
   }
 
   const sortVal = (r: TickerResult, key: SortKey): number | null => {
     if (key === 'quality') return r.quality_score ?? null
+    if (key === 'risk_reward') return riskRewardRatio(r)
     return r[key] ?? null
   }
   const filtered = results.filter(rowMatches)
@@ -509,6 +516,17 @@ export default function Database() {
                     <RangeFilter value={filters.quality} step="0.1" onChange={v => setFilters(f => ({ ...f, quality: v }))} />
                   </FilterHeader>
                 </th>
+                <th className="text-right py-2 px-2">
+                  <FilterHeader
+                    label={<span className="cursor-pointer hover:text-slate-300 select-none" onClick={() => toggleSort('risk_reward')}>R/R</span>}
+                    active={colActive.riskReward}
+                    open={openFilter === 'riskReward'}
+                    align="right"
+                    onToggle={() => toggleFilter('riskReward')}
+                  >
+                    <RangeFilter value={filters.riskReward} step="0.1" onChange={v => setFilters(f => ({ ...f, riskReward: v }))} />
+                  </FilterHeader>
+                </th>
                 <th className="text-right py-2 px-2 cursor-pointer hover:text-slate-300 select-none" onClick={() => toggleSort('fair_value')}>Fair Value</th>
                 <th className="text-right py-2 px-2">Price</th>
                 <th className="text-right py-2 px-4">
@@ -542,6 +560,9 @@ export default function Database() {
                   <td className="py-2 px-2 text-xs text-slate-500 font-mono">{r.stock_type || '—'}</td>
                   <td className={`py-2 px-2 text-right font-mono text-xs ${qualityScoreColor(r.quality_score)}`}>
                     {r.quality_score != null ? r.quality_score.toFixed(1) : '—'}
+                  </td>
+                  <td className={`py-2 px-2 text-right font-mono text-xs ${riskRewardColor(riskRewardRatio(r))}`}>
+                    {riskRewardRatio(r) != null ? riskRewardRatio(r)!.toFixed(2) : '—'}
                   </td>
                   <td className="py-2 px-2 text-right font-mono text-xs text-slate-300">
                     {r.fair_value != null ? `$${r.fair_value.toFixed(2)}` : '—'}
