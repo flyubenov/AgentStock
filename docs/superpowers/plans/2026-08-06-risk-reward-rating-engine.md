@@ -29,7 +29,7 @@
 
 **Interfaces:**
 - Produces:
-  - `RiskRewardConfig` (frozen `BaseModel`) with fields: `weights: dict[str, float]`, `axis: dict[str, str]`, `sources: dict[str, list[str]]`, `anchors: dict[str, tuple[float, float, float]]`, `ratio_clamp: tuple[float, float]`, `tiers: list[tuple[float, str]]`, `min_reward: int`, `min_risk: int`, `rsi_period: int`, `vol_annualization: float`, `history_period: str`.
+  - `RiskRewardConfig` (frozen `BaseModel`) with fields: `weights: dict[str, float]`, `axis: dict[str, str]`, `sources: dict[str, list[str]]`, `anchors: dict[str, tuple[float, float, float]]`, `ratio_clamp: tuple[float, float]`, `tiers: list[tuple[float, str]]`, `min_reward: int`, `min_risk: int`, `rsi_period: int`, `vol_annualization: float`, `history_period: str`, and the confidence-scaled analyst-weight knobs `analyst_weight_floor: float`, `analyst_weight_span: float`, `analyst_coverage_lo: float`, `analyst_coverage_hi: float`, `analyst_spread_lo: float`, `analyst_spread_hi: float`. (The `weights["analyst_upside"]` entry is the *nominal base* — 0.12 — used by the sum-to-1 invariant and as documentation; the actual per-ticker weight is computed in Task 5 and floats in `[floor, floor+span]` = `[0.08, 0.18]`.)
   - `REWARD_SLOTS: list[str]`, `RISK_SLOTS: list[str]` (module constants).
   - `CONFIG: RiskRewardConfig` (module-level singleton).
 
@@ -58,6 +58,16 @@ def test_every_source_has_anchors_and_every_slot_has_sources():
 def test_clamp_and_floor_defaults():
     assert CONFIG.ratio_clamp == (0.2, 5.0)
     assert CONFIG.min_reward == 2 and CONFIG.min_risk == 2
+
+
+def test_analyst_weight_knobs_bracket_base():
+    # floor 8% <= nominal base 12% <= cap (floor+span) 18%
+    cap = CONFIG.analyst_weight_floor + CONFIG.analyst_weight_span
+    assert CONFIG.analyst_weight_floor == 0.08
+    assert cap == 0.18
+    assert CONFIG.analyst_weight_floor <= CONFIG.weights["analyst_upside"] <= cap
+    assert CONFIG.analyst_coverage_lo < CONFIG.analyst_coverage_hi
+    assert CONFIG.analyst_spread_lo < CONFIG.analyst_spread_hi
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -140,6 +150,17 @@ class RiskRewardConfig(BaseModel):
     vol_annualization: float = float(os.getenv("RR_VOL_ANNUALIZATION", "252"))
     history_period: str = os.getenv("RR_HISTORY_PERIOD", "1y")
 
+    # Confidence-scaled Analyst-upside weight (Task 5 computes it per ticker):
+    #   c = min(coverage, agreement) in [0,1];  weight = floor + span*c  ->  [0.08, 0.18]
+    #   coverage  ramps 0 -> 1 as numberOfAnalystOpinions goes lo -> hi
+    #   agreement ramps 1 -> 0 as target dispersion goes spread_lo -> spread_hi
+    analyst_weight_floor: float = 0.08
+    analyst_weight_span: float = 0.10
+    analyst_coverage_lo: float = 3.0
+    analyst_coverage_hi: float = 20.0
+    analyst_spread_lo: float = 0.20
+    analyst_spread_hi: float = 0.80
+
 
 CONFIG = RiskRewardConfig()
 ```
@@ -147,7 +168,7 @@ CONFIG = RiskRewardConfig()
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd backend && python -m pytest tests/test_risk_reward_config.py -v`
-Expected: PASS (3 tests)
+Expected: PASS (4 tests)
 
 - [ ] **Step 5: Commit**
 
@@ -498,7 +519,8 @@ git commit -m "feat(risk-reward): SMA/RSI/realized-vol indicators"
 - Consumes: `RiskRewardInputs`, `MetricScore` (Task 2); `score_metric` (Task 3); `CONFIG`, `REWARD_SLOTS`, `RISK_SLOTS` (Task 1).
 - Produces:
   - `SOURCE_EXTRACTORS: dict[str, Callable[[RiskRewardInputs], float | None]]` — one extractor per source key in `CONFIG.anchors`.
-  - `build_metric_scores(inp: RiskRewardInputs, cfg: RiskRewardConfig = CONFIG) -> dict[str, MetricScore]` — one entry per slot in `REWARD_SLOTS + RISK_SLOTS`; walks the slot's source chain, scores the first non-None raw with that source's anchors, and marks the slot `dropped=True` (score/raw/source None) when the whole chain misses.
+  - `_analyst_confidence(info: dict, cfg) -> float` and `_analyst_weight(info: dict, cfg) -> float` — the confidence-scaled Analyst-upside weight (`min(coverage, agreement)` → `floor + span·c`, missing inputs collapse to the floor). See spec §4.1†.
+  - `build_metric_scores(inp: RiskRewardInputs, cfg: RiskRewardConfig = CONFIG) -> dict[str, MetricScore]` — one entry per slot in `REWARD_SLOTS + RISK_SLOTS`; walks the slot's source chain, scores the first non-None raw with that source's anchors, and marks the slot `dropped=True` (score/raw/source None) when the whole chain misses. The `analyst_upside` slot carries the **dynamic** weight from `_analyst_weight(inp.info, cfg)` instead of the static `cfg.weights` entry (all other slots use the static weight). The axis renormalization in Task 6 needs no change — it already divides by the sum of *active* weights.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -550,6 +572,31 @@ def test_leverage_percent_debt_to_equity():
     ms = build_metric_scores(_inputs(info={"debtToEquity": 150.0}))
     assert ms["leverage"].source == "debt_to_equity"
     assert ms["leverage"].score == 5.0
+
+
+def test_analyst_weight_at_cap_when_well_covered_and_tight():
+    # 25 analysts (>= hi=20) + spread (140-120)/130 = 15% (<= 20%) -> c=1 -> weight 0.18
+    info = {"targetMeanPrice": 130.0, "targetHighPrice": 140.0,
+            "targetLowPrice": 120.0, "numberOfAnalystOpinions": 25}
+    ms = build_metric_scores(_inputs(info=info))
+    assert ms["analyst_upside"].source == "analyst_upside"
+    assert round(ms["analyst_upside"].weight, 4) == 0.18
+
+
+def test_analyst_weight_at_floor_when_thin_and_dispersed():
+    # 1 analyst (< lo=3) + huge spread -> c=0 -> weight 0.08 (metric still scores)
+    info = {"targetMeanPrice": 130.0, "targetHighPrice": 260.0,
+            "targetLowPrice": 30.0, "numberOfAnalystOpinions": 1}
+    ms = build_metric_scores(_inputs(info=info))
+    assert ms["analyst_upside"].score is not None
+    assert round(ms["analyst_upside"].weight, 4) == 0.08
+
+
+def test_analyst_weight_floors_when_confidence_data_missing():
+    # only targetMeanPrice present: metric scores, but no coverage/dispersion -> floor
+    ms = build_metric_scores(_inputs(info={"targetMeanPrice": 130.0}))
+    assert ms["analyst_upside"].score is not None
+    assert round(ms["analyst_upside"].weight, 4) == 0.08
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -618,11 +665,43 @@ def _net_debt_ebitda(i: RiskRewardInputs):
     return (total_debt - total_cash) / ebitda
 
 
+def _clamp01(x: float) -> float:
+    return max(0.0, min(1.0, x))
+
+
+def _analyst_confidence(info: dict, cfg: RiskRewardConfig) -> float:
+    """Trust in the analyst-upside signal, in [0, 1]: the weaker (min) of analyst
+    COVERAGE and AGREEMENT. Magnitude of the upside is NOT an input (it already lives
+    in the score). Any missing input collapses its factor to 0 -> the weight floor."""
+    n = _pos(info.get("numberOfAnalystOpinions"))
+    coverage = (_clamp01((n - cfg.analyst_coverage_lo)
+                         / (cfg.analyst_coverage_hi - cfg.analyst_coverage_lo))
+                if n is not None else 0.0)
+    mean = _pos(info.get("targetMeanPrice"))
+    hi = _pos(info.get("targetHighPrice"))
+    lo = _pos(info.get("targetLowPrice"))
+    if mean is not None and hi is not None and lo is not None and hi >= lo:
+        spread = (hi - lo) / mean
+        agreement = _clamp01((cfg.analyst_spread_hi - spread)
+                             / (cfg.analyst_spread_hi - cfg.analyst_spread_lo))
+    else:
+        agreement = 0.0
+    return min(coverage, agreement)
+
+
+def _analyst_weight(info: dict, cfg: RiskRewardConfig) -> float:
+    return cfg.analyst_weight_floor + cfg.analyst_weight_span * _analyst_confidence(info, cfg)
+
+
 def build_metric_scores(inp: RiskRewardInputs,
                         cfg: RiskRewardConfig = CONFIG) -> dict[str, MetricScore]:
     out: dict[str, MetricScore] = {}
     for slot in REWARD_SLOTS + RISK_SLOTS:
-        weight = cfg.weights[slot]
+        # Analyst upside carries a confidence-scaled weight (spec §4.1†); every other
+        # slot uses its static config weight. The weight applies whether or not the
+        # metric resolves — a dropped slot is excluded from Task 6's renormalization.
+        weight = (_analyst_weight(inp.info, cfg) if slot == "analyst_upside"
+                  else cfg.weights[slot])
         chosen = None
         for src in cfg.sources[slot]:
             raw = SOURCE_EXTRACTORS[src](inp)
@@ -639,7 +718,7 @@ def build_metric_scores(inp: RiskRewardInputs,
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd backend && python -m pytest tests/test_risk_reward_extraction.py -v`
-Expected: PASS (5 tests)
+Expected: PASS (8 tests)
 
 - [ ] **Step 5: Commit**
 

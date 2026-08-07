@@ -106,11 +106,32 @@ is tried before the metric is dropped. Anchors below are the **config defaults**
 | Valuation | `pegRatio`/`trailingPegRatio` → fwd earnings yield (`1/forwardPE`) → `1/priceToSalesTrailing12M` | lower PEG better | 1.0 | 1.5 | 3.0 | 18% |
 | Growth | `revenueGrowth` → `earningsGrowth` | higher better | 25% | 10% | 0% | 18% |
 | Profitability | `returnOnEquity` → `returnOnAssets` | higher better | 20% | 12% | 5% | 12% |
-| Analyst upside | `(targetMeanPrice − price)/price` (1-yr consensus) | higher better | 30% | 10% | 0% | 12% |
+| Analyst upside | `(targetMeanPrice − price)/price` (1-yr consensus) | higher better | 30% | 10% | 0% | 8–18%† |
 | Tech: discount | `(52W_high − price)/52W_high` | bigger discount better | 25% | 12% | 3% | 24% |
 | Tech: RSI | RSI(14) from history | oversold better | 30 | 50 | 70 | 16% |
 
-Fund 60 / Tech 40, summing to 100%.
+Fund 60 / Tech 40, summing to 100% at the Analyst-upside **base** weight (12%).
+
+**† Analyst upside uses a confidence-scaled weight, not a static one.** The upside
+*magnitude* is already fully captured by the score (anchors 30/10/0% → 5/3/1). What varies
+per ticker is how much that score is *trusted*, driven by **analyst coverage and agreement**
+— never by the size of the upside (weighting by magnitude would double-count it and hand the
+most influence to the least-corroborated names). Two factors, each in `[0,1]`:
+
+- **Coverage** — `numberOfAnalystOpinions`, ramping from 0 at ≤ `analyst_coverage_lo` (3)
+  analysts to 1 at ≥ `analyst_coverage_hi` (20).
+- **Agreement** — target dispersion `(targetHighPrice − targetLowPrice)/targetMeanPrice`,
+  ramping from 1 at ≤ `analyst_spread_lo` (20% spread) down to 0 at ≥ `analyst_spread_hi`
+  (80% spread).
+
+Confidence `c = min(coverage, agreement)` (a signal is only as strong as its weaker leg),
+and `weight = analyst_weight_floor + analyst_weight_span · c` = `0.08 + 0.10·c`, i.e. a
+floor of 8%, base ≈ 12% (c ≈ 0.4), cap 18%. **Missing inputs collapse the affected factor
+to 0** → the metric falls to the 8% floor (never dropped if it still has a `targetMeanPrice`
+to score). This is deliberate for thinly-covered pre-profit names (NBIS/CRWV/ASTS/IREN),
+where a lone price target is the least reliable input in the model — they sit at the floor,
+they are **not** given extra analyst weight. The weight is computed per ticker at metric-build
+time; the axis renormalization in §5 handles the rest, so no other metric's weight changes.
 
 For the Valuation fallbacks, the anchors are re-expressed per source (earnings-yield
 anchors ~8%/5%/2%; P/S-yield anchors are configured separately). Each fallback carries
@@ -135,8 +156,9 @@ Fund 45 / Tech 55, summing to 100%. Net-debt/EBITDA fallback carries anchors ~4.
   margins add risk. This covers both profitable and pre-profit names.
 - **Momentum and max-drawdown are excluded** as redundant with discount + trend + volatility.
 - **Analyst upside is a 1-year consensus** (`targetMeanPrice`) — the one sub-multi-year
-  input, kept intentionally and weighted modestly (12%); it is a herd/sentiment signal
-  and drops out for thinly-covered names.
+  input, kept intentionally and weighted modestly (base ≈ 12%, confidence-scaled 8–18%; see
+  §4.1†); it is a herd/sentiment signal and is muted to the 8% floor for thinly-covered or
+  wildly-dispersed names rather than dropped outright.
 
 ## 5. Graceful degradation and coverage floor
 
@@ -157,9 +179,11 @@ executor — see the yf-pool memory), reusing the existing retry/backoff/timeout
 1. **Info** — `services.yahoo.fetch_ticker_info(ticker)` (already cached per process).
    Fields consumed: `pegRatio`/`trailingPegRatio`, `forwardPE`, `priceToSalesTrailing12M`,
    `revenueGrowth`, `earningsGrowth`, `returnOnEquity`, `returnOnAssets`, `targetMeanPrice`,
-   `currentPrice`/`regularMarketPrice`, `fiftyTwoWeekHigh`, `debtToEquity`, `totalDebt`,
-   `totalCash`, `ebitda`, `operatingMargins`, `profitMargins`, `currentRatio`, `quickRatio`,
-   `beta`.
+   `targetHighPrice`, `targetLowPrice`, `numberOfAnalystOpinions` (the last three feed the
+   confidence-scaled analyst weight, §4.1†), `currentPrice`/`regularMarketPrice`,
+   `fiftyTwoWeekHigh`, `debtToEquity`, `totalDebt`, `totalCash`, `ebitda`, `operatingMargins`,
+   `profitMargins`, `currentRatio`, `quickRatio`, `beta`. (All arrive in the single `info`
+   dict — no extra fetch, and `RiskRewardInputs` needs no new fields to carry them.)
 2. **Daily price history** — a new pooled helper (mirroring `_fetch_ev_ebitda_history_sync`)
    pulling `tk.history(period="1y", interval="1d", timeout=_HISTORY_TIMEOUT)` (~250 rows).
    Computed **locally** from the close series (per the PRD's freshness requirement):
@@ -210,10 +234,13 @@ weight: float, dropped: bool }`.
 ## 8. Configuration (`RiskRewardConfig`)
 
 A Pydantic `BaseSettings` object holding: per-metric anchor triples (including per-fallback
-anchors), per-metric weights (per axis), the fund/tech split is expressed implicitly by the
-weights, `ratio_clamp = (0.2, 5.0)`, tier boundaries, the coverage floor (`min_reward=2`,
-`min_risk=2`), RSI period (14), volatility annualization factor (252), and history window
-(`period="1y"`). All overridable via environment variables.
+anchors), per-metric weights (per axis, the Analyst-upside entry being the **nominal base**
+that the confidence scaling overrides at runtime), the confidence-scaled analyst-weight knobs
+(`analyst_weight_floor=0.08`, `analyst_weight_span=0.10`, `analyst_coverage_lo=3`,
+`analyst_coverage_hi=20`, `analyst_spread_lo=0.20`, `analyst_spread_hi=0.80`), the fund/tech
+split is expressed implicitly by the weights, `ratio_clamp = (0.2, 5.0)`, tier boundaries, the
+coverage floor (`min_reward=2`, `min_risk=2`), RSI period (14), volatility annualization factor
+(252), and history window (`period="1y"`). All overridable via environment variables.
 
 ## 9. Orchestration integration
 
