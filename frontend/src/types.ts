@@ -22,6 +22,8 @@ export interface TickerResult {
   errors: string[]
   quality_score?: number | null
   screener?: ScreenerResult | null
+  risk_reward?: RiskRewardResult | null      // nested object — Results grid + detail
+  risk_reward_ratio?: number | null          // mirrored number — Database grid
 }
 
 export interface JobStatus {
@@ -160,5 +162,61 @@ export function qualityScoreBadgeClass(score: number | null | undefined): string
   if (score >= 8) return 'bg-green-900/40 text-green-400 border border-green-700'
   if (score >= 6.5) return 'bg-blue-900/40 text-blue-400 border border-blue-700'
   if (score >= 5) return 'bg-yellow-900/40 text-yellow-400 border border-yellow-700'
+  return 'bg-red-900/40 text-red-400 border border-red-700'
+}
+
+export interface RiskRewardMetricScore {
+  raw: number | null
+  source: string | null
+  score: number | null
+  weight: number
+  dropped: boolean
+}
+
+export interface RiskRewardResult {
+  ticker: string
+  company_name: string | null
+  last_evaluated: string | null
+  ratio: number | null
+  tier: string | null
+  reward_score: number | null
+  risk_score: number | null
+  actionable_insight: string | null
+  metric_scores: Record<string, RiskRewardMetricScore>
+  raw_snapshot: Record<string, number | null>
+  status: 'completed' | 'insufficient_data' | 'failed'
+  errors: string[]
+}
+
+/** The Results grid carries the nested object; the Database grid carries the
+ *  mirrored number. One helper reads whichever is present. */
+export function riskRewardRatio(
+  r: { risk_reward?: RiskRewardResult | null; risk_reward_ratio?: number | null },
+): number | null {
+  return r.risk_reward?.ratio ?? r.risk_reward_ratio ?? null
+}
+
+export function riskRewardTier(ratio: number | null | undefined): string | null {
+  if (ratio == null) return null
+  if (ratio >= 2.0) return 'Asymmetric Upside'
+  if (ratio >= 1.3) return 'Reward-Favored'
+  if (ratio >= 0.8) return 'Balanced'
+  if (ratio >= 0.5) return 'Risk-Favored'
+  return 'Value Trap'
+}
+
+export function riskRewardColor(ratio: number | null | undefined): string {
+  if (ratio == null) return 'text-slate-400'
+  if (ratio >= 2.0) return 'text-green-400'
+  if (ratio >= 1.3) return 'text-blue-400'
+  if (ratio >= 0.8) return 'text-yellow-400'
+  return 'text-red-400'
+}
+
+export function riskRewardBadgeClass(ratio: number | null | undefined): string {
+  if (ratio == null) return 'bg-slate-800 text-slate-300'
+  if (ratio >= 2.0) return 'bg-green-900/40 text-green-400 border border-green-700'
+  if (ratio >= 1.3) return 'bg-blue-900/40 text-blue-400 border border-blue-700'
+  if (ratio >= 0.8) return 'bg-yellow-900/40 text-yellow-400 border border-yellow-700'
   return 'bg-red-900/40 text-red-400 border border-red-700'
 }
