@@ -23,6 +23,7 @@ class AnalyseRequest(BaseModel):
 
 class DatabaseRow(TickerResult):
     quality_score: float | None = None
+    risk_reward_ratio: float | None = None
 
 
 class JobStatus(BaseModel):
