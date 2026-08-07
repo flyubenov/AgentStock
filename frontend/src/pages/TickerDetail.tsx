@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useLocation, Link } from 'react-router-dom'
-import type { TickerResult, ScreenerResult } from '../types'
+import type { TickerResult, ScreenerResult, RiskRewardResult } from '../types'
 import { fvBadgeClass, fvGapLabel } from '../types'
 import FairValuePanel from '../components/FairValuePanel'
 import ScreenerPanel from '../components/ScreenerPanel'
+import RiskRewardPanel from '../components/RiskRewardPanel'
 
 import { API_BASE as API } from '../lib/api'
 
@@ -11,8 +12,9 @@ export default function TickerDetail() {
   const location = useLocation()
   const result: TickerResult | undefined = location.state?.result
 
-  const [tab, setTab] = useState<'fv' | 'screener'>('fv')
+  const [tab, setTab] = useState<'fv' | 'screener' | 'risk_reward'>('fv')
   const [screener, setScreener] = useState<ScreenerResult | null>(result?.screener ?? null)
+  const [riskReward, setRiskReward] = useState<RiskRewardResult | null>(result?.risk_reward ?? null)
 
   useEffect(() => {
     if (tab === 'screener' && !screener && result?.ticker) {
@@ -21,7 +23,13 @@ export default function TickerDetail() {
         .then(d => { if (!d.error) setScreener(d as ScreenerResult) })
         .catch(() => {})
     }
-  }, [tab, screener, result])
+    if (tab === 'risk_reward' && !riskReward && result?.ticker) {
+      fetch(`${API}/api/risk-reward/${result.ticker}`)
+        .then(r => r.json())
+        .then(d => { if (!d.error) setRiskReward(d as RiskRewardResult) })
+        .catch(() => {})
+    }
+  }, [tab, screener, riskReward, result])
 
   if (!result) {
     return (
@@ -70,24 +78,32 @@ export default function TickerDetail() {
       </div>
 
       <div className="flex gap-4 border-b border-[#1e1e2a] mb-4">
-        {(['fv', 'screener'] as const).map(t => (
+        {(['fv', 'screener', 'risk_reward'] as const).map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={`pb-2 text-sm ${tab === t ? 'text-blue-400 border-b-2 border-blue-400' : 'text-slate-500 hover:text-slate-300'}`}
           >
-            {t === 'fv' ? 'Fair Value' : 'Screener'}
+            {t === 'fv' ? 'Fair Value' : t === 'screener' ? 'Screener' : 'Risk-Reward'}
           </button>
         ))}
       </div>
 
       {tab === 'fv' ? (
         <FairValuePanel result={result} />
-      ) : screener ? (
-        <ScreenerPanel result={screener} />
+      ) : tab === 'screener' ? (
+        screener ? (
+          <ScreenerPanel result={screener} />
+        ) : (
+          <div className="text-slate-500 text-sm py-8 text-center">
+            No screener data for this ticker yet.
+          </div>
+        )
+      ) : riskReward ? (
+        <RiskRewardPanel result={riskReward} />
       ) : (
         <div className="text-slate-500 text-sm py-8 text-center">
-          No screener data for this ticker yet.
+          No Risk-Reward data for this ticker yet.
         </div>
       )}
 
