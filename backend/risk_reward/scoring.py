@@ -131,3 +131,53 @@ def build_metric_scores(inp: RiskRewardInputs,
         out[slot] = chosen or MetricScore(raw=None, source=None, score=None,
                                           weight=weight, dropped=True)
     return out
+
+
+from dataclasses import dataclass
+
+
+@dataclass
+class Aggregation:
+    reward: float | None
+    risk: float | None
+    ratio: float | None
+    tier: str | None
+    insight: str | None
+    status: str
+
+
+def _axis_average(scores, slots) -> tuple[float | None, int]:
+    """Weighted average over the active (non-dropped) metrics in `slots`, with the
+    active weights renormalized to sum to 1. Returns (average, active_count)."""
+    active = [scores[s] for s in slots if not scores[s].dropped and scores[s].score is not None]
+    total_w = sum(ms.weight for ms in active)
+    if not active or total_w <= 0:
+        return None, len(active)
+    avg = sum(ms.score * ms.weight for ms in active) / total_w
+    return avg, len(active)
+
+
+def tier_for(ratio: float, cfg: RiskRewardConfig = CONFIG) -> str:
+    for floor, label in cfg.tiers:
+        if ratio >= floor:
+            return label
+    return cfg.tiers[-1][1]
+
+
+def _insight(tier: str, reward: float, risk: float) -> str:
+    lean = "reward outweighs risk" if reward >= risk else "risk outweighs reward"
+    return f"{tier}: {lean} (reward {reward:.1f} vs risk {risk:.1f} on a 1-5 scale)."
+
+
+def aggregate(scores: dict[str, MetricScore],
+              cfg: RiskRewardConfig = CONFIG) -> Aggregation:
+    reward, n_reward = _axis_average(scores, REWARD_SLOTS)
+    risk, n_risk = _axis_average(scores, RISK_SLOTS)
+    if n_reward < cfg.min_reward or n_risk < cfg.min_risk or reward is None or risk is None:
+        return Aggregation(reward=reward, risk=risk, ratio=None, tier=None,
+                           insight=None, status="insufficient_data")
+    lo, hi = cfg.ratio_clamp
+    ratio = max(lo, min(hi, reward / risk))
+    tier = tier_for(ratio, cfg)
+    return Aggregation(reward=reward, risk=risk, ratio=ratio, tier=tier,
+                       insight=_insight(tier, reward, risk), status="completed")
