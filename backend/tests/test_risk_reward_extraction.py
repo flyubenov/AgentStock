@@ -69,3 +69,19 @@ def test_analyst_weight_floors_when_confidence_data_missing():
     ms = build_metric_scores(_inputs(info={"targetMeanPrice": 130.0}))
     assert ms["analyst_upside"].score is not None
     assert round(ms["analyst_upside"].weight, 4) == 0.08
+
+
+def test_negative_peg_falls_back_to_earnings_yield():
+    # pre-profit name: yfinance reports a NEGATIVE pegRatio. Must NOT be used
+    # (and must NOT score 5.0 via peg) -> falls through to earnings_yield.
+    ms = build_metric_scores(_inputs(info={"pegRatio": -2.0, "forwardPE": 12.5}))
+    assert ms["valuation"].source == "earnings_yield"
+    assert ms["valuation"].score == 5.0
+
+
+def test_negative_peg_alone_drops_valuation_slot():
+    # negative PEG with no fallback source available must drop the slot,
+    # never fabricate a 5.0 "best" reward score.
+    ms = build_metric_scores(_inputs(info={"pegRatio": -2.0}))
+    assert ms["valuation"].dropped is True
+    assert ms["valuation"].score is None

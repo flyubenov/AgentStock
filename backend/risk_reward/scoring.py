@@ -48,7 +48,7 @@ def _ratio(num, den):
 
 SOURCE_EXTRACTORS: dict[str, Callable[[RiskRewardInputs], float | None]] = {
     # reward
-    "peg": lambda i: i.info.get("pegRatio") or i.info.get("trailingPegRatio"),
+    "peg": lambda i: _pos(i.info.get("pegRatio")) or _pos(i.info.get("trailingPegRatio")),
     "earnings_yield": lambda i: _ratio(1.0, i.info.get("forwardPE")),
     "ps_yield": lambda i: _ratio(1.0, i.info.get("priceToSalesTrailing12Months")),
     "revenue_growth": lambda i: i.info.get("revenueGrowth"),
