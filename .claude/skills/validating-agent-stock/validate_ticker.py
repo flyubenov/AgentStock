@@ -1,9 +1,10 @@
-"""Single-ticker validation harness for Agent Stock.
+"""Single-ticker validation harness for Agent Stock — runs ALL THREE pipelines.
 
-Runs BOTH pipelines live (yfinance) for one ticker and dumps everything an
+Runs all three pipelines live (yfinance) for one ticker and dumps everything an
 analyst needs to cross-check the result against the pipeline logic:
 the extracted `fin` inputs, the raw statement fetches, the classifier verdict,
-the full FV breakdown (per-leg weight + scenarios), and the Quality sections.
+the full FV breakdown (per-leg weight + scenarios), the Quality sections, and
+the Risk-Reward breakdown (ratio/tier/reward/risk + per-metric scoring).
 
 Usage (from anywhere; it locates backend/ itself):
     python validate_ticker.py PLTR
@@ -32,10 +33,25 @@ _add_backend_to_path()
 
 from valuation.engine import run as fv_run              # noqa: E402
 from screener.engine import run as sc_run               # noqa: E402
+from risk_reward.engine import run as rr_run            # noqa: E402
 from services.yahoo import (                            # noqa: E402
     fetch_ticker_info, extract_financials, fetch_ticker_cashflow,
     fetch_ev_ebitda_history, fetch_quarterly_revenue,
 )
+
+# The yfinance info fields the Risk-Reward engine reads, dumped under --inputs so
+# every R-R metric's sourcing (and the confidence-scaled analyst weight) is
+# cross-checkable against the raw values.
+_RR_INFO_FIELDS = [
+    # reward axis
+    "pegRatio", "trailingPegRatio", "forwardPE", "priceToSalesTrailing12Months",
+    "revenueGrowth", "earningsGrowth", "returnOnEquity", "returnOnAssets",
+    "targetMeanPrice", "targetHighPrice", "targetLowPrice", "numberOfAnalystOpinions",
+    "fiftyTwoWeekHigh",
+    # risk axis
+    "debtToEquity", "totalDebt", "totalCash", "ebitda",
+    "operatingMargins", "profitMargins", "currentRatio", "quickRatio", "beta",
+]
 
 
 async def dump_inputs(ticker: str) -> dict:
@@ -54,7 +70,7 @@ async def dump_inputs(ticker: str) -> dict:
 
 
 async def main(ticker: str, with_inputs: bool):
-    fv, sc = await asyncio.gather(fv_run(ticker), sc_run(ticker))
+    fv, sc, rr = await asyncio.gather(fv_run(ticker), sc_run(ticker), rr_run(ticker))
     out = {
         "FV": fv.model_dump(),
         "QUALITY": {
@@ -66,9 +82,15 @@ async def main(ticker: str, with_inputs: bool):
             "status": sc.status,
             "errors": sc.errors,
         },
+        # Third pipeline. The full result: ratio, tier, reward_score, risk_score,
+        # actionable_insight, per-slot metric_scores (raw/source/score/weight/dropped),
+        # raw_snapshot, status, errors. See risk-reward-validation.md for the recipe.
+        "RISK_REWARD": rr.model_dump(),
     }
     if with_inputs:
         out["INPUTS"] = await dump_inputs(ticker)
+        info = await fetch_ticker_info(ticker)   # cached per process
+        out["INPUTS"]["rr_source_inputs"] = {k: info.get(k) for k in _RR_INFO_FIELDS}
     print(json.dumps(out, indent=2, default=str))
 
 
