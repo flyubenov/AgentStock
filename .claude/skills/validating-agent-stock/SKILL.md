@@ -1,21 +1,22 @@
 ---
 name: validating-agent-stock
-description: Use when the user questions, sanity-checks, or asks you to validate Agent Stock's fair value or quality score for a specific ticker ("is PLTR's FV right?", "why is X rated so low?", "does −63% look fair?", "cross-check this number"), or suspects the valuation/scoring pipeline unfairly mis-rated a company.
+description: Use when the user questions, sanity-checks, or asks you to validate Agent Stock's fair value or quality score for a specific ticker ("is PLTR's FV right?", "why is X rated so low?", "does −63% look fair?", "cross-check this number"), or suspects the valuation/scoring pipeline unfairly mis-rated a company, or the newly added Risk-Reward (R-R) ratio ("is X's R-R right?", "why is this a Value Trap?", "does this R-R look fair?").
 ---
 
 # Validating Agent Stock
 
 ## Overview
 
-You are an expert financial analyst validating a result that Agent Stock — a two-pipeline Python app — produced for one ticker. **Your default deliverable is a verdict + evidence, not a code change.** Agent Stock has been through many tuning passes (see the memory dir); most numbers are sound. Confirm or fault the number honestly; only cross into fixing the engine when a *real* gap is proven and the user is in the loop.
+You are an expert financial analyst validating a result that Agent Stock — a three-pipeline Python app (Fair Value, Quality Score, Risk-Reward) — produced for one ticker. **Your default deliverable is a verdict + evidence, not a code change.** Agent Stock has been through many tuning passes (see the memory dir); most numbers are sound. Confirm or fault the number honestly; only cross into fixing the engine when a *real* gap is proven and the user is in the loop.
 
-**Core principle:** a fair value is a *range*, not a point. Agent Stock reports a single number; your job is to judge whether that number is a defensible center of a reasonable range, and if not, *why* — data problem, or logic problem.
+**Core principle:** a fair value is a *range*, not a point. Agent Stock reports a single number; your job is to judge whether that number is a defensible center of a reasonable range, and if not, *why* — data problem, or logic problem. Risk-Reward is different in kind: unlike a fair value (a range around a market/DCF truth), the **R-R ratio is a constructed index with no external market truth** — there is no "true" R-R to converge on. Validate its **internal correctness** (inputs, scoring, aggregation) and whether the **tier's story matches the company**, not its distance from a market price.
 
 ## When to use
 
 - User asks whether a ticker's FV or Quality score is right / fair / trustworthy.
 - User says a company looks mis-rated (too cheap/expensive, quality too low/high).
 - You suspect a classifier tier, method weight, guard, or cap distorted a result.
+- User asks whether a ticker's Risk-Reward ratio or tier (e.g. "Value Trap") is right / fair.
 
 **When NOT to use:** building new features, screener work unrelated to a specific verdict, or generic finance questions with no Agent Stock result in play.
 
@@ -28,14 +29,16 @@ You are an expert financial analyst validating a result that Agent Stock — a t
 
 ## Run one ticker (the harness — don't reinvent it)
 
-`validate_ticker.py` (shipped beside this skill) runs BOTH pipelines live and dumps everything you need. It locates `backend/` itself and is read-only (no Sheets writes):
+`validate_ticker.py` (shipped beside this skill) runs ALL THREE pipelines live and dumps everything you need, including a `RISK_REWARD` block (ratio, tier, reward/risk scores, per-metric `metric_scores`, `raw_snapshot`). It locates `backend/` itself and is read-only (no Sheets writes):
 
 ```
 "C:/Users/f_lub/AppData/Local/Python/bin/python3.exe" \
   ".claude/skills/validating-agent-stock/validate_ticker.py" PLTR --inputs
 ```
 
-`--inputs` also dumps the raw `extract_financials` dict, cashflow, EV/EBITDA history, and quarterly revenue — the inputs you cross-check against. Use it every time; input-dumping is what turns hand-waving into evidence.
+`--inputs` also dumps the raw `extract_financials` dict, cashflow, EV/EBITDA history, quarterly revenue, and `rr_source_inputs` (the R-R-specific raw fields) — the inputs you cross-check against. Use it every time; input-dumping is what turns hand-waving into evidence.
+
+**Validating a Risk-Reward ratio? Read `risk-reward-validation.md`** (in this skill dir) — it carries the full R-R recipe, the qualitative read, the traps, and the calibration flow. Run that recipe **only when the question is about R-R.** An FV/Quality validation may add a **one-line** R-R cross-reference (ratio + tier, straight from the harness dump) when it's relevant or contradicts the FV/Quality verdict — it does not run the full R-R recipe unprompted.
 
 To test **logic on synthetic inputs** (no network), call the pure cores directly:
 `valuation.engine.evaluate(fin)`, `valuation.classifier.classify(fin)`, `screener.scoring.score(metrics, sector)`.
@@ -50,10 +53,16 @@ To test **logic on synthetic inputs** (no network), call the pure cores directly
 | Stock-type tiers + method weights | `backend/valuation/classifier.py` | `classify(fin)`, `_TYPE_WEIGHTS` |
 | Quality — live | `backend/screener/engine.py` | `run(ticker)` → `ScreenerResult` |
 | Quality — metrics / scoring | `backend/screener/{metrics,scoring}.py` | `compute_metrics`, `score` |
-| Both pipelines + Sheets persist | `backend/orchestrator/batch.py` | `_run_one(ticker)` |
+| Risk-Reward — live | `backend/risk_reward/engine.py` | `run(ticker)` → `RiskRewardResult` |
+| R-R scoring / aggregation | `backend/risk_reward/scoring.py` | `build_metric_scores`, `aggregate` |
+| R-R config (anchors/weights/tiers/clamp) | `backend/risk_reward/config.py` | — |
+| R-R persistence (tab + Database col R mirror) | `backend/services/risk_reward_sheets.py` | — |
+| All pipelines + Sheets persist | `backend/orchestrator/batch.py` | `_run_one(ticker)` |
 | Live recompute API | `backend/routers/analysis.py` | `POST /ticker/{t}/recalculate` |
 | yfinance data layer | `backend/services/yahoo.py`, `yf_pool.py` | `extract_financials`, `fetch_*` |
 | Tests | `backend/tests/` | `pytest` from `backend/` (`asyncio_mode=auto`) |
+
+R-R is **fully isolated** from Fair Value and Quality Score — an R-R change cannot move an FV/Quality number, and vice-versa (this bounds blast radius). R-R is **config-driven** — anchors/weights/tiers live in `config.py`, so many R-R fixes are a config re-tune with a global blast radius across the R-R universe.
 
 **FV tiers** (`classify`): FINANCIAL, ASSET_HEAVY, CONGLOMERATE, EARLY_GROWTH, GROWTH, DIVIDEND, CYCLICAL, then size default MEGA_CAP (>$1T) / LARGE_CAP (>$100B) / MID_CAP. Each has fixed method weights.
 
