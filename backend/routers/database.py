@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from services.sheets import read_database, delete_database_row, delete_watchlist_row
 from services.screener_sheets import read_screener_one, delete_screener_row
+from services.risk_reward_sheets import read_risk_reward_one, delete_risk_reward_row
 
 router = APIRouter()
 
@@ -24,6 +25,7 @@ async def delete_ticker(ticker: str):
         removed = {
             "database": await delete_database_row(t),
             "screener": await delete_screener_row(t),
+            "risk_reward": await delete_risk_reward_row(t),
             "tickers": await delete_watchlist_row(t),
         }
         if not any(removed.values()):
@@ -39,6 +41,17 @@ async def get_screener(ticker: str):
         r = await read_screener_one(ticker)
         if r is None:
             return {"error": f"No screener record for {ticker.upper()}"}
+        return r.model_dump()
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@router.get("/risk-reward/{ticker}")
+async def get_risk_reward(ticker: str):
+    try:
+        r = await read_risk_reward_one(ticker)
+        if r is None:
+            return {"error": f"No risk-reward record for {ticker.upper()}"}
         return r.model_dump()
     except Exception as e:
         return {"error": str(e)}

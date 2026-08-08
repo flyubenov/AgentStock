@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { useParams, useLocation, Link } from 'react-router-dom'
 import type { TickerResult } from '../types'
-import { fvGapColor, fvGapLabel, qualityScoreColor } from '../types'
+import { fvGapColor, fvGapLabel, qualityScoreColor, riskRewardColor, riskRewardRatio } from '../types'
 
-type SortKey = 'fair_value' | 'price_vs_fair_value_pct' | 'ticker' | 'quality_score'
+type SortKey = 'fair_value' | 'price_vs_fair_value_pct' | 'ticker' | 'quality_score' | 'risk_reward'
 
 export default function Results() {
   const { jobId } = useParams()
@@ -13,7 +13,9 @@ export default function Results() {
   const [sortAsc, setSortAsc] = useState(false)
 
   const sortVal = (r: TickerResult): string | number | null | undefined =>
-    sortKey === 'quality_score' ? r.screener?.quality_score : r[sortKey]
+    sortKey === 'quality_score' ? r.screener?.quality_score
+    : sortKey === 'risk_reward' ? riskRewardRatio(r)
+    : r[sortKey]
 
   const sorted = [...results].sort((a, b) => {
     const av = sortVal(a) ?? (sortAsc ? Infinity : -Infinity)
@@ -27,10 +29,10 @@ export default function Results() {
   }
 
   const exportCSV = () => {
-    const headers = ['Ticker', 'Company', 'Stock Type', 'Quality Score', 'Fair Value', 'Price', 'FV Gap%', 'Verdict']
+    const headers = ['Ticker', 'Company', 'Stock Type', 'Quality Score', 'Risk-Reward', 'Fair Value', 'Price', 'FV Gap%', 'Verdict']
     const rows = sorted.map(r => [
       r.ticker, r.company_name, r.stock_type,
-      r.screener?.quality_score, r.fair_value, r.current_price, r.price_vs_fair_value_pct,
+      r.screener?.quality_score, riskRewardRatio(r), r.fair_value, r.current_price, r.price_vs_fair_value_pct,
       fvGapLabel(r.price_vs_fair_value_pct),
     ])
     const esc = (v: unknown) => {
@@ -65,6 +67,7 @@ export default function Results() {
               <th className="text-left py-2">Company</th>
               <th className="text-left py-2 px-2">Stock Type</th>
               <th className="text-right py-2 px-2 cursor-pointer hover:text-slate-300" onClick={() => toggleSort('quality_score')}>Quality</th>
+              <th className="text-right py-2 px-2 cursor-pointer hover:text-slate-300" onClick={() => toggleSort('risk_reward')}>R/R</th>
               <th className="text-right py-2 px-2 cursor-pointer hover:text-slate-300" onClick={() => toggleSort('fair_value')}>Fair Value</th>
               <th className="text-right py-2 px-2">Price</th>
               <th className="text-right py-2 px-4 cursor-pointer hover:text-slate-300" onClick={() => toggleSort('price_vs_fair_value_pct')}>FV Gap%</th>
@@ -82,6 +85,9 @@ export default function Results() {
                 <td className="py-2 px-2 text-xs text-slate-500 font-mono">{r.stock_type || '—'}</td>
                 <td className={`py-2 px-2 text-right font-mono text-xs ${qualityScoreColor(r.screener?.quality_score)}`}>
                   {r.screener?.quality_score != null ? r.screener.quality_score.toFixed(1) : '—'}
+                </td>
+                <td className={`py-2 px-2 text-right font-mono text-xs ${riskRewardColor(riskRewardRatio(r))}`}>
+                  {riskRewardRatio(r) != null ? riskRewardRatio(r)!.toFixed(2) : '—'}
                 </td>
                 <td className="py-2 px-2 text-right font-mono text-xs text-slate-300">
                   {r.fair_value != null ? `$${r.fair_value.toFixed(2)}` : '—'}

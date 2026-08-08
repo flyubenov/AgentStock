@@ -90,3 +90,15 @@ def fetch_price_monthly(ticker: str) -> tuple[float, ...]:
         return tuple(float(x) for x in hist["Close"].tolist() if x == x)
     except Exception:
         return tuple()
+
+
+def fetch_price_daily(ticker: str, period: str = "1y") -> tuple[float, ...]:
+    """Oldest->newest daily closes over `period` (best-effort). Mirrors
+    fetch_price_monthly but at daily interval for the Risk-Reward indicators."""
+    try:
+        hist = yf.Ticker(ticker).history(period=period, interval="1d", timeout=_HISTORY_TIMEOUT)
+        if hist is None or hist.empty:
+            return tuple()
+        return tuple(float(x) for x in hist["Close"].tolist() if x == x)
+    except Exception:
+        return tuple()

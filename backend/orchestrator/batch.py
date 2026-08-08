@@ -3,8 +3,10 @@ import asyncio, os
 from collections.abc import AsyncGenerator
 from valuation.engine import run as engine_run
 from screener.engine import run as screener_run
+from risk_reward.engine import run as risk_reward_run
 from services.sheets import upsert_result
 from services.screener_sheets import upsert_screener_result
+from services.risk_reward_sheets import upsert_risk_reward_result
 from services.yf_pool import rate_limit_pressure
 from models import TickerResult
 
@@ -28,11 +30,15 @@ def _pacing_delay() -> float:
 
 
 async def _run_one(ticker: str) -> dict:
-    """Run both pipelines for one ticker; upsert FV first (so the Database row
-    exists for the Q mirror), then the screener. Neither failure aborts the other."""
+    """Run all three pipelines for one ticker; upsert FV first (so the Database row
+    exists for the Q/R mirrors), then the screener, then risk-reward. No pipeline's
+    failure aborts another — each is gathered with return_exceptions and its write is
+    independently guarded."""
     fv_task = asyncio.create_task(engine_run(ticker))
     sc_task = asyncio.create_task(screener_run(ticker))
-    fv_res, sc_res = await asyncio.gather(fv_task, sc_task, return_exceptions=True)
+    rr_task = asyncio.create_task(risk_reward_run(ticker))
+    fv_res, sc_res, rr_res = await asyncio.gather(
+        fv_task, sc_task, rr_task, return_exceptions=True)
 
     errors = []
     fv_dump = None
@@ -70,11 +76,27 @@ async def _run_one(ticker: str) -> dict:
             except Exception as e:
                 errors.append(f"screener_write: {e}")
 
+    # Risk-Reward: a third, fully isolated pipeline. Only a "completed" result is
+    # persisted — a "failed" (no data) or "insufficient_data" (coverage floor) result
+    # is attached to the payload but never written, so the mirror column stays blank
+    # rather than showing a fabricated ratio.
+    rr_dump = None
+    if isinstance(rr_res, Exception):
+        errors.append(f"risk_reward: {rr_res}")
+    else:
+        rr_dump = rr_res.model_dump()
+        if rr_res.status == "completed":
+            try:
+                await upsert_risk_reward_result(rr_res)
+            except Exception as e:
+                errors.append(f"risk_reward_write: {e}")
+
     if fv_dump is None:
         fv_dump = TickerResult(ticker=ticker.upper(), status="failed", errors=errors).model_dump()
     else:
         fv_dump.setdefault("errors", []).extend(errors)
     fv_dump["screener"] = sc_dump
+    fv_dump["risk_reward"] = rr_dump
     fv_failed = fv_dump.get("status") == "failed"
     return {"result": fv_dump, "fv_failed": fv_failed}
 

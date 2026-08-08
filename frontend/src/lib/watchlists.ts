@@ -7,6 +7,7 @@ export interface SerializedFilters {
   stockTypes: string[]
   quality: NumRange
   gap: NumRange
+  riskReward: NumRange
 }
 
 export interface Watchlist {
