@@ -22,7 +22,7 @@ You are an expert financial analyst validating a result that Agent Stock — a t
 
 ## Do these first (the RED gaps this skill exists to close)
 
-1. **Read the relevant memory before analyzing.** `C:\Users\f_lub\.claude\projects\C--Users-f-lub-proj-Agent-Stock\memory\` (index: `MEMORY.md`). Many tickers and mechanisms are already documented — NBIS's real 684% growth, the size-coupled fade saga, winner-take-all `pick_ev_multiple`, split-aware history. Grep it for the ticker AND the mechanism. **Do not re-derive settled decisions or re-open a fix the memory already records.**
+1. **Read the relevant memory before analyzing.** `.claude/memory/` (repo-relative; index: `MEMORY.md`). This is the project-canonical memory store — it travels with the repo, so it works identically locally and in a cloud checkout. Many tickers and mechanisms are already documented — NBIS's real 684% growth, the size-coupled fade saga, winner-take-all `pick_ev_multiple`, split-aware history. Grep it for the ticker AND the mechanism. **Do not re-derive settled decisions or re-open a fix the memory already records.**
 2. **Separate "the number the engine computes now" from "the number the app shows."** The grid/UI serves **persisted Google Sheets rows**; they can be stale (a code fix does *not* change what's shown until a recompute). Always recompute live before trusting or faulting a number. See [[app-serves-persisted-rows-not-live-compute]].
 3. **Read the ticker-tagged code comments around whatever leg/cap/guard drives this ticker.** Agent Stock is in active optimization, and nearly every constant, cap, and guard carries an inline comment naming the ticker(s) it was tuned against and *why* (`grep` the driver in `valuation/{engine,models}.py`, `classifier.py`, `screener/{metrics,scoring}.py` — e.g. `# NVDA's peak-era median reads ~fairly valued at 25x but flips to undervalued at 30x`, `# TEM: +$635M net debt over -$185M EBITDA … scored 10/10`). These comments are the design intent: they tell you whether the behavior you're seeing is deliberate calibration or an unforeseen case. **Never propose changing a constant without first reading the comment that set it** — you will otherwise re-break a documented neighbor.
 4. **Before designing any fix, search the code for an existing pattern that already solves a structurally-similar problem, and reuse/extend it** rather than inventing a new mechanism. See [Reuse before inventing](#reuse-an-existing-pattern-before-inventing-one-do-this-before-designing-any-fix) — this is a hard requirement, not a nicety.
@@ -32,9 +32,9 @@ You are an expert financial analyst validating a result that Agent Stock — a t
 `validate_ticker.py` (shipped beside this skill) runs ALL THREE pipelines live and dumps everything you need, including a `RISK_REWARD` block (ratio, tier, reward/risk scores, per-metric `metric_scores`, `raw_snapshot`). It locates `backend/` itself and is read-only (no Sheets writes):
 
 ```
-"C:/Users/f_lub/AppData/Local/Python/bin/python3.exe" \
-  ".claude/skills/validating-agent-stock/validate_ticker.py" PLTR --inputs
+python3 ".claude/skills/validating-agent-stock/validate_ticker.py" PLTR --inputs
 ```
+(Run from the repo root with the `backend/` deps installed. `python3` resolves both locally and in a Linux cloud checkout; the harness locates `backend/` itself.)
 
 `--inputs` also dumps the raw `extract_financials` dict, cashflow, EV/EBITDA history, quarterly revenue, and `rr_source_inputs` (the R-R-specific raw fields) — the inputs you cross-check against. Use it every time; input-dumping is what turns hand-waving into evidence.
 
