@@ -19,3 +19,7 @@ backend/credentials/
 # IDE
 .vscode/
 .idea/
+
+# Local Claude Platform deploy scripts (may contain secrets) — do not commit
+/SetupClaudePlatform.ps1
+/SetupClaudePlatform2.ps1
