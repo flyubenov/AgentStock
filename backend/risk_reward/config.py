@@ -57,6 +57,13 @@ class RiskRewardConfig(BaseModel):
         "volatility": (0.70, 0.40, 0.20),
         "trend": (-0.15, 0.0, 0.08),
         "beta": (2.0, 1.2, 0.8),
+        # Statement-annual variants (see [[iren-rr-stmt-gap-guard]]): same basis/anchors
+        # as their info-sourced counterparts (revenue YoY as a fraction, operating
+        # margin as a fraction) — only the raw source differs (annual statement vs.
+        # info's quarterly-YoY / TTM). Used ONLY by the gap guard in scoring.py, never
+        # part of a slot's normal fallback chain.
+        "revenue_growth_stmt": (0.25, 0.10, 0.0),
+        "operating_margin_stmt": (-0.15, 0.0, 0.15),
     }
     ratio_clamp: tuple[float, float] = (0.2, 5.0)
     tiers: list[tuple[float, str]] = [
@@ -79,6 +86,19 @@ class RiskRewardConfig(BaseModel):
     analyst_coverage_hi: float = 20.0
     analyst_spread_lo: float = 0.20
     analyst_spread_hi: float = 0.80
+
+    # Statement-corroboration gap guard for growth/burn (see [[iren-rr-stmt-gap-guard]]):
+    # info's revenueGrowth (quarterly YoY) / operatingMargins can read a flat/negative
+    # growth or deeply-negative margin artifact for capex-heavy crypto miners (IREN,
+    # MARA, RIOT, CLSK, CIFR, WULF) while the statement shows a materially better
+    # reality. Override ONLY when the statement-sourced score beats info's by >= this
+    # many points on the shared 1-5 scale (growth: statement higher; burn: info higher,
+    # i.e. info overstates risk) — directional and self-limiting, so a name where info
+    # reads BETTER than the statement (CORZ, APLD — a real business-transition/impairment
+    # divergence, not a feed artifact) is structurally excluded, no per-name carve-out.
+    # Live-swept 1.0 sits clear of the largest false-positive candidate (CRWV burn gap
+    # 0.80) and well below the smallest true positive (RIOT growth gap 1.48).
+    stmt_gap_min: float = 1.0
 
 
 CONFIG = RiskRewardConfig()
