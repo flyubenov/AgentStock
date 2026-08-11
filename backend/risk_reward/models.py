@@ -15,6 +15,13 @@ class RiskRewardInputs:
     ma_50: float | None
     rsi: float | None
     volatility: float | None
+    # Statement-annual growth/margin (Total Revenue YoY, Operating Income / Total
+    # Revenue), same basis as screener/metrics.py's revenue_growth_yoy / op_margin.
+    # Feeds the growth/burn statement-corroboration guard in scoring.py ONLY — never
+    # a blanket replacement for info's quarterly-YoY figures (see
+    # [[iren-rr-stmt-gap-guard]]). None when the statement fetch is unavailable.
+    revenue_growth_stmt: float | None = None
+    operating_margin_stmt: float | None = None
 
 
 class MetricScore(BaseModel):
