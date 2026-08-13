@@ -1,5 +1,4 @@
 import os
-import statistics
 import time
 import yfinance as yf
 from functools import lru_cache
@@ -7,6 +6,11 @@ from datetime import date as _date
 from services.yf_pool import run_yf, note_rate_limit
 
 EV_EBITDA_HISTORY_MIN_YEARS = 3
+# Recency-weight decay for ev_ebitda_history_ewma: each year further into the past
+# counts for half as much as the year after it (half-life = 1 year). See that
+# function's docstring / [[strl-ev-ebitda-trend-lag]] for why a flat median was
+# replaced.
+EV_EBITDA_HISTORY_DECAY = 0.5
 
 try:
     from yfinance.exceptions import YFRateLimitError as _YFRateLimitError
@@ -155,11 +159,30 @@ def statements_predate_split(latest_statement_date, split_dates) -> bool:
     return any(d > latest_statement_date for d in split_dates)
 
 
-def ev_ebitda_history_median(rows: list[dict],
-                             min_years: int = EV_EBITDA_HISTORY_MIN_YEARS) -> float | None:
-    """Median historical EV/EBITDA from per-year rows of
-    {avg_price, shares, ebitda, net_debt}. Years with non-positive EBITDA or
-    missing price/shares are skipped; None if fewer than min_years remain."""
+def ev_ebitda_history_ewma(rows: list[dict], min_years: int = EV_EBITDA_HISTORY_MIN_YEARS,
+                          decay: float = EV_EBITDA_HISTORY_DECAY) -> float | None:
+    """Exponentially recency-weighted historical EV/EBITDA from per-year rows of
+    {avg_price, shares, ebitda, net_debt} (most-recent-first, matching
+    latest_statement_ebitda's convention). Years with non-positive EBITDA or
+    missing price/shares are skipped; None if fewer than min_years remain.
+
+    Replaces a flat median (see [[strl-ev-ebitda-trend-lag]]): a median lags a
+    persistent multi-year re-rating trend, in EITHER direction. STRL's multiple
+    climbed 5.24x->6.23x->8.15x->14.54x over 4 years (a genuine, sustained
+    business-mix shift, not noise) but the median (7.19x) sat near the OLDEST
+    two years, understating the fair value by anchoring to a growth regime STRL
+    has since grown past. The mirror-image also happens: CRM's multiple fell
+    36.9x->27.4x->23.0x->14.8x, and its median (25.2x) OVERSTATES the current
+    level. A flat median is simply the wrong central-tendency statistic for a
+    trending (not mean-reverting) series.
+
+    decay=0.5 (weight halves each year further into the past, i.e. the latest
+    year counts 2x the year before it) smoothly favors the recent trading level
+    without a hard year-cutoff (noisier, window-edge-sensitive) or a
+    monotonicity on/off switch (blunter -- live-swept to move unrelated names
+    -27pp to +20pp, unpredictable in direction once it falls back to the spot
+    multiple's separate compression path). A flat (non-trending) series still
+    resolves to that same constant, so a stable/cyclical name is unaffected."""
     mults = []
     for r in rows:
         ebitda = r.get("ebitda")
@@ -171,14 +194,15 @@ def ev_ebitda_history_median(rows: list[dict],
         mults.append(ev / ebitda)
     if len(mults) < min_years:
         return None
-    return statistics.median(mults)
+    weights = [decay ** i for i in range(len(mults))]   # mults[0] (most recent) -> weight 1.0
+    return sum(w * mlt for w, mlt in zip(weights, mults)) / sum(weights)
 
 
 def latest_statement_ebitda(rows: list[dict]) -> float | None:
     """The most recent positive statement EBITDA from the reconstruction rows
     (most-recent-first). This is the projection base that stays consistent with
-    the statement-derived median multiple — using yfinance info['ebitda'] instead
-    mixes two EBITDA definitions (they differ ~2x for content names like NFLX)."""
+    the statement-derived representative multiple — using yfinance info['ebitda']
+    instead mixes two EBITDA definitions (they differ ~2x for content names like NFLX)."""
     for r in rows:
         ebitda = r.get("ebitda")
         if ebitda and ebitda > 0:
@@ -241,7 +265,8 @@ def _fetch_ev_ebitda_history_sync(ticker: str) -> dict | None:
     """Reconstruct annual EV/EBITDA = (avg price * shares + net debt) / EBITDA from
     income statement + balance sheet + monthly price history.
 
-    Returns {"multiple": median EV/EBITDA, "ebitda": latest statement EBITDA} — both
+    Returns {"multiple": recency-weighted representative EV/EBITDA (see
+    ev_ebitda_history_ewma), "ebitda": latest statement EBITDA} — both
     on the same statement-EBITDA definition so the caller can project a consistent
     base against the multiple. Returns None (never raises) when the statements are
     unavailable/insufficient, or when a stock split postdates the statements
@@ -285,10 +310,10 @@ def _fetch_ev_ebitda_history_sync(ticker: str) -> dict | None:
             rows.append({"avg_price": float(avg_close[year]), "shares": shares,
                          "ebitda": ebitda, "net_debt": net_debt, "revenue": revenue,
                          "operating_income": op_income, "net_income": net_income})
-        median = ev_ebitda_history_median(rows)
-        if median is None:
+        representative = ev_ebitda_history_ewma(rows)
+        if representative is None:
             return None
-        return {"multiple": median, "ebitda": latest_statement_ebitda(rows),
+        return {"multiple": representative, "ebitda": latest_statement_ebitda(rows),
                 "revenue_growth": _statement_revenue_yoy(rows),
                 "op_income_growth": _statement_op_income_yoy(rows),
                 "net_income_growth": _statement_net_income_yoy(rows),
