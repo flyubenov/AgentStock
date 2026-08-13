@@ -745,6 +745,30 @@ def test_evaluate_distorted_roe_bank_pb_leg_is_guarded():
     assert guarded < round(bvps * unguarded_pb * m.MOS, 2)
 
 
+def test_evaluate_distorted_roe_bank_rim_leg_is_guarded():
+    # Same fixture/shape as the P/B guard test above (eps/bvps = 45/100 = 0.45, well
+    # past the 3x*FINANCIAL_COE=0.255 cap) -- RIM must be guarded the same way P/B
+    # already is (see [[opfi-rim-roe-cap-gap]]): RIM's own eps/bvps ROE is capped, not
+    # just P/B's.
+    fin = _bank_fin(return_on_equity=0.45, eps_ttm=45.0)
+    growth = engine.build_scenarios(fin)
+    raw_roe = fin["eps_ttm"] / fin["book_value_per_share"]
+    assert raw_roe > m.ROE_PB_CAP_MULT * m.FINANCIAL_COE   # sanity: this fixture trips the cap
+
+    guarded = engine.evaluate(fin)["fair_value_breakdown"]["rim"]["fair_value"]
+
+    def _uncapped_rim(g: float) -> float:
+        total, bv = 0.0, fin["book_value_per_share"]
+        for t in range(1, 11):
+            bv_prev = bv
+            bv *= (1 + g)
+            total += (bv_prev * (raw_roe - m.FINANCIAL_COE)) / (1 + m.FINANCIAL_COE) ** t
+        return (fin["book_value_per_share"] + total) * m.MOS
+
+    unguarded = round(sum(_uncapped_rim(growth[k]) for k in growth) / 3, 2)
+    assert guarded < unguarded
+
+
 def _snps_fin(**over):
     # SNPS-shaped (Synopsys mid-2025, just after the ~$35B Ansys deal closed): forward
     # EPS ($17.26) is ~3.9x trailing ($4.39) because trailing FCF/earnings carry the

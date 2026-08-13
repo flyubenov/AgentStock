@@ -715,3 +715,42 @@ def test_ev_ebitda_leg_not_funding_gap_adjusted():
     frozen = m.calc_ev_ebitda(base, GROWTH, compress=False)["fair_value"]
     burner = m.calc_ev_ebitda({**base, "fcf_ttm": -3e9}, GROWTH, compress=False)["fair_value"]
     assert burner == pytest.approx(frozen)
+
+
+def _manual_rim(bvps, roe, coe, g, horizon=10, mos=0.90):
+    total = 0.0
+    bv = bvps
+    for t in range(1, horizon + 1):
+        bv_prev = bv
+        bv = bv * (1 + g)
+        total += (bv_prev * (roe - coe)) / (1 + coe) ** t
+    return (bvps + total) * mos
+
+
+def test_rim_uncapped_matches_manual_pv_for_normal_roe():
+    # bank-shaped: roe 0.15, well below the 3x*coe=0.255 cap -> untouched by the guard.
+    fin = {"book_value_per_share": 100.0, "eps_ttm": 15.0, "cost_of_equity": 0.085}
+    growth = {"optimistic": 0.05, "realistic": 0.03, "pessimistic": 0.01}
+    r = m.calc_rim(fin, growth)
+    expected = sum(_manual_rim(100.0, 0.15, 0.085, growth[k]) for k in growth) / 3
+    assert r["fair_value"] == pytest.approx(expected, abs=1e-6)
+
+
+def test_rim_distorted_roe_is_capped():
+    # OPFI-shaped: bvps=2.862, eps=3.01 -> raw roe eps/bvps = 1.0517 (105%), coe=0.085
+    # -> capped to ROE_PB_CAP_MULT(3.0)*0.085 = 0.255, mirroring calc_pb's guard.
+    fin = {"book_value_per_share": 2.862, "eps_ttm": 3.01, "cost_of_equity": 0.085}
+    growth = {"optimistic": 0.05, "realistic": 0.03, "pessimistic": 0.01}
+    raw_roe = 3.01 / 2.862
+    assert raw_roe > m.ROE_PB_CAP_MULT * 0.085          # sanity: this fixture DOES trip the cap
+    capped_roe = m.ROE_PB_CAP_MULT * 0.085
+    capped = m.calc_rim(fin, growth)["fair_value"]
+    expected_capped = sum(_manual_rim(2.862, capped_roe, 0.085, growth[k]) for k in growth) / 3
+    expected_uncapped = sum(_manual_rim(2.862, raw_roe, 0.085, growth[k]) for k in growth) / 3
+    assert capped == pytest.approx(expected_capped, abs=1e-6)
+    assert capped < expected_uncapped                    # strictly below the un-guarded value
+
+
+def test_rim_missing_inputs_return_null():
+    assert m.calc_rim({"book_value_per_share": None, "eps_ttm": 3.0}, GROWTH)["fair_value"] is None
+    assert m.calc_rim({"book_value_per_share": 10.0, "eps_ttm": None}, GROWTH)["fair_value"] is None

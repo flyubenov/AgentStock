@@ -85,3 +85,82 @@ def test_negative_peg_alone_drops_valuation_slot():
     ms = build_metric_scores(_inputs(info={"pegRatio": -2.0}))
     assert ms["valuation"].dropped is True
     assert ms["valuation"].score is None
+
+
+def test_growth_stmt_override_fires_on_iren_shaped_gap():
+    # IREN-shaped: info.revenueGrowth reads a flat/negative artifact (-0.0) while the
+    # statement shows real, strong annual growth (+167.7%) -> gap (5.0-1.0=4.0) >= 1.0.
+    ms = build_metric_scores(_inputs(info={"revenueGrowth": -0.0},
+                                     revenue_growth_stmt=1.677))
+    assert ms["growth"].source == "revenue_growth_stmt"
+    assert ms["growth"].score == 5.0
+
+
+def test_growth_stmt_override_fires_on_riot_shaped_gap():
+    # RIOT-shaped: info reads a modest positive (+13.9%, score 3.52) while the
+    # statement reads much stronger (+71.9%, score 5.0) -> gap 1.48 >= 1.0 (the
+    # smallest live true-positive in the swept basket).
+    ms = build_metric_scores(_inputs(info={"revenueGrowth": 0.139},
+                                     revenue_growth_stmt=0.719))
+    assert ms["growth"].source == "revenue_growth_stmt"
+    assert ms["growth"].score == 5.0
+
+
+def test_growth_stmt_no_override_when_gap_below_threshold():
+    # info already reads decently (score ~4.33); statement only slightly better
+    # (score 5.0) -> gap 0.67 < 1.0 -> stays on info (not every small divergence
+    # should flip the source).
+    ms = build_metric_scores(_inputs(info={"revenueGrowth": 0.20},
+                                     revenue_growth_stmt=0.25))
+    assert ms["growth"].source == "revenue_growth"
+
+
+def test_growth_stmt_no_override_when_info_reads_better_corz_shaped():
+    # CORZ-shaped: info reads a large positive (+108.8%, saturates at 5.0) while the
+    # statement reads NEGATIVE (-37.5%, score 1.0) -- a real business-transition
+    # divergence, not a feed artifact. The guard is directional (only fires when
+    # statement is BETTER than info) so this must stay on info, unmoved.
+    ms = build_metric_scores(_inputs(info={"revenueGrowth": 1.088},
+                                     revenue_growth_stmt=-0.375))
+    assert ms["growth"].source == "revenue_growth"
+    assert ms["growth"].score == 5.0
+
+
+def test_growth_stmt_ignored_when_missing():
+    # No statement data available (None) -> falls through untouched, same as before
+    # this guard existed.
+    ms = build_metric_scores(_inputs(info={"revenueGrowth": 0.05}))
+    assert ms["growth"].source == "revenue_growth"
+
+
+def test_burn_stmt_override_fires_on_iren_shaped_gap():
+    # IREN-shaped: info.operatingMargins reads a deep artifact (-64.5%, saturates
+    # danger score at 5.0) while the statement shows real mild profitability (+4.4%,
+    # score ~2.41) -> gap 2.59 >= 1.0, info OVERSTATES risk.
+    ms = build_metric_scores(_inputs(info={"operatingMargins": -0.645},
+                                     operating_margin_stmt=0.044))
+    assert ms["burn"].source == "operating_margin_stmt"
+    assert round(ms["burn"].score, 2) == 2.41
+
+
+def test_burn_stmt_no_override_when_gap_below_threshold():
+    # Both already read as the safest score (1.0) -- no meaningful gap to correct.
+    ms = build_metric_scores(_inputs(info={"operatingMargins": 0.20},
+                                     operating_margin_stmt=0.18))
+    assert ms["burn"].source == "operating_margin"
+
+
+def test_burn_stmt_no_override_when_info_reads_better_corz_shaped():
+    # CORZ-shaped: info reads mildly positive (+6.9%, score ~2.08) while the
+    # statement shows a real, deep operating LOSS (-70.4%, score 5.0, likely an
+    # impairment/restructuring charge). The guard must not fire here -- correcting
+    # in this direction would mask real risk, not artifacts, and this failure mode
+    # is unproven (unlike IREN's). Stays on info.
+    ms = build_metric_scores(_inputs(info={"operatingMargins": 0.069},
+                                     operating_margin_stmt=-0.704))
+    assert ms["burn"].source == "operating_margin"
+
+
+def test_burn_stmt_ignored_when_missing():
+    ms = build_metric_scores(_inputs(info={"operatingMargins": -0.10}))
+    assert ms["burn"].source == "operating_margin"

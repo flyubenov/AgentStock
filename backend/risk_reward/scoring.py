@@ -71,7 +71,44 @@ SOURCE_EXTRACTORS: dict[str, Callable[[RiskRewardInputs], float | None]] = {
     "trend": lambda i: ((i.price - i.ma_200) / i.ma_200)
                        if (i.price and i.ma_200 and i.ma_200 > 0) else None,
     "beta": lambda i: i.info.get("beta"),
+    # statement-annual variants: gap-guard-only, never part of a normal fallback
+    # chain (see [[iren-rr-stmt-gap-guard]] / _stmt_gap_override below).
+    "revenue_growth_stmt": lambda i: i.revenue_growth_stmt,
+    "operating_margin_stmt": lambda i: i.operating_margin_stmt,
 }
+
+# slot -> (statement source key, favor_high). growth: override only when the
+# statement score is HIGHER than info's (info understates growth). burn: override
+# only when the statement score is LOWER than info's (info overstates risk). Both
+# directions are self-limiting -- see CONFIG.stmt_gap_min's docstring.
+_STMT_GAP_GUARDS: dict[str, tuple[str, bool]] = {
+    "growth": ("revenue_growth_stmt", True),
+    "burn": ("operating_margin_stmt", False),
+}
+
+
+def _stmt_gap_override(inp: RiskRewardInputs, chosen: MetricScore, slot: str,
+                       cfg: RiskRewardConfig) -> MetricScore:
+    """Corroboration guard (see [[iren-rr-stmt-gap-guard]]): override `chosen`
+    (the info-chain-resolved score) with the statement-sourced score only when the
+    statement reads MATERIALLY more favorable, by >= cfg.stmt_gap_min points on the
+    shared 1-5 scale. Directional per slot (growth: statement higher; burn: info
+    higher) so a name where the statement reads WORSE than info (a real business
+    divergence, not a feed artifact -- e.g. CORZ, APLD) is structurally excluded,
+    with no per-name carve-out. No-op when the statement input is unavailable."""
+    guard = _STMT_GAP_GUARDS.get(slot)
+    if guard is None:
+        return chosen
+    stmt_source, favor_high = guard
+    raw = SOURCE_EXTRACTORS[stmt_source](inp)
+    stmt_score = score_metric(raw, *cfg.anchors[stmt_source])
+    if stmt_score is None:
+        return chosen
+    gap = (stmt_score - chosen.score) if favor_high else (chosen.score - stmt_score)
+    if gap >= cfg.stmt_gap_min:
+        return MetricScore(raw=float(raw), source=stmt_source, score=stmt_score,
+                           weight=chosen.weight, dropped=False)
+    return chosen
 
 
 def _net_debt_ebitda(i: RiskRewardInputs):
@@ -128,6 +165,8 @@ def build_metric_scores(inp: RiskRewardInputs,
                 chosen = MetricScore(raw=float(raw), source=src, score=score,
                                      weight=weight, dropped=False)
                 break
+        if chosen is not None:
+            chosen = _stmt_gap_override(inp, chosen, slot, cfg)
         out[slot] = chosen or MetricScore(raw=None, source=None, score=None,
                                           weight=weight, dropped=True)
     return out
