@@ -538,12 +538,25 @@ def calc_pb(fin: dict) -> dict:
 
 # -- RIM (residual income) -----------------------------------------------------
 def calc_rim(fin: dict, growth: dict) -> dict:
+    """Residual income: bvps + PV(bv_{t-1} * (roe - coe)) over HORIZON, roe/bv held flat.
+
+    The ROE input is capped at ROE_PB_CAP_MULT x COE, mirroring calc_pb's guard (same
+    constant, same rationale): RIM is the highest-weighted FINANCIAL leg (0.45) and, unlike
+    P/B, ran an uncapped eps/bvps for all 10 years -- a real high-ROE lender's earnings
+    growth (OPFI's eps/bvps rose 71%->105% as trailing EPS compounded) could run the
+    residual-income term away with nothing to check it. See [[opfi-rim-roe-cap-gap]] (this
+    asymmetry was logged, left open pending a fade-vs-cap design call, then closed with the
+    flat mirror once the gap widened enough to matter). Only ever binds FINANCIAL-tier
+    names (RIM's weight is 0 everywhere else -- engine.evaluate never even calls this
+    function off that tier), and only the ones whose eps/bvps exceeds the cap; a normal
+    bank (ROE ~15%) never touches it."""
     bvps = fin.get("book_value_per_share")
     eps = fin.get("eps_ttm")
     if bvps is None or eps is None:
         return _null_result(True)
     coe = fin.get("cost_of_equity") or 0.10
     roe = eps / bvps if bvps > 0 else 0
+    roe = min(roe, ROE_PB_CAP_MULT * coe)
 
     def scenario_rim(g: float) -> float:
         total = 0.0
@@ -556,6 +569,7 @@ def calc_rim(fin: dict, growth: dict) -> dict:
 
     scenarios = {k: scenario_rim(growth[k]) for k in SCENARIO_KEYS}
     return {"scenarios": scenarios, "fair_value": _avg(scenarios), "weight": 0.0, "has_scenarios": True}
+
 
 
 # -- NAV (book value per share) ------------------------------------------------
