@@ -155,3 +155,126 @@ Each of 2-4 needs: failing tests first (TDD), a full blast-radius sweep across t
 existing 481+ test/canary universe (IREN, NBIS, KLAC recurring canaries; FINANCIAL-tier
 canaries AXP/JPM/OPFI specifically for #2 given `opfi-rim-roe-cap-gap.md`), and a memory
 write-up on landing, same discipline as every other fix this session.
+
+---
+
+# SWEEP RESULTS (2026-08-13) -- ran once, found real problems, STILL NOT IMPLEMENTED
+
+Basket: wide-moat durable (AAPL, MSFT, COST, V, MA), durable-modest (KO, PG, JNJ, MCD),
+high-beta/high-quality (NVDA, PLTR, CRWV, MU), weak-ROIC laggards (WBD, F, CCL, GE),
+FINANCIAL canaries (JPM, AXP, OPFI). Script: `/tmp/wacc_mos_sweep.py` (not committed --
+temp, reproducible from this file). Method: built `fin`/`ScreenerInputs` once per ticker,
+compared baseline `engine.evaluate()` (flat `DISCOUNT_RATE=0.10`, flat `MOS=0.90`) against
+(a) WACC-only, (b) proposed-MOS-only, (c) both combined -- via direct, sequential
+module-attribute reassignment of `models.DISCOUNT_RATE`/`models.MOS` (safe because this
+sweep is NOT run under asyncio.gather concurrency, unlike the R-R sweep earlier this
+session which needed to avoid `unittest.mock.patch` for exactly that reason).
+
+## Finding 1 -- CRITICAL: raw WACC as an unbounded DCF discount rate is dangerous
+
+**F (Ford) broke it: FV -31.3% -> +301.2%.** Cause: `wacc()`'s debt/equity blend uses
+`info.get("totalDebt")` unconditionally. Ford's `totalDebt=$163.3B` vs `marketCap=$57.3B`
+(debt is 2.8x market cap) -- almost entirely Ford Credit's captive-finance auto-loan book,
+not operating leverage. That drags the blended WACC to ~4%, and halving a 10-year discount
+rate compounds into an enormous PV inflation. **The same raw fraction is safe when it
+feeds a saturating `score_high()` (Quality's current use) and dangerous when it multiplies
+an unbounded 10-year discount factor (FV's proposed use) -- same signal, very different
+risk exposure depending on where it's plugged in.** GM likely shares this shape (also
+carries a captive-finance arm) -- not yet tested, should be in the next sweep.
+
+## Finding 2 -- even "normal" low-beta blue chips show swings far bigger than expected
+
+| Ticker | beta-implied WACC | Baseline pct | WACC-only pct |
+|---|---|---|---|
+| KO | 6.1% | -41.1% | -0.9% |
+| JNJ | 5.5% | -54.0% | +0.1% |
+| PG | 6.1% | -44.8% | +25.6% |
+| MCD | 5.8% | -20.3% | +25.7% |
+| NVDA (high beta, for contrast) | 14.7% | -14.6% | -44.8% (correct direction) |
+
+A full swap to raw CAPM WACC would re-rate almost the entire low-beta blue-chip universe
+from "overvalued" to "roughly fair or cheap" -- a MUCH bigger, more sweeping recalibration
+than intended (not STRL-sized; potentially reshapes MEGA_CAP/LARGE_CAP broadly).
+High-beta names (NVDA) correctly move the OTHER way (more overvalued) -- that part of the
+mechanism works as designed.
+
+**Recommendation (not yet implemented, needs a decision):** blend rather than replace --
+`used_rate = 0.5*DISCOUNT_RATE + 0.5*wacc_capped`, PLUS a tight floor/ceiling around
+today's 10% (proposed 7%-13%, not the raw CAPM range) so beta nudges the rate rather than
+overriding it. This also neutralizes Ford-style blowups without needing to fix `wacc()`'s
+debt-weighting itself (a separate, real problem -- captive-finance debt inflating the debt
+weight -- that a tight band makes moot for THIS purpose, though it may still distort
+Quality's own ROIC-WACC spread for Ford-like names, out of scope here). Open question for
+next session: blend+bound (safer, smaller blast radius) vs. fix `wacc()`'s debt treatment
+directly (exclude non-operating captive-finance debt, more "correct" but a bigger, separate
+change touching Quality's existing calibration too).
+
+## Finding 3 -- bug (not a design choice): missing data defaults to the WORST MOS
+
+V and CRWV both had `beta=None` -> `wacc()` returns `None` -> spread inputs are `None` ->
+sweep's ramp code treated missing spread as the ramp's floor (`0.0`) -> **MOS_FLOOR (0.75,
+the harshest haircut) applied to V, a genuine wide-moat compounder, purely because of a
+data gap, not weak quality.** Must fix: fall back to today's flat `0.90` (neutral) when
+spread inputs are unavailable, mirroring the "don't punish for missing data" principle
+already used elsewhere (R-R's coverage floor, the analyst-weight floor). This is a
+straightforward fix, not a design fork -- do it regardless of the WACC blend/bound decision.
+
+## Finding 4 -- OPFI's moat-margin swing reintroduces a known, already-flagged tension
+
+OPFI spread is enormous (85% spot, 68.6% durability) -> both ramps saturate -> FV
+**+68.9% -> +84.0%** (more undervalued). But `opfi-rim-roe-cap-gap.md` already documents
+OPFI's real ROE as exceptional AND facing an unmodelable regulatory tail (state APR caps)
+the quant model structurally can't see. A moat-margin mechanism that makes OPFI look even
+cheaper compounds a name already flagged as having a real, non-fundamental risk. Not
+necessarily wrong (Quality's Section II score is a legitimate signal) but worth being
+deliberate about -- flag prominently in the eventual PR/memory, don't let it pass silently.
+FINANCIAL-tier confirmed correctly UNAFFECTED by the WACC/discount-rate change (JPM/AXP/
+OPFI's `wacc_variant_pct == base_pct` -- `FINANCIAL_COE` override holds), but IS affected
+by the MOS change (JPM -14.7%->-28.9%, AXP -46.1%->-55.1%) -- correct/expected, since MOS
+applies to P/B/RIM legs too and was never meant to be FINANCIAL-exempt (only the discount
+RATE override is FINANCIAL-specific).
+
+## Finding 5 -- #4 Incremental ROIC validates well once a script bug was fixed
+
+Original sweep script used a strict `n-1` "oldest year" index, which is `None` for most
+tickers (statement history commonly has a gap in the oldest fetched year) and silently
+returned `None` for names that should have resolved (AAPL, MSFT, etc). Fixed by walking
+from the back to the last **available** (non-`None`) year for both EBIT and Invested
+Capital independently (mirrors `latest_statement_ebitda`'s existing "walk to first
+non-None" pattern, just from the other end) -- **this fix belongs in the real
+implementation, not just the sweep script.**
+
+Re-run results:
+
+| Bucket | Ticker | Incremental ROIC | Read |
+|---|---|---|---|
+| Wide-moat | MSFT 27.3%, COST 29.0%, MA 89.1% | capital-light, high marginal returns -- correct |
+| Durable | KO 29.0%, PG 24.6%, JNJ 87.9%, MCD 32.7% | all strong, sensible |
+| High-beta/quality | NVDA 87.8%, PLTR 32.2%, **CRWV 0.2%** | CRWV correctly reads near-zero -- heavy build-out capex not yet converting to NOPAT, exactly the nuance the metric should catch |
+| Laggards | WBD -35.4%, F -35.4%, GE -36.9%, **CCL -318.5%** | negative = destroying value on the margin (intended); CCL magnitude is a small-EBIT-base noise artifact |
+| Financials | JPM/AXP `None` (correct -- EBIT/Invested Capital isn't meaningful for lenders), **OPFI 426.3%** (noise, should ALSO be `None`) |
+
+**Two fixes needed before shipping, both cheap:**
+1. **Exclude FINANCIAL-profile names outright.** This closes an ALREADY-DOCUMENTED latent
+   gap from `opfi-rim-roe-cap-gap.md`: *"ROIC not excluded from FINANCIALS Section II
+   though structurally distorted for lenders"* -- a two-for-one fix.
+2. **Add a magnitude guard on the EBIT base** (not just relative ΔIC size) to stop
+   CCL/OPFI-style small-absolute-base blowups, then convert to a banded `score_high()`-style
+   score like its Section II neighbors rather than exposing a raw, unbounded percentage.
+
+## Where this leaves things -- decisions needed before implementation resumes
+
+1. **WACC discount rate:** blend+bound (my recommendation, safer/smaller blast radius) vs.
+   fix `wacc()`'s debt-weighting for captive-finance names (more "correct," bigger,
+   separate change, also touches Quality's existing calibration) -- undecided, needs a
+   session to pick and then re-sweep the chosen approach specifically against F, GM (untested),
+   and the blue-chip set above before TDD.
+2. **MOS missing-data fallback:** straightforward bug fix (-> 0.90 neutral), no decision
+   needed, just do it when implementing.
+3. **OPFI-style saturation tension:** no action proposed, just flag prominently when this
+   ships so it's a visible, acknowledged tradeoff rather than a silent side effect.
+4. **Incremental ROIC:** fix the "last-available-year" walk (not just `n-1`), exclude
+   FINANCIAL profile, add an EBIT-magnitude guard, then band it like its neighbors. This
+   piece is otherwise ready for TDD independent of the WACC/MOS decisions above (items 1-3
+   don't block it).
+
