@@ -1,12 +1,63 @@
 ---
 name: wacc-mos-moat-margin-design
 description: "DESIGN CHECKPOINT (not yet implemented) -- WACC-driven FV discount rate, ROIC-WACC-spread-driven moat-adjusted margin replacing flat MOS=0.90, and an incremental-ROIC-on-reinvested-capital Quality metric. Next step: live sweep to calibrate pivots, then TDD."
-metadata:
+metadata: 
   node_type: memory
   type: project
+  originSessionId: ab39a665-b1a3-474c-8aff-036288d4b0a8
+  modified: 2026-08-16T21:27:58.720Z
 ---
 
-# Status: DESIGN ONLY -- nothing in this file has been implemented yet
+# Status: SPEC WRITTEN + COMMITTED (2026-08-17) -- not yet implemented
+
+## UPDATE 2026-08-17 -- brainstorm session: scope narrowed, spec committed, NEXT = writing-plans
+
+Ran `superpowers:brainstorming` over the four candidate improvements. **Decisions this
+session:**
+- **Scope narrowed to the FV cluster only: #1 (discount rate) + #2/#3 (moat-adjusted MOS),
+  as ONE combined session on this branch `wacc-mos-moat-margin-design`.** #4 (incremental
+  ROIC) is DROPPED from this scope entirely -- deferred to a separate track/branch, not
+  part of this work. (User first mis-clicked "#4 own branch", then explicitly said ignore
+  #4 completely for now.)
+- **Conceptual backbone approved: two ORTHOGONAL quality signals** -- discount rate keyed to
+  MARKET risk (beta/WACC), MOS keyed to BUSINESS-DURABILITY risk (ROIC-WACC spread). Keeping
+  both is complementary (not the article's "redundant stacked discount") *because* the
+  signals often disagree (low-beta-no-moat utility vs high-beta-wide-moat compounder); the
+  double-count only bites when they agree, and tight bounded bands keep that modest.
+- **#1 = blend+bound (confirmed, not raw swap):** `used_rate = 0.5*0.10 + 0.5*company_WACC`
+  clamped ~[7%,13%]. Blend weight + band width are sweep-calibrated starting proposals.
+- **#2/#3 MOS = decided EMPIRICALLY, not pre-committed.** Build BOTH variants behind one
+  seam -- (A) nudged MOS ~[0.85,0.95] tilted by ROIC-WACC spread, (B) drop MOS entirely and
+  lean on the quality rate + existing caps/fades/guards -- then sweep and pick on which is
+  more defensible for AVERAGE/MEDIOCRE-beta names. Key insight that made it empirical:
+  dropping MOS is not a uniform +11% lift once #1 is live -- high-beta/low-quality names get
+  the harsher rate offsetting the removed haircut (~wash), low-beta/high-quality names STACK
+  (materially cheaper), and beta~1 mediocre names get the full +11% with no quality
+  justification under B (Variant A's near-flat MOS still protects them). That average-name
+  behavior is the crux the sweep resolves.
+- **Robustness (approved):** missing/distorted signal (no beta, captive-finance-inflated
+  WACC) -> BOTH levers fall back toward the neutral flat prior (10% / 0.90), never punitive.
+  Fixes the Finding-3 sweep bug (missing beta -> worst-case floor for V/CRWV).
+- **Architecture (approved):** FV recomputes its OWN WACC/spread by reusing `screener.metrics`
+  as a library (NOT a cross-pipeline call to Quality's live output) -- preserves failure
+  isolation; single-source math. PLUS expose the per-company rate + MOS used in the FV
+  breakdown so the number stays auditable / reconcilable by `validating-agent-stock`.
+- **Captive-finance (approved):** BOUND-ONLY for this work (tight bands cap Ford/GM's effect
+  on both levers); do NOT re-derive `wacc()`'s debt weighting here -- logged as a separate
+  known gap (it also touches Quality's calibration).
+
+**Spec written + committed:** `docs/superpowers/specs/2026-08-17-fv-quality-discount-mos-design.md`
+(commit `f62e10b`). User is reviewing it. **NEXT STEP: on user approval of the spec, invoke
+`superpowers:writing-plans` to produce the implementation plan** (then TDD per §7; sweep
+basket + the 4 things it must resolve are in spec §5, incl. GM which was untested in the
+first sweep, and the OPFI-saturation caveat to flag prominently on landing).
+
+The original design notes + the 2026-08-13 live-sweep findings below are still valid inputs
+to the tech plan (Findings 1-4 in particular; Finding 5 / incremental-ROIC is now OUT of scope).
+
+---
+
+# Status (original): DESIGN ONLY -- nothing in this file has been implemented yet
 
 Session context: user supplied a Buffett-style investment-philosophy article ("The
 Illusion of the Cheap Asset") and asked for a comparison against Agent Stock's Quality
