@@ -77,7 +77,11 @@ Two variants are implemented behind the **same seam**, and the choice between th
 
 All band widths, the blend weight, the MOS band, and the pivot points are **starting proposals**, not final. Before implementation is finalized, a live sweep across a representative basket pins the real numbers, mirroring the STRL-EWMA and scenario-growth-band sweep discipline (build inputs once per ticker, vary only the parameter under test, measure before/after live, no mocking).
 
-**Basket must include:**
+**Coverage (breadth requirement):** the sweep runs across **as many of the memory canary tickers as possible — ideally every ticker referenced across `.claude/memory/`** — and MUST cover **at least two tickers per classification category** produced by `classify()` (GROWTH, MEGA_CAP, LARGE_CAP, MID_CAP, EARLY_GROWTH, DIVIDEND, FINANCIAL, CYCLICAL, ASSET_HEAVY, and the PRE_PROFIT decline path), so no tier's behavior is inferred from a single name. The named buckets below are the minimum must-includes on top of that breadth.
+
+**Three-way comparison (the headline output):** for every ticker, report **three columns side by side** so the A-vs-B choice is unambiguous — (0) baseline (flat 10% / flat 0.90), (1) **quality-rate + quality-MOS** (Variant A: blend+bound rate + ROIC−WACC-spread MOS), (2) **quality-rate + no-MOS** (Variant B: blend+bound rate + MOS dropped). The report must make the **difference between columns (1) and (2)** clearly visible per ticker and per classification, with particular attention to average / mediocre-beta names where the two variants diverge most.
+
+**Basket must include (minimum, on top of the per-category breadth above):**
 - Wide-moat durable compounders (high spot *and* durable spread): AAPL, MSFT, COST, V, MA.
 - Durable-but-modest names (lower spot, good 5y): KO, PG, JNJ, MCD.
 - High-beta / high-quality (to observe the accepted orthogonal tension): NVDA, PLTR, CRWV, MU.
