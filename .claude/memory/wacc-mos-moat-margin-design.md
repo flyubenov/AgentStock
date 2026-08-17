@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: ab39a665-b1a3-474c-8aff-036288d4b0a8
-  modified: 2026-08-16T21:27:58.720Z
+  modified: 2026-08-17T14:02:08.535Z
 ---
 
 # Status: SPEC WRITTEN + COMMITTED (2026-08-17) -- not yet implemented
@@ -54,6 +54,60 @@ first sweep, and the OPFI-saturation caveat to flag prominently on landing).
 
 The original design notes + the 2026-08-13 live-sweep findings below are still valid inputs
 to the tech plan (Findings 1-4 in particular; Finding 5 / incremental-ROIC is now OUT of scope).
+
+## UPDATE 2026-08-17 (later) -- ran the §5 sweep, TWO ROUNDS, 60 names / 8 categories. OPEN DECISION on DIVIDEND tier.
+
+Broadened §5 in the spec (committed) to require: as many memory tickers as possible, >=2 per
+classification, explicit three-way per-ticker comparison. Then ACTUALLY RAN it (scratchpad
+`fv_quality_sweep.py` round-1, `fv_quality_sweep2.py` round-2; outputs `sweep_out.txt` /
+`sweep2_out.txt`). Harness method: capture the fully-prepared `fin` from `engine.run` via an
+`engine.evaluate` wrapper, then re-run the SAME `evaluate(fin)` under patched
+`models.DISCOUNT_RATE`/`models.MOS`; round-2 also wraps `models.calc_ddm` to give ONLY the
+perpetuity leg a higher floored rate (DDM guard). GOTCHA fixed: patching DISCOUNT_RATE breaks
+engine's FINANCIAL `coe == DISCOUNT_RATE` sentinel -> pin `cost_of_equity=FINANCIAL_COE` onto
+`fin` for FINANCIAL names before patching. Coverage: GROWTH 21, MEGA 6, LARGE 2, MID 7,
+EARLY_GROWTH 6, DIVIDEND 7, FINANCIAL 9; PRE_PROFIT (MARA/RIOT) + ASTS structurally decline
+(no FV). Caveat carried: MATURE_MULTIPLE_FACTOR stays import-bound to 0.10 (EV/EBITDA ceilings only).
+
+**ROUND-1 (three-way: baseline vs A=qual-rate+qual-MOS vs B=qual-rate+no-MOS; blend 0.5, band
+7-13%, MOS 0.85-0.95) -> TWO conclusions:**
+- **MOS decision = Variant A (nudged MOS), SETTLED by evidence.** B (drop-MOS) over-lifts
+  mediocre-beta / weak-spread names with no quality basis: CRM (+1.2 spread) reads +58% cheap
+  under B; MBLY (-13.5 spread) lifted to -17 under B; CCL/CEG similar. A's 0.85 floor keeps a
+  safety margin exactly there. High-quality names: A~=B (AAPL A-B only -3.4). The durability
+  ramp also correctly rescued SNPS (spot spread -5.7 trough from Ansys, but 5y durable -> MOS 0.95).
+- **BIG problem surfaced: the RATE lever, even bounded 7-13%, over-inflates low-beta / low-WACC
+  DDM-heavy names.** F +122pp (base -31->+91), VZ +90, PG +48, PEP +36, MCD/ABBV/JNJ/KO ~+18-20.
+  Cause: DDM Gordon `(rate-g)` denominator is hypersensitive at the low end; the 7% floor doesn't
+  tame it. Ford = captive-finance 4% WACC floored to 7% and STILL doubles (GM is fine, -46->-46,
+  because it isn't DDM-dominated). Working-as-designed parts: high-beta correctly harsher
+  (NVDA -14->-29, AMD, MU, TEM, IREN); neutral fallback holds (V/CRWV no-beta, all lenders
+  no-spread -> MOS 0.90); FINANCIAL rate-invariant (book legs on FINANCIAL_COE).
+
+**ROUND-2 (RECALIBRATION user asked for, across ALL categories: gentler blend 0.3 + higher floor
+8.5% + DDM guard = perpetuity leg floored 9% + nudged Variant-A MOS; shown as baseline vs one
+recal combo):** tames the blowups -- F +122->+36, VZ +90->+29, PEP +36->+23; also softens the
+high-beta side (NVDA -14.4->-7.7) and makes JNJ/KO a milder +11. **Everything now sits inside
+~+/-12pp EXCEPT the DIVIDEND tier, which still moves +12 to +36pp** (F +36, VZ +29, PEP +23,
+PG +18, NKE +15, MCD +14, ABBV +12). FINANCIAL fully rate-invariant (Delta 0 except OPFI +9.4,
+the flagged saturation caveat). Read: PG/KO/JNJ/MCD moving toward fair is arguably CORRECT
+(fixes the flat-10%-over-penalizes-blue-chips bias the BWXT memo flagged); Ford +36 is still a
+captive-finance DISTORTION not genuine safety; VZ +29 (SELL->BUY flip) is the aggressive one.
+
+**OPEN DECISION (next session) -- how to treat the DIVIDEND tier / captive-finance.** Presented
+4 options, USER WANTED TO CLARIFY THE QUESTIONS FIRST (not yet answered): (A) accept the
+blue-chip re-rating as intended + fix Ford/GM captive-finance WACC AT SOURCE in `wacc()`
+(exclude non-operating finance-arm debt -- the bigger §6 change, touches Quality's shared
+`wacc()`); (B) damp DIVIDEND further (DDM floor 9->9.5%, band floor 8.5->9%) -- simple but also
+blunts the wanted PG/KO/JNJ correction; (C) accept round-2 as-is (calibration proposal, TDD +
+final blast-radius pass still follow); (D) re-sweep more DIVIDEND-focused combos. **Everything
+else about the design is settled** (Variant A MOS; blend 0.3 / floor 8.5 / DDM guard 9% as the
+working rate calibration; neutral fallback; FINANCIAL untouched; recompute-not-call). NEXT after
+this decision: writing-plans, then TDD. Note: I offered to clarify (why DIVIDEND moves so much;
+what fixing Ford at source entails + its Quality blast radius; correct-re-rating vs distortion;
+whether these calibration numbers are even the ones to lock) -- resume there.
+
+Scratchpad temp scripts removed from `backend/` on save; reproducible from the params above.
 
 ---
 
