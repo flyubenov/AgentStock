@@ -566,12 +566,14 @@ def calc_ddm(fin: dict, growth: dict) -> dict:
     div = fin.get("dividend_rate")
     if div is None or div <= 0:
         return _null_result(True)
+    rate = fin.get("ddm_rate") or DISCOUNT_RATE
+    mos = fin.get("mos") or MOS
 
     def scenario_ddm(g: float) -> float | None:
-        capped_g = min(g, DISCOUNT_RATE - 0.01)
-        if DISCOUNT_RATE <= capped_g:
+        capped_g = min(g, rate - 0.01)
+        if rate <= capped_g:
             return None
-        return _apply_mos(div * (1 + capped_g) / (DISCOUNT_RATE - capped_g))
+        return _apply_mos(div * (1 + capped_g) / (rate - capped_g), mos)
 
     scenarios = {k: scenario_ddm(growth[k]) for k in SCENARIO_KEYS}
     return {"scenarios": scenarios, "fair_value": _avg(scenarios), "weight": 0.0, "has_scenarios": True}

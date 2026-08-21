@@ -811,3 +811,17 @@ def test_ev_ebitda_uses_fin_discount_rate():
     lower_rate = m.calc_ev_ebitda({**fin, "discount_rate": 0.085}, GROWTH)["fair_value"]
     # The future EV is discounted back 10 years at the per-company rate: a lower rate -> higher PV.
     assert lower_rate > base
+
+
+def test_ddm_uses_fin_ddm_rate_and_mos():
+    fin = {"dividend_rate": 2.0}
+    base = m.calc_ddm(fin, GROWTH)["fair_value"]
+    # A HIGHER ddm_rate widens the Gordon denominator -> LOWER value (the guard's whole point).
+    higher_rate = m.calc_ddm({**fin, "ddm_rate": 0.12}, GROWTH)["fair_value"]
+    assert higher_rate < base
+
+
+def test_ddm_absent_keys_are_identical_to_today():
+    fin = {"dividend_rate": 2.0}
+    explicit = m.calc_ddm({**fin, "ddm_rate": m.DISCOUNT_RATE, "mos": m.MOS}, GROWTH)
+    assert m.calc_ddm(fin, GROWTH)["fair_value"] == pytest.approx(explicit["fair_value"])
