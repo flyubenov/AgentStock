@@ -151,8 +151,8 @@ def _pv(cf: float, rate: float, year: int) -> float:
     return cf / (1 + rate) ** year
 
 
-def _apply_mos(value: float) -> float:
-    return value * MOS
+def _apply_mos(value: float, mos: float = MOS) -> float:
+    return value * mos
 
 
 def _avg(scenarios: dict) -> float | None:
@@ -262,24 +262,26 @@ def _faded_rate(g_start: float, hold: int, year: int) -> float:
 
 
 def _scenario_dcf_equity(cf: float, growth: float, net_debt: float, shares: float,
-                         hold: int = HORIZON) -> float:
+                         hold: int = HORIZON, rate: float = DISCOUNT_RATE,
+                         mos: float = MOS) -> float:
     total = 0.0
     cf_t = cf
     for t in range(1, HORIZON + 1):
         cf_t *= (1 + _faded_rate(growth, hold, t))
-        total += _pv(cf_t, DISCOUNT_RATE, t)
-    tv = cf_t * (1 + TERMINAL_GROWTH) / (DISCOUNT_RATE - TERMINAL_GROWTH)
-    total += _pv(tv, DISCOUNT_RATE, HORIZON)
-    return _apply_mos((total - net_debt) / shares)
+        total += _pv(cf_t, rate, t)
+    tv = cf_t * (1 + TERMINAL_GROWTH) / (rate - TERMINAL_GROWTH)
+    total += _pv(tv, rate, HORIZON)
+    return _apply_mos((total - net_debt) / shares, mos)
 
 
 def _scenario_ev_multiple(base: float, growth: float, multiple: float, net_debt: float,
-                          shares: float, hold: int = HORIZON) -> float:
+                          shares: float, hold: int = HORIZON, rate: float = DISCOUNT_RATE,
+                          mos: float = MOS) -> float:
     projected = base
     for t in range(1, HORIZON + 1):
         projected *= (1 + _faded_rate(growth, hold, t))
     future_ev = projected * multiple
-    return _apply_mos((future_ev - net_debt) / shares / (1 + DISCOUNT_RATE) ** HORIZON)
+    return _apply_mos((future_ev - net_debt) / shares / (1 + rate) ** HORIZON, mos)
 
 
 def exit_net_debt(fin: dict, rev0: float | None, growth: float, hold: int,
@@ -358,7 +360,10 @@ def calc_dcf(fin: dict, growth: dict, base_override: float | None = None,
         return _null_result(True)
     net_debt = fin.get("net_debt") or 0
     hold = _fade_hold_years(fin.get("market_cap"), fin.get("revenue_growth"))
-    scenarios = {k: _scenario_dcf_equity(base, growth[k], net_debt, shares, hold) for k in SCENARIO_KEYS}
+    rate = fin.get("discount_rate") or DISCOUNT_RATE
+    mos = fin.get("mos") or MOS
+    scenarios = {k: _scenario_dcf_equity(base, growth[k], net_debt, shares, hold,
+                                         rate=rate, mos=mos) for k in SCENARIO_KEYS}
     if value_cap is not None:
         scenarios = {k: (min(v, value_cap) if v is not None else None) for k, v in scenarios.items()}
     return {"scenarios": scenarios, "fair_value": _avg(scenarios), "weight": 0.0, "has_scenarios": True}
@@ -374,7 +379,10 @@ def calc_fcfe(fin: dict, growth: dict) -> dict:
     tax_rate = 0.21 if tax_rate is None else tax_rate
     interest_adj = (fin.get("interest_expense") or 0) * (1 - tax_rate)
     fcfe = fcf - interest_adj
-    scenarios = {k: _scenario_dcf_equity(fcfe, growth[k], 0, shares) for k in SCENARIO_KEYS}
+    mos = fin.get("mos") or MOS
+    rate = fin.get("discount_rate") or DISCOUNT_RATE
+    scenarios = {k: _scenario_dcf_equity(fcfe, growth[k], 0, shares, rate=rate, mos=mos)
+                 for k in SCENARIO_KEYS}
     return {"scenarios": scenarios, "fair_value": _avg(scenarios), "weight": 0.0, "has_scenarios": True}
 
 
@@ -428,7 +436,10 @@ def calc_ev_ebitda(fin: dict, growth: dict, hist_multiple: float | None = None,
     # which the funding gap extrapolates into a nonsensical accretion (~$12B against a ~$4.8B EV)
     # — an over-correction on top of a leg already tuned for these names. The correction stays
     # scoped to the EARLY_GROWTH forward-sales bridge (calc_ev_sales — CRWV, NBIS).
-    scenarios = {k: _scenario_ev_multiple(ebitda, growth[k], multiple, net_debt, shares, hold) for k in SCENARIO_KEYS}
+    rate = fin.get("discount_rate") or DISCOUNT_RATE
+    mos = fin.get("mos") or MOS
+    scenarios = {k: _scenario_ev_multiple(ebitda, growth[k], multiple, net_debt, shares, hold,
+                                          rate=rate, mos=mos) for k in SCENARIO_KEYS}
     return {"scenarios": scenarios, "fair_value": _avg(scenarios), "weight": 0.0, "has_scenarios": True}
 
 
@@ -485,9 +496,12 @@ def calc_ev_sales(fin: dict, growth: dict) -> dict:
     # Forward EV/Sales projects a year-10 revenue; bridge it to equity with the year-10
     # funding-adjusted net debt (self-gating — unchanged for FCF-positive names). hold=HORIZON
     # to match this leg's flat (unfaded) revenue projection.
+    rate = fin.get("discount_rate") or DISCOUNT_RATE
+    mos = fin.get("mos") or MOS
     scenarios = {k: _scenario_ev_multiple(
                     revenue, growth[k], multiple,
-                    exit_net_debt(fin, revenue, growth[k], HORIZON, net_debt), shares)
+                    exit_net_debt(fin, revenue, growth[k], HORIZON, net_debt), shares,
+                    rate=rate, mos=mos)
                  for k in SCENARIO_KEYS}
     return {"scenarios": scenarios, "fair_value": _avg(scenarios), "weight": 0.0, "has_scenarios": True}
 

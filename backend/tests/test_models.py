@@ -787,3 +787,27 @@ def test_quality_mos_ramps_within_band():
     assert m.quality_margin_of_safety(0.0, 25.0, 20.0) == pytest.approx(0.95)
     # Half of the spot pivot -> midpoint 0.90.
     assert m.quality_margin_of_safety(7.5, None, None) == pytest.approx(0.90)
+
+
+def test_dcf_uses_fin_discount_rate_and_mos():
+    fin = {"fcf_ttm": 1_000.0, "shares_outstanding": 100.0, "net_debt": 0}
+    base = m.calc_dcf(fin, GROWTH)["fair_value"]
+    # A LOWER discount rate raises the DCF; a HIGHER mos (less haircut) raises it too.
+    tuned = m.calc_dcf({**fin, "discount_rate": 0.085, "mos": 0.95}, GROWTH)["fair_value"]
+    assert tuned > base
+
+
+def test_dcf_absent_keys_are_identical_to_today():
+    # Backward-compatible identity: no discount_rate/mos in fin -> the flat-10%/0.90 result.
+    fin = {"fcf_ttm": 1_000.0, "shares_outstanding": 100.0, "net_debt": 0}
+    explicit = m.calc_dcf({**fin, "discount_rate": m.DISCOUNT_RATE, "mos": m.MOS}, GROWTH)
+    assert m.calc_dcf(fin, GROWTH)["fair_value"] == pytest.approx(explicit["fair_value"])
+
+
+def test_ev_ebitda_uses_fin_discount_rate():
+    fin = {"ebitda_ttm": 500.0, "shares_outstanding": 100.0, "net_debt": 0,
+           "ev_ebitda": 12.0, "fcf_ttm": 300.0}
+    base = m.calc_ev_ebitda(fin, GROWTH)["fair_value"]
+    lower_rate = m.calc_ev_ebitda({**fin, "discount_rate": 0.085}, GROWTH)["fair_value"]
+    # The future EV is discounted back 10 years at the per-company rate: a lower rate -> higher PV.
+    assert lower_rate > base
