@@ -5,10 +5,10 @@ metadata:
   node_type: memory
   type: project
   originSessionId: ab39a665-b1a3-474c-8aff-036288d4b0a8
-  modified: 2026-08-17T14:02:08.535Z
+  modified: 2026-08-21T20:36:18.431Z
 ---
 
-# Status: SPEC WRITTEN + COMMITTED (2026-08-17) -- not yet implemented
+# Status: DESIGN FULLY SETTLED (2026-08-21) -- all decisions closed, NEXT = writing-plans -> TDD. See the 2026-08-21 UPDATE below for the final settled design.
 
 ## UPDATE 2026-08-17 -- brainstorm session: scope narrowed, spec committed, NEXT = writing-plans
 
@@ -108,6 +108,54 @@ what fixing Ford at source entails + its Quality blast radius; correct-re-rating
 whether these calibration numbers are even the ones to lock) -- resume there.
 
 Scratchpad temp scripts removed from `backend/` on save; reproducible from the params above.
+
+## UPDATE 2026-08-21 -- DECISION CLOSED: Option A taken + Option-A sweep run + VZ path (i). DESIGN NOW FULLY SETTLED.
+
+**DECISION (user, 2026-08-21): take Option A (captive-finance WACC fix AT SOURCE in `wacc()`),
+and VZ path (i) ACCEPT-IT.** This closes the last open item -- the design is now fully settled;
+NEXT is `superpowers:writing-plans` -> TDD. No more calibration decisions pending.
+
+**Feasibility probe (real yfinance data, Ford/GM vs controls).** Captive finance IS detectable,
+but NOT via the industry string -- TSLA is also "Auto Manufacturers" yet has debt-weight 0.01 and
+a healthy 13.7% WACC, so an industry hardcode would misfire. The clean, classifier-free
+SIGNATURE that only Ford/GM share: (1) implausibly cheap implied cost of debt (~0.5% after tax --
+the finance arm's interest is booked against finance REVENUE, not the industrial "Interest
+Expense" line, so `interest/totalDebt` collapses), and (2) debt dominating the cap structure
+(debt-weight 0.62-0.74). Non-current Accounts Receivable ($61B F, $44B GM) is the finance loan
+book -- a corroborating tell but not needed for the fix. Crucially the signature SEPARATES Ford
+from VZ: VZ's low 4.34% WACC is its BETA (0.23 -> 5.9% cost of equity), NOT debt distortion.
+
+**THE OPTION-A FIX (classifier-free; inside `wacc()`, non-financials only -- `sector ==
+"Financial Services"` skipped):**
+- (1) cost-of-debt floor: `cost_debt = max(cost_debt, rf*(1-tax))` -- rejects the ~0.5% artifact.
+- (2) debt-weight cap: `w_debt = min(w_debt, 0.50)` -- match-funded debt can't dominate the equity
+  hurdle. `wacc = (1-w_debt)*cost_equity + w_debt*cost_debt`.
+This is a TRUE source fix (A1): it changes the shared `wacc()`, so BOTH the new FV discount rate
+AND the Quality `roic_wacc_spread` see the corrected WACC.
+
+**Option-A sweep (all 60 canaries, on top of the round-2 recal combo). Results:**
+- **Quality blast radius ~= NIL**: across all 60 names only GM's quality moves (-0.10); every
+  other name dQ=0.00. The feared Quality damage does NOT materialize -- Ford's ROIC is low enough
+  that its spread sub-score was already floored. => "fix at source" is SAFE for Quality.
+- **FV**: Ford fixed WACC 4.1->8.6%; DIVIDEND blowup FIXED -- recal +4.7 -> **A -24.8** (Δ -29.5pp;
+  now only +6.7 vs today's -31.5). Every OTHER name moves <=3.9pp (CRM -3.9, LYFT -3.6 from the
+  cost_debt floor mildly tightening two expensive names; ETN/NKE/PEP/VZ/GM/CEG ~ -1 to -1.4).
+- **Blue-chip re-rating PRESERVED**: PG/KO/JNJ/MCD/ABBV move only -0.2..-0.4 under A. So A is
+  surgical -- fixes Ford WITHOUT undoing the wanted correction (unlike Option B's blunt damping).
+- **VZ**: A moves it only -1.2 (stays +12.4, SELL->BUY). Confirmed VZ is a beta story, orthogonal
+  to captive finance. **Path (i) ACCEPTED**: a 0.23-beta blue chip legitimately gets a low hurdle;
+  band floor 8.5% + DDM floor 9% already cap the benefit; VZ +12 = model says genuinely cheap. NO
+  beta floor added.
+
+**FINAL SETTLED DESIGN (all decided, ready for writing-plans):**
+1. Discount rate = blend+bound: `clamp(0.7*0.10 + 0.3*(WACC/100), 0.085, 0.13)`; DDM perpetuity
+   leg floored separately at 9%. Neutral fallback 10% when WACC/beta missing. FINANCIAL uses
+   FINANCIAL_COE (rate-invariant). NO beta floor (VZ path i).
+2. MOS = Variant A: `0.85 + ramp*0.10`, ramp = `max(spread/15, (roic5-wacc)/5)` clamped [0,1];
+   neutral 0.90 when signals missing.
+3. Option A captive-finance fix inside `wacc()` (both fix legs above), non-financials only.
+Scratchpad repro: `optionA_sweep.py` (+ `captive_probe.py`, `optionA_out.txt`) in this session's
+scratchpad. Reproducible from params above.
 
 ---
 
