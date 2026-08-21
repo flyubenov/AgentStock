@@ -4,6 +4,21 @@ DISCOUNT_RATE = 0.10
 TERMINAL_GROWTH = 0.03
 HORIZON = 10
 MOS = 0.90
+# Quality-adjusted discount rate (spec §4.1): nudge the flat prior partway toward the
+# company's beta-driven WACC, then clamp to a tight band. Gentler 0.30 blend + 8.5%
+# floor were chosen because aggressive settings over-inflated low-WACC DDM-heavy names.
+RATE_BLEND_W = 0.30
+RATE_FLOOR = 0.085
+RATE_CEIL = 0.13
+# DDM perpetuity guard: (rate - g) in the Gordon denominator is hypersensitive at low
+# rates, so the DDM leg floors its discount rate higher than the DCF/EV legs.
+DDM_RATE_FLOOR = 0.09
+# Quality-adjusted margin of safety (spec §4.2, Variant A): nudge the flat 0.90 within a
+# tight band by business durability (ROIC-WACC spot spread, or 5y-ROIC-vs-WACC ramp).
+MOS_FLOOR = 0.85
+MOS_CEIL = 0.95
+MOS_SPREAD_PIVOT = 15.0       # pp of ROIC-WACC spot spread for the full nudge
+MOS_DURABILITY_PIVOT = 5.0    # pp of (roic_5y_avg - wacc) for the full nudge
 EV_EBITDA_CAP = 20.0
 # Growth-coupled ceiling for the EV/EBITDA exit multiple. EV_EBITDA_CAP is the ceiling for
 # a slow/no-growth name; a genuine grower earns
@@ -143,6 +158,40 @@ def _apply_mos(value: float) -> float:
 def _avg(scenarios: dict) -> float | None:
     vals = [v for v in scenarios.values() if v is not None]
     return sum(vals) / len(vals) if vals else None
+
+
+def _clamp(x: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, x))
+
+
+def blended_discount_rate(wacc_pct: float | None) -> float:
+    """Per-company DCF/EV discount rate: blend the flat prior toward the company WACC,
+    clamped to [RATE_FLOOR, RATE_CEIL]. Neutral flat prior when WACC is unavailable
+    (spec §4.3) — this makes the no-signal case byte-identical to today's model."""
+    if wacc_pct is None:
+        return DISCOUNT_RATE
+    return _clamp((1 - RATE_BLEND_W) * DISCOUNT_RATE + RATE_BLEND_W * (wacc_pct / 100.0),
+                  RATE_FLOOR, RATE_CEIL)
+
+
+def ddm_discount_rate(rate: float) -> float:
+    """DDM perpetuity-leg rate: the DCF/EV rate floored at DDM_RATE_FLOOR (Gordon guard)."""
+    return max(rate, DDM_RATE_FLOOR)
+
+
+def quality_margin_of_safety(spread_pp: float | None, roic5_pct: float | None,
+                             wacc_pct: float | None) -> float:
+    """Variant-A MOS: nudge the flat MOS within [MOS_FLOOR, MOS_CEIL] on the GREATER of the
+    ROIC-WACC spot-spread ramp and the 5y-ROIC-vs-WACC durability ramp. Neutral flat MOS
+    when both signals are missing (spec §4.3) — byte-identical to today's model."""
+    ramps = []
+    if spread_pp is not None:
+        ramps.append(_clamp(spread_pp / MOS_SPREAD_PIVOT, 0.0, 1.0))
+    if roic5_pct is not None and wacc_pct is not None:
+        ramps.append(_clamp((roic5_pct - wacc_pct) / MOS_DURABILITY_PIVOT, 0.0, 1.0))
+    if not ramps:
+        return MOS
+    return MOS_FLOOR + max(ramps) * (MOS_CEIL - MOS_FLOOR)
 
 
 def _null_result(has_scenarios: bool) -> dict:

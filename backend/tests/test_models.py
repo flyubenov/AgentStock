@@ -754,3 +754,36 @@ def test_rim_distorted_roe_is_capped():
 def test_rim_missing_inputs_return_null():
     assert m.calc_rim({"book_value_per_share": None, "eps_ttm": 3.0}, GROWTH)["fair_value"] is None
     assert m.calc_rim({"book_value_per_share": 10.0, "eps_ttm": None}, GROWTH)["fair_value"] is None
+
+
+def test_blended_discount_rate_neutral_fallback():
+    # No WACC signal -> exactly the flat prior (backward-compatible identity).
+    assert m.blended_discount_rate(None) == pytest.approx(m.DISCOUNT_RATE)
+
+
+def test_blended_discount_rate_blends_and_clamps():
+    # 0.7*0.10 + 0.3*(wacc/100), clamped to [0.085, 0.13].
+    assert m.blended_discount_rate(8.6) == pytest.approx(0.7 * 0.10 + 0.3 * 0.086)   # ~0.0958
+    assert m.blended_discount_rate(4.0) == pytest.approx(0.085)   # low WACC hits the floor
+    assert m.blended_discount_rate(20.0) == pytest.approx(0.13)   # high WACC hits the ceiling
+
+
+def test_ddm_discount_rate_floors_at_9pct():
+    assert m.ddm_discount_rate(0.085) == pytest.approx(0.09)   # perpetuity floor binds
+    assert m.ddm_discount_rate(0.12) == pytest.approx(0.12)    # above the floor, unchanged
+
+
+def test_quality_mos_neutral_fallback():
+    # Both durability signals missing -> exactly the flat 0.90 (backward-compatible identity).
+    assert m.quality_margin_of_safety(None, None, None) == pytest.approx(m.MOS)
+
+
+def test_quality_mos_ramps_within_band():
+    # Full spot spread (>=15pp) -> ceiling 0.95; zero/negative durability -> floor 0.85.
+    assert m.quality_margin_of_safety(15.0, None, None) == pytest.approx(0.95)
+    assert m.quality_margin_of_safety(0.0, None, None) == pytest.approx(0.85)
+    # Takes the GREATER of the spot-spread ramp and the (roic5 - wacc) durability ramp.
+    # spread 0 but roic5 25 vs wacc 20 -> durability ramp = 5/5 = 1.0 -> ceiling.
+    assert m.quality_margin_of_safety(0.0, 25.0, 20.0) == pytest.approx(0.95)
+    # Half of the spot pivot -> midpoint 0.90.
+    assert m.quality_margin_of_safety(7.5, None, None) == pytest.approx(0.90)
