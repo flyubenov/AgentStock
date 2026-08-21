@@ -168,11 +168,24 @@ def test_wacc_debt_weight_capped_at_half():
     # Debt-weight would be 0.74; capped to 0.50 so match-funded debt can't dominate the hurdle.
     heavy = _mk_inputs(info={"beta": 1.85, "totalDebt": 163_000.0, "marketCap": 57_000.0})
     heavy.income.rows["Interest Expense"] = [1_000.0] * 4
+    # Hand-computed expected WACC with both guards applied:
+    #   cost_equity = 0.045 + 1.85*0.05 = 0.1375
+    #   cost_debt floored = max((1000/163000)*(1-0.21), 0.045*(1-0.21))
+    #                     = max(0.004847, 0.03555) = 0.03555
+    #   debt-weight capped at 0.50 (raw would be 163000/220000 = 0.7409)
+    #   WACC = 0.5*0.1375 + 0.5*0.03555 = 0.086525
+    # This would fail against the pre-fix formula (~0.039, uncapped 0.74 debt weight
+    # dragged toward the unfloored ~0.0048 cost of debt).
+    assert wacc_fn(heavy, 0.21) == pytest.approx(0.086525, abs=1e-4)
     # Same company but with the debt weight already <= 0.50 (double the equity): the cap
-    # doesn't bind, so the only lift comes from the cost-of-debt floor.
+    # doesn't bind, so the only lift comes from the cost-of-debt floor. The capped
+    # (heavy) WACC should still exceed what an uncapped 0.74 debt weight would give,
+    # confirming the cap is actually reducing the debt weight's drag.
     lighter = _mk_inputs(info={"beta": 1.85, "totalDebt": 163_000.0, "marketCap": 200_000.0})
     lighter.income.rows["Interest Expense"] = [1_000.0] * 4
-    assert wacc_fn(heavy, 0.21) is not None and wacc_fn(lighter, 0.21) is not None
+    assert wacc_fn(lighter, 0.21) is not None
+    uncapped_debt_weight_wacc = 0.74 * 0.03555 + 0.26 * 0.1375
+    assert wacc_fn(heavy, 0.21) > uncapped_debt_weight_wacc
 
 
 def test_wacc_low_debt_name_untouched_by_captive_fix():
