@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import patch
 from valuation import engine
 from models import TickerResult
+from screener.models import ScreenerMetrics
 
 _INFO = {
     "symbol": "AAPL", "shortName": "Apple Inc.", "currentPrice": 190.0,
@@ -19,7 +20,8 @@ _INFO = {
 @pytest.mark.asyncio
 async def test_run_returns_completed_ticker_result():
     with patch("valuation.engine.fetch_ticker_info", return_value=_INFO), \
-         patch("valuation.engine.fetch_ticker_cashflow", return_value=None):
+         patch("valuation.engine.fetch_ticker_cashflow", return_value=None), \
+         patch("valuation.engine.fetch_screener_inputs", return_value=None):
         result = await engine.run("AAPL")
     assert isinstance(result, TickerResult)
     assert result.status == "completed"
@@ -40,10 +42,12 @@ async def test_run_yfinance_failure_is_failed():
 async def test_run_uses_real_fcf_from_cashflow():
     cf_low = {"free_cash_flow": 20_000_000_000, "operating_cash_flow": None, "capital_expenditure": None}
     with patch("valuation.engine.fetch_ticker_info", return_value=_INFO), \
-         patch("valuation.engine.fetch_ticker_cashflow", return_value=None):
+         patch("valuation.engine.fetch_ticker_cashflow", return_value=None), \
+         patch("valuation.engine.fetch_screener_inputs", return_value=None):
         baseline = (await engine.run("AAPL")).fair_value
     with patch("valuation.engine.fetch_ticker_info", return_value=_INFO), \
-         patch("valuation.engine.fetch_ticker_cashflow", return_value=cf_low):
+         patch("valuation.engine.fetch_ticker_cashflow", return_value=cf_low), \
+         patch("valuation.engine.fetch_screener_inputs", return_value=None):
         lowered = (await engine.run("AAPL")).fair_value
     # real FCF (20B) is below the info-dict FCF (99B), so DCF + EV/EBITDA conversion drop
     assert lowered < baseline
@@ -69,7 +73,8 @@ _IREN_HIST = {"multiple": 16.8, "ebitda": 286_000_000, "revenue_growth": 1.677}
 async def test_run_iren_reroutes_to_completed_fair_value():
     with patch("valuation.engine.fetch_ticker_info", return_value=_IREN_INFO), \
          patch("valuation.engine.fetch_ticker_cashflow", return_value=_IREN_CF), \
-         patch("valuation.engine.fetch_ev_ebitda_history", return_value=_IREN_HIST):
+         patch("valuation.engine.fetch_ev_ebitda_history", return_value=_IREN_HIST), \
+         patch("valuation.engine.fetch_screener_inputs", return_value=None):
         result = await engine.run("IREN")
     assert result.status == "completed"
     assert result.stock_type == "MID_CAP"
@@ -85,3 +90,29 @@ async def test_run_iren_reroutes_to_completed_fair_value():
     assert 20 < result.fair_value < 60
     assert "ev_ebitda" in result.fair_value_breakdown
     assert "dcf" not in result.fair_value_breakdown
+
+
+@pytest.mark.asyncio
+async def test_run_low_wacc_lifts_fair_value():
+    # A low per-company WACC (5%) + wide durability spread lifts FV above the neutral run.
+    stub = ScreenerMetrics(wacc=5.0, roic_wacc_spread=20.0, roic_5y_avg=25.0)
+    with patch("valuation.engine.fetch_ticker_info", return_value=_INFO), \
+         patch("valuation.engine.fetch_ticker_cashflow", return_value=None), \
+         patch("valuation.engine.fetch_screener_inputs", return_value=None):
+        neutral = (await engine.run("AAPL")).fair_value
+    with patch("valuation.engine.fetch_ticker_info", return_value=_INFO), \
+         patch("valuation.engine.fetch_ticker_cashflow", return_value=None), \
+         patch("valuation.engine.fetch_screener_inputs", return_value=object()), \
+         patch("valuation.engine.compute_metrics", return_value=stub):
+        lifted = (await engine.run("AAPL")).fair_value
+    assert lifted > neutral
+
+
+@pytest.mark.asyncio
+async def test_run_screener_failure_is_isolated():
+    # A screener-data failure must not fail the FV run — it falls back to the neutral prior.
+    with patch("valuation.engine.fetch_ticker_info", return_value=_INFO), \
+         patch("valuation.engine.fetch_ticker_cashflow", return_value=None), \
+         patch("valuation.engine.fetch_screener_inputs", side_effect=RuntimeError("boom")):
+        result = await engine.run("AAPL")
+    assert result.status == "completed" and result.fair_value is not None

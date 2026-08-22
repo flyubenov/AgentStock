@@ -7,6 +7,8 @@ from services.yahoo import (
     fetch_ev_ebitda_history, fetch_quarterly_revenue, _effective_shares,
 )
 from models import TickerResult
+from screener.data import fetch_screener_inputs
+from screener.metrics import compute_metrics
 
 EBITDA_MARGIN_FLOOR = 0.08
 SUSTAINABLE_CEIL = 0.039
@@ -784,6 +786,21 @@ async def run(ticker: str) -> TickerResult:
         if bs_shares:
             fin["shares_outstanding"] = _effective_shares(
                 info, fin.get("current_price"), bs_shares)
+
+    # Attach the per-company WACC / ROIC-WACC durability signal for the quality-adjusted
+    # discount rate + MOS (spec §4.1/§4.2), reusing screener.metrics as a library (the
+    # Option A captive-finance fix lives inside its wacc()). Failure-isolated: any screener
+    # error leaves the keys absent, so evaluate() falls back to the neutral flat prior
+    # (rate 0.10 / MOS 0.90) and FV still computes — preserving pipeline independence.
+    try:
+        sinp = await fetch_screener_inputs(ticker)
+        if sinp is not None:
+            met = compute_metrics(sinp)
+            fin["wacc"] = met.wacc
+            fin["roic_wacc_spread"] = met.roic_wacc_spread
+            fin["roic_5y_avg"] = met.roic_5y_avg
+    except Exception:
+        pass
 
     data = evaluate(fin)
     data["last_evaluated"] = datetime.now(timezone.utc).isoformat()
