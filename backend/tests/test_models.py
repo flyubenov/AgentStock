@@ -797,6 +797,16 @@ def test_dcf_uses_fin_discount_rate_and_mos():
     assert tuned > base
 
 
+def test_dcf_uses_fin_discount_rate_in_isolation():
+    # Isolating guard: with mos held at the flat default, the discount_rate alone must move
+    # the DCF (a lower rate -> higher PV). Guards against a future regression that drops the
+    # rate thread from calc_dcf but keeps mos -- which the combined test above would not catch.
+    fin = {"fcf_ttm": 1_000.0, "shares_outstanding": 100.0, "net_debt": 0}
+    base = m.calc_dcf({**fin, "mos": m.MOS}, GROWTH)["fair_value"]
+    lower_rate = m.calc_dcf({**fin, "discount_rate": 0.085, "mos": m.MOS}, GROWTH)["fair_value"]
+    assert lower_rate > base
+
+
 def test_dcf_absent_keys_are_identical_to_today():
     # Backward-compatible identity: no discount_rate/mos in fin -> the flat-10%/0.90 result.
     fin = {"fcf_ttm": 1_000.0, "shares_outstanding": 100.0, "net_debt": 0}
