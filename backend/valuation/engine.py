@@ -497,6 +497,20 @@ def evaluate(fin: dict) -> dict:
         coe = fin.get("cost_of_equity")
         if coe is None or coe == m.DISCOUNT_RATE:
             fin = {**fin, "cost_of_equity": m.FINANCIAL_COE}
+    # Quality-adjusted discount rate and margin of safety (spec §4.1/§4.2). Inputs are the
+    # per-company WACC / ROIC-WACC spread / 5y ROIC that run() attaches to fin by reusing
+    # screener.metrics (percent units). Missing signals -> neutral flat prior (§4.3), which
+    # makes the injected values equal the flat globals, so a no-signal fin is byte-identical
+    # to today's model. FINANCIAL stays rate-invariant: its book legs discount at
+    # FINANCIAL_COE and its DCF/EV/DDM weights are 0, so only the durability MOS is applied.
+    wacc_pct = fin.get("wacc")
+    inject = {"mos": m.quality_margin_of_safety(
+        fin.get("roic_wacc_spread"), fin.get("roic_5y_avg"), wacc_pct)}
+    if stock_type != "FINANCIAL":
+        rate = m.blended_discount_rate(wacc_pct)
+        inject["discount_rate"] = rate
+        inject["ddm_rate"] = m.ddm_discount_rate(rate)
+    fin = {**fin, **inject}
     weights = {mid: classification["method_weights"][mid]["weight"] for mid in m.ALL_METHODS}
     weights = pick_ev_multiple(weights, fin)
 

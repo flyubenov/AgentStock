@@ -1480,3 +1480,30 @@ def test_band_growth_signal_respects_guards():
     # normal, no statement -> info revenue growth
     assert engine._band_growth_signal(
         {"earnings_growth": 0.3, "revenue_growth": 0.40}) == pytest.approx(0.40)
+
+
+def test_evaluate_applies_low_wacc_discount_rate():
+    # A non-financial DCF-anchored name: a low per-company WACC -> lower discount rate + a
+    # wide durability spread -> higher MOS -> a HIGHER fair value than the neutral baseline.
+    base_fin = {
+        "ticker": "T", "current_price": 100.0, "fcf_ttm": 1_000.0,
+        "shares_outstanding": 100.0, "net_debt": 0, "market_cap": 50_000_000_000,
+        "revenue_growth": 0.05, "eps_ttm": 5.0, "trailing_pe": 20.0,
+    }
+    baseline = engine.evaluate(dict(base_fin))["fair_value"]
+    tuned = engine.evaluate({**base_fin, "wacc": 5.0, "roic_wacc_spread": 20.0,
+                             "roic_5y_avg": 25.0})["fair_value"]
+    assert tuned > baseline
+
+
+def test_evaluate_missing_wacc_is_identity():
+    # No WACC signal -> injected rate/mos equal the flat globals -> byte-identical FV.
+    base_fin = {
+        "ticker": "T", "current_price": 100.0, "fcf_ttm": 1_000.0,
+        "shares_outstanding": 100.0, "net_debt": 0, "market_cap": 50_000_000_000,
+        "revenue_growth": 0.05, "eps_ttm": 5.0, "trailing_pe": 20.0,
+    }
+    a = engine.evaluate(dict(base_fin))["fair_value"]
+    b = engine.evaluate({**base_fin, "wacc": None, "roic_wacc_spread": None,
+                         "roic_5y_avg": None})["fair_value"]
+    assert a == pytest.approx(b)
