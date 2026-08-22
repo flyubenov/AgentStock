@@ -1,0 +1,301 @@
+<title>Rate &amp; MOS Rerating</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,560;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  --ground:#F1F4F8; --surface:#FFFFFF; --surface-2:#F7F9FC;
+  --ink:#151B26; --muted:#5C6675; --faint:#8A93A2;
+  --hair:#E1E6ED; --hair-2:#EDF0F5;
+  --accent:#3B4B66; --accent-soft:#5B6E8F;
+  --pos:#16785F; --pos-bg:#E1F0EA; --pos-bar:#2E9E7E;
+  --neg:#B23A48; --neg-bg:#F6E4E6; --neg-bar:#D0596A;
+  --flat:#8A93A2;
+  --shadow:0 1px 2px rgba(20,27,38,.05),0 8px 24px rgba(20,27,38,.06);
+}
+:root:not([data-theme="light"]){ }
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0D1117; --surface:#151B24; --surface-2:#1A212C;
+    --ink:#E7ECF3; --muted:#9AA4B2; --faint:#6C7686;
+    --hair:#242C39; --hair-2:#1E2530;
+    --accent:#93A9CC; --accent-soft:#7C90B3;
+    --pos:#57C6A4; --pos-bg:#123329; --pos-bar:#3FA989;
+    --neg:#EB8091; --neg-bg:#3A1F26; --neg-bar:#C85C6D;
+    --flat:#6C7686;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0D1117; --surface:#151B24; --surface-2:#1A212C;
+  --ink:#E7ECF3; --muted:#9AA4B2; --faint:#6C7686;
+  --hair:#242C39; --hair-2:#1E2530;
+  --accent:#93A9CC; --accent-soft:#7C90B3;
+  --pos:#57C6A4; --pos-bg:#123329; --pos-bar:#3FA989;
+  --neg:#EB8091; --neg-bg:#3A1F26; --neg-bar:#C85C6D;
+  --flat:#6C7686;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,sans-serif; font-size:15px; line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1120px; margin:0 auto; padding:40px 24px 80px}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums}
+.num{font-family:"IBM Plex Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums; text-align:right}
+
+/* masthead */
+.eyebrow{font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--accent-soft); margin:0 0 14px}
+h1{font-family:"Fraunces",Georgia,serif; font-weight:560; font-size:clamp(34px,6vw,54px); line-height:1.02; letter-spacing:-.01em; margin:0; text-wrap:balance}
+.thesis{font-size:clamp(16px,2.3vw,19px); color:var(--muted); max-width:64ch; margin:18px 0 0; line-height:1.5}
+.thesis b{color:var(--ink); font-weight:600}
+.meta{display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:22px; font-family:"IBM Plex Mono",monospace; font-size:12.5px; color:var(--faint)}
+.meta span b{color:var(--muted); font-weight:500}
+.rule{height:1px; background:var(--hair); border:0; margin:32px 0}
+
+/* tiles */
+.tiles{display:grid; grid-template-columns:repeat(4,1fr); gap:14px}
+.tile{background:var(--surface); border:1px solid var(--hair); border-radius:14px; padding:18px 18px 16px; box-shadow:var(--shadow)}
+.tile .k{font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); margin:0}
+.tile .v{font-family:"Fraunces",serif; font-weight:600; font-size:32px; line-height:1.05; margin:10px 0 4px; font-variant-numeric:tabular-nums}
+.tile .s{font-size:12.5px; color:var(--muted); margin:0}
+.v.pos{color:var(--pos)} .v.neg{color:var(--neg)}
+
+/* movers band */
+.h2{font-family:"Fraunces",serif; font-weight:600; font-size:22px; margin:0 0 4px; letter-spacing:-.01em}
+.sub{color:var(--muted); font-size:14px; margin:0 0 18px; max-width:70ch}
+.cols{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+.panel{background:var(--surface); border:1px solid var(--hair); border-radius:14px; padding:8px 6px; box-shadow:var(--shadow)}
+.panel .cap{display:flex; align-items:center; gap:8px; padding:10px 14px 8px; font-family:"IBM Plex Mono",monospace; font-size:11.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
+.dot{width:8px; height:8px; border-radius:50%}
+.dot.up{background:var(--pos-bar)} .dot.dn{background:var(--neg-bar)}
+.mv{display:flex; align-items:center; gap:10px; padding:7px 14px; border-radius:8px}
+.mv:hover{background:var(--surface-2)}
+.mv .t{font-family:"IBM Plex Mono",monospace; font-weight:600; font-size:13.5px; width:62px; flex:none}
+.mv .c{color:var(--muted); font-size:12.5px; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.mv .d{font-family:"IBM Plex Mono",monospace; font-weight:600; font-size:13.5px; font-variant-numeric:tabular-nums; flex:none}
+.mv .d.pos{color:var(--pos)} .mv .d.neg{color:var(--neg)}
+
+/* controls */
+.controls{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:8px 0 14px}
+.chip{font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:.02em; padding:6px 12px; border-radius:999px; border:1px solid var(--hair); background:var(--surface); color:var(--muted); cursor:pointer; transition:.12s}
+.chip:hover{border-color:var(--accent-soft); color:var(--ink)}
+.chip[aria-pressed="true"]{background:var(--accent); border-color:var(--accent); color:#fff}
+:root[data-theme="dark"] .chip[aria-pressed="true"], :root:not([data-theme="light"]) .chip[aria-pressed="true"]{color:#0D1117}
+@media (prefers-color-scheme:light){:root:not([data-theme="dark"]) .chip[aria-pressed="true"]{color:#fff}}
+.search{margin-left:auto; font-family:"IBM Plex Mono",monospace; font-size:12.5px; padding:6px 12px; border-radius:999px; border:1px solid var(--hair); background:var(--surface); color:var(--ink); min-width:150px}
+.search::placeholder{color:var(--faint)}
+.search:focus,.chip:focus-visible,th[data-k]:focus-visible{outline:2px solid var(--accent-soft); outline-offset:2px}
+
+/* table */
+.tbl-wrap{background:var(--surface); border:1px solid var(--hair); border-radius:14px; box-shadow:var(--shadow); overflow-x:auto}
+table{border-collapse:collapse; width:100%; min-width:880px}
+thead th{position:sticky; top:0; background:var(--surface); z-index:2}
+th{font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.07em; text-transform:uppercase; color:var(--faint); font-weight:500; text-align:right; padding:13px 12px; border-bottom:1px solid var(--hair); cursor:pointer; white-space:nowrap; user-select:none}
+th.l{text-align:left}
+th[data-k]:hover{color:var(--ink)}
+th .ar{opacity:0; margin-left:3px}
+th[aria-sort] .ar{opacity:1; color:var(--accent-soft)}
+tbody td{padding:10px 12px; border-bottom:1px solid var(--hair-2); white-space:nowrap}
+tbody tr:hover{background:var(--surface-2)}
+tbody tr:last-child td{border-bottom:0}
+.tk{font-family:"IBM Plex Mono",monospace; font-weight:600; font-size:13.5px}
+.co{color:var(--muted); font-size:12.5px; max-width:190px; overflow:hidden; text-overflow:ellipsis}
+.badge{font-family:"IBM Plex Mono",monospace; font-size:10px; letter-spacing:.03em; padding:2px 7px; border-radius:5px; background:var(--surface-2); border:1px solid var(--hair); color:var(--muted); white-space:nowrap}
+.na{color:var(--faint)}
+/* delta cell with diverging bar */
+.dcell{position:relative; min-width:118px}
+.dtrack{position:relative; height:22px; display:flex; align-items:center; justify-content:center}
+.dmid{position:absolute; left:50%; top:2px; bottom:2px; width:1px; background:var(--hair)}
+.dbar{position:absolute; top:4px; bottom:4px; border-radius:3px; opacity:.9}
+.dbar.pos{left:50%; background:var(--pos-bar)}
+.dbar.neg{right:50%; background:var(--neg-bar)}
+.dval{position:relative; z-index:1; font-family:"IBM Plex Mono",monospace; font-weight:600; font-size:12.5px; font-variant-numeric:tabular-nums; padding:0 6px}
+.dval.pos{color:var(--pos)} .dval.neg{color:var(--neg)} .dval.flat{color:var(--flat)}
+.arrow{color:var(--faint); padding:0 2px}
+.qd.pos{color:var(--pos)} .qd.neg{color:var(--neg)} .qd.z{color:var(--faint)}
+.count{font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--faint); margin:14px 2px 0}
+
+/* footnote */
+.notes{margin-top:34px; border-top:1px solid var(--hair); padding-top:22px; color:var(--muted); font-size:13px; line-height:1.6; max-width:78ch}
+.notes h3{font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--faint); margin:0 0 10px; font-weight:500}
+.notes p{margin:0 0 10px} .notes b{color:var(--ink); font-weight:600}
+.notes code{font-family:"IBM Plex Mono",monospace; font-size:12px; background:var(--surface-2); padding:1px 5px; border-radius:4px; border:1px solid var(--hair)}
+
+@media (max-width:760px){
+  .tiles{grid-template-columns:repeat(2,1fr)}
+  .cols{grid-template-columns:1fr}
+  .wrap{padding:28px 16px 60px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Fair-Value Engine · A / B Model Comparison</p>
+    <h1>Rate &amp; MOS Rerating</h1>
+    <p class="thesis">Switching the fair-value engine from a <b>static 10% discount rate and 0.90 margin of safety</b> to a <b>per-company WACC-blended rate and quality-scaled MOS</b> — every ticker in the database, priced both ways from the same fetched fundamentals. Durable low-risk compounders re-rate up; speculative high-beta names get haircut.</p>
+    <div class="meta">
+      <span><b>136</b> tickers</span>
+      <span><b>113</b> valued both ways</span>
+      <span>branch <b>wacc-mos-moat-margin-design</b></span>
+      <span>live prices at run time</span>
+    </div>
+  </header>
+
+  <hr class="rule">
+
+  <section class="tiles" aria-label="Summary">
+    <div class="tile"><p class="k">Median FV Δ</p><p class="v neg">−3.3%</p><p class="s">range −19.3% to +41.6%</p></div>
+    <div class="tile"><p class="k">FV re-rated</p><p class="v">32&#8202;↑ / 74&#8202;↓</p><p class="s">7 flat · of 113 valued</p></div>
+    <div class="tile"><p class="k">Quality moved</p><p class="v">2 <span style="font-size:18px;color:var(--faint)">/ 134</span></p><p class="s">OKTA, LEU (−0.2 each)</p></div>
+    <div class="tile"><p class="k">Coverage</p><p class="v">113 <span style="font-size:18px;color:var(--faint)">valued</span></p><p class="s">23 unvaluable by both</p></div>
+  </section>
+
+  <div style="height:34px"></div>
+
+  <section aria-label="What moved and why">
+    <h2 class="h2">What moved, and why</h2>
+    <p class="sub">The discount rate is keyed to market risk (WACC → beta), the MOS to business durability (ROIC−WACC spread). The two levers pull in opposite directions across the risk spectrum.</p>
+    <div class="cols">
+      <div class="panel">
+        <div class="cap"><span class="dot up"></span> Re-rated up · low WACC + durable spread</div>
+        <div id="upList"></div>
+      </div>
+      <div class="panel">
+        <div class="cap"><span class="dot dn"></span> Re-rated down · high WACC + thin/negative spread</div>
+        <div id="dnList"></div>
+      </div>
+    </div>
+  </section>
+
+  <div style="height:38px"></div>
+
+  <section aria-label="Full comparison">
+    <h2 class="h2">Every ticker</h2>
+    <p class="sub">Old vs new fair value and quality score, per ticker. Click any column to sort; filter or search below.</p>
+    <div class="controls" role="group" aria-label="Filters">
+      <button class="chip" data-f="all" aria-pressed="true">All</button>
+      <button class="chip" data-f="up">FV up</button>
+      <button class="chip" data-f="down">FV down</button>
+      <button class="chip" data-f="qmoved">Quality moved</button>
+      <button class="chip" data-f="na">Unvaluable</button>
+      <input class="search" id="q" type="search" placeholder="filter ticker / name…" aria-label="Search">
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th class="l" data-k="ticker">Ticker<span class="ar">↕</span></th>
+          <th class="l" data-k="company">Company<span class="ar">↕</span></th>
+          <th class="l" data-k="type">Type<span class="ar">↕</span></th>
+          <th data-k="price">Price<span class="ar">↕</span></th>
+          <th data-k="fv_old">FV old<span class="ar">↕</span></th>
+          <th data-k="fv_new">FV new<span class="ar">↕</span></th>
+          <th data-k="fvd" aria-sort="ascending">Δ FV<span class="ar">↕</span></th>
+          <th data-k="q_old">Q old<span class="ar">↕</span></th>
+          <th data-k="q_new">Q new<span class="ar">↕</span></th>
+          <th data-k="qd">Δ Q<span class="ar">↕</span></th>
+          <th data-k="wacc">WACC<span class="ar">↕</span></th>
+          <th data-k="spread">Spread<span class="ar">↕</span></th>
+        </tr></thead>
+        <tbody id="tb"></tbody>
+      </table>
+    </div>
+    <p class="count" id="count"></p>
+  </section>
+
+  <section class="notes">
+    <h3>Method &amp; caveats</h3>
+    <p><b>Old</b> = static <code>DISCOUNT_RATE = 0.10</code> / <code>MOS = 0.90</code> across every leg, plus the pre-Option-A <code>wacc()</code> (no captive-finance floor/cap) for the quality score. <b>New</b> = the live branch: a per-company rate <code>clamp(0.7·0.10 + 0.3·WACC, 0.085, 0.13)</code> with a 9% DDM floor, a durability MOS <code>0.85 + max(spread/15, (roic5−wacc)/5)·0.10</code> clamped to [0.85, 0.95], and the Option-A <code>wacc()</code> fix. Both numbers for each ticker come from a single fundamentals fetch, so the delta isolates the model change.</p>
+    <p><b>Quality is nearly inert</b> because the Option-A <code>wacc()</code> fix only bites on the captive-finance debt signature — in this database only <b>OKTA</b> and <b>LEU</b> shift (−0.2). Everything else scores identically. <b>FINANCIAL</b> names (JPM, SOFI) keep an identical FV: the rate is invariant for them, and with no ROIC−WACC durability signal the MOS stays neutral.</p>
+    <p><b>23 names are unvaluable by both models</b> — pre-profit / early-stage miners, SPACs and foreign tickers (ACHR, OKLO, IONQ, RHM, RR…) where neither the old nor the new engine produces a fair value; their FV cells read N/A. One name (<b>ZETA</b>) hit a quality-metric error and shows no score. <b>SYM</b>'s spread is a known ROIC-denominator artifact; its FV delta is still bounded.</p>
+  </section>
+</div>
+
+<script>
+const DATA = [{"ticker":"NFLX","company":"Netflix, Inc.","type":"GROWTH","status":"completed","price":79.59,"fv_old":85.8,"fv_new":85.59,"fvd":-0.2,"q_old":9.1,"q_new":9.1,"qd":0.0,"wacc":11.915,"spread":16.445,"roic5":20.743,"note":""},{"ticker":"ACHR","company":"Archer Aviation Inc.","type":"PRE_PROFIT","status":"failed","price":6.3,"fv_old":null,"fv_new":null,"fvd":null,"q_old":3.8,"q_new":3.8,"qd":0.0,"wacc":null,"spread":null,"roic5":null,"note":""},{"ticker":"AAPL","company":"Apple Inc.","type":"MEGA_CAP","status":"completed","price":309.35,"fv_old":184.308,"fv_new":194.19,"fvd":5.4,"q_old":7.8,"q_new":7.8,"qd":0.0,"wacc":10.055,"spread":55.085,"roic5":60.86,"note":""},{"ticker":"FICO","company":"Fair Isaac Corporation","type":"GROWTH","status":"completed","price":1172.67,"fv_old":1056.876,"fv_new":1116.1,"fvd":5.6,"q_old":9.0,"q_new":9.0,"qd":0.0,"wacc":9.986,"spread":48.051,"roic5":48.343,"note":""},{"ticker":"MSFT","company":"Microsoft Corporation","type":"MEGA_CAP","status":"completed","price":483.24,"fv_old":325.347,"fv_new":343.306,"fvd":5.5,"q_old":8.5,"q_new":8.5,"qd":0.0,"wacc":10.011,"spread":18.207,"roic5":27.848,"note":""},{"ticker":"MNDY","company":"monday.com Ltd.","type":"GROWTH","status":"completed","price":90.73,"fv_old":191.06,"fv_new":180.592,"fvd":-5.5,"q_old":6.7,"q_new":6.7,"qd":0.0,"wacc":9.977,"spread":-10.088,"roic5":-5.127,"note":""},{"ticker":"ACN","company":"Accenture plc","type":"DIVIDEND","status":"completed","price":185.28,"fv_old":242.63,"fv_new":252.067,"fvd":3.9,"q_old":8.1,"q_new":8.1,"qd":0.0,"wacc":9.661,"spread":null,"roic5":null,"note":""},{"ticker":"WDAY","company":"Workday, Inc.","type":"GROWTH","status":"completed","price":200.01,"fv_old":174.07,"fv_new":165.214,"fvd":-5.1,"q_old":8.0,"q_new":8.0,"qd":0.0,"wacc":9.525,"spread":-2.376,"roic5":3.275,"note":""},{"ticker":"NOW","company":"ServiceNow, Inc.","type":"GROWTH","status":"completed","price":128.48,"fv_old":117.386,"fv_new":115.5,"fvd":-1.6,"q_old":7.9,"q_new":7.9,"qd":0.0,"wacc":9.045,"spread":3.169,"roic5":8.788,"note":""},{"ticker":"OPFI","company":"OppFi Inc.","type":"FINANCIAL","status":"completed","price":6.98,"fv_old":12.063,"fv_new":12.732,"fvd":5.5,"q_old":9.7,"q_new":9.7,"qd":0.0,"wacc":9.328,"spread":85.04,"roic5":78.026,"note":""},{"ticker":"KLAC","company":"KLA Corporation","type":"GROWTH","status":"completed","price":183.99,"fv_old":94.128,"fv_new":95.366,"fvd":1.3,"q_old":8.3,"q_new":8.3,"qd":0.0,"wacc":11.83,"spread":29.662,"roic5":37.993,"note":""},{"ticker":"AMAT","company":"Applied Materials, Inc.","type":"GROWTH","status":"completed","price":492.32,"fv_old":271.106,"fv_new":268.748,"fvd":-0.9,"q_old":7.9,"q_new":7.9,"qd":0.0,"wacc":12.657,"spread":14.049,"roic5":28.174,"note":""},{"ticker":"LRCX","company":"Lam Research Corporation","type":"GROWTH","status":"completed","price":314.0,"fv_old":228.88,"fv_new":219.452,"fvd":-4.1,"q_old":8.7,"q_new":8.7,"qd":0.0,"wacc":13.96,"spread":31.742,"roic5":37.063,"note":""},{"ticker":"META","company":"Meta Platforms, Inc.","type":"MEGA_CAP","status":"completed","price":549.9,"fv_old":480.081,"fv_new":499.962,"fvd":4.1,"q_old":8.6,"q_new":8.6,"qd":0.0,"wacc":10.387,"spread":11.816,"roic5":20.157,"note":""},{"ticker":"PANW","company":"Palo Alto Networks, Inc.","type":"GROWTH","status":"completed","price":357.87,"fv_old":133.412,"fv_new":134.22,"fvd":0.6,"q_old":8.6,"q_new":8.6,"qd":0.0,"wacc":9.161,"spread":5.357,"roic5":8.441,"note":""},{"ticker":"ABBV","company":"AbbVie Inc.","type":"DIVIDEND","status":"completed","price":264.96,"fv_old":182.432,"fv_new":211.583,"fvd":16.0,"q_old":6.4,"q_new":6.4,"qd":0.0,"wacc":5.731,"spread":3.75,"roic5":8.933,"note":""},{"ticker":"IREN","company":"IREN LIMITED","type":"MID_CAP","status":"completed","price":41.88,"fv_old":27.835,"fv_new":25.189,"fvd":-9.5,"q_old":4.7,"q_new":4.7,"qd":0.0,"wacc":11.706,"spread":-8.209,"roic5":-10.971,"note":""},{"ticker":"JPM","company":"JP Morgan Chase & Co.","type":"FINANCIAL","status":"completed","price":351.58,"fv_old":307.553,"fv_new":307.553,"fvd":0.0,"q_old":7.4,"q_new":7.4,"qd":0.0,"wacc":7.325,"spread":null,"roic5":null,"note":""},{"ticker":"DOCN","company":"DigitalOcean Holdings, Inc.","type":"GROWTH","status":"completed","price":115.64,"fv_old":97.629,"fv_new":91.498,"fvd":-6.3,"q_old":6.6,"q_new":6.6,"qd":0.0,"wacc":11.529,"spread":2.475,"roic5":5.55,"note":""},{"ticker":"NVDA","company":"NVIDIA Corporation","type":"MEGA_CAP","status":"completed","price":214.72,"fv_old":191.295,"fv_new":173.642,"fvd":-9.2,"q_old":9.2,"q_new":9.2,"qd":0.0,"wacc":14.712,"spread":57.855,"roic5":55.089,"note":""},{"ticker":"GOOGL","company":"Alphabet Inc.","type":"MEGA_CAP","status":"completed","price":344.82,"fv_old":201.957,"fv_new":208.821,"fvd":3.4,"q_old":8.4,"q_new":8.4,"qd":0.0,"wacc":10.729,"spread":18.018,"roic5":26.224,"note":""},{"ticker":"ETN","company":"Eaton Corporation, PLC","type":"LARGE_CAP","status":"completed","price":419.2,"fv_old":303.902,"fv_new":306.883,"fvd":1.0,"q_old":8.2,"q_new":8.2,"qd":0.0,"wacc":9.847,"spread":4.779,"roic5":12.555,"note":""},{"ticker":"AVGO","company":"Broadcom Inc.","type":"MEGA_CAP","status":"completed","price":368.45,"fv_old":234.922,"fv_new":225.654,"fvd":-3.9,"q_old":8.8,"q_new":8.8,"qd":0.0,"wacc":11.81,"spread":2.184,"roic5":15.254,"note":""},{"ticker":"AMZN","company":"Amazon.com, Inc.","type":"MEGA_CAP","status":"completed","price":258.63,"fv_old":248.244,"fv_new":238.728,"fvd":-3.8,"q_old":7.8,"q_new":7.8,"qd":0.0,"wacc":11.33,"spread":5.463,"roic5":11.224,"note":""},{"ticker":"TER","company":"Teradyne, Inc.","type":"GROWTH","status":"completed","price":375.74,"fv_old":170.47,"fv_new":167.13,"fvd":-2.0,"q_old":7.0,"q_new":7.0,"qd":0.0,"wacc":13.69,"spread":5.679,"roic5":21.639,"note":""},{"ticker":"AMD","company":"Advanced Micro Devices, Inc.","type":"GROWTH","status":"completed","price":473.25,"fv_old":315.634,"fv_new":282.964,"fvd":-10.4,"q_old":7.2,"q_new":7.2,"qd":0.0,"wacc":14.677,"spread":-9.582,"roic5":2.608,"note":""},{"ticker":"ALAB","company":"Astera Labs, Inc.","type":"GROWTH","status":"completed","price":284.97,"fv_old":167.046,"fv_new":147.92,"fvd":-11.4,"q_old":7.3,"q_new":7.3,"qd":0.0,"wacc":14.728,"spread":-4.681,"roic5":0.272,"note":""},{"ticker":"NKE","company":"Nike, Inc.","type":"DIVIDEND","status":"completed","price":40.76,"fv_old":49.406,"fv_new":54.844,"fvd":11.0,"q_old":6.2,"q_new":6.2,"qd":0.0,"wacc":9.316,"spread":3.951,"roic5":17.325,"note":""},{"ticker":"LYFT","company":"Lyft, Inc.","type":"GROWTH","status":"completed","price":17.47,"fv_old":55.036,"fv_new":48.29,"fvd":-12.3,"q_old":6.1,"q_new":6.1,"qd":0.0,"wacc":12.238,"spread":-12.831,"roic5":-28.898,"note":""},{"ticker":"OKLO","company":"Oklo Inc.","type":"PRE_PROFIT","status":"failed","price":42.09,"fv_old":null,"fv_new":null,"fvd":null,"q_old":4.8,"q_new":4.8,"qd":0.0,"wacc":null,"spread":null,"roic5":null,"note":""},{"ticker":"CRDO","company":"Credo Technology Group Holding ","type":"GROWTH","status":"completed","price":230.57,"fv_old":126.114,"fv_new":112.432,"fvd":-10.8,"q_old":8.1,"q_new":8.1,"qd":0.0,"wacc":14.732,"spread":6.617,"roic5":3.647,"note":""},{"ticker":"TTAN","company":"ServiceTitan, Inc.","type":"EARLY_GROWTH","status":"completed","price":94.87,"fv_old":46.596,"fv_new":46.596,"fvd":0.0,"q_old":5.5,"q_new":5.5,"qd":0.0,"wacc":null,"spread":null,"roic5":-7.204,"note":""},{"ticker":"ANET","company":"Arista Networks, Inc.","type":"GROWTH","status":"completed","price":188.65,"fv_old":150.952,"fv_new":147.856,"fvd":-2.1,"q_old":9.5,"q_new":9.5,"qd":0.0,"wacc":12.813,"spread":12.935,"roic5":25.432,"note":""},{"ticker":"PLTR","company":"Palantir Technologies Inc.","type":"GROWTH","status":"completed","price":179.94,"fv_old":63.534,"fv_new":60.264,"fvd":-5.1,"q_old":8.1,"q_new":8.1,"qd":0.0,"wacc":12.549,"spread":6.324,"roic5":5.549,"note":""},{"ticker":"DDOG","company":"Datadog, Inc.","type":"GROWTH","status":"completed","price":235.62,"fv_old":111.784,"fv_new":100.448,"fvd":-10.1,"q_old":6.2,"q_new":6.2,"qd":0.0,"wacc":12.16,"spread":-9.676,"roic5":1.952,"note":""},{"ticker":"CELH","company":"Celsius Holdings, Inc.","type":"GROWTH","status":"completed","price":33.36,"fv_old":25.436,"fv_new":24.356,"fvd":-4.2,"q_old":6.9,"q_new":6.9,"qd":0.0,"wacc":9.092,"spread":-0.972,"roic5":-48.588,"note":""},{"ticker":"PATH","company":"UiPath, Inc.","type":"GROWTH","status":"completed","price":16.39,"fv_old":17.182,"fv_new":16.494,"fvd":-4.0,"q_old":6.2,"q_new":6.2,"qd":0.0,"wacc":9.483,"spread":-7.848,"roic5":-4.859,"note":""},{"ticker":"HON","company":"Honeywell International Inc.","type":"CYCLICAL","status":"completed","price":215.9,"fv_old":153.169,"fv_new":176.947,"fvd":15.5,"q_old":6.4,"q_new":6.4,"qd":0.0,"wacc":7.481,"spread":3.997,"roic5":13.587,"note":""},{"ticker":"CF","company":"CF Industries Holdings, Inc.","type":"CYCLICAL","status":"completed","price":129.6,"fv_old":216.558,"fv_new":266.183,"fvd":22.9,"q_old":7.7,"q_new":7.7,"qd":0.0,"wacc":6.273,"spread":17.499,"roic5":29.87,"note":""},{"ticker":"HOOD","company":"Robinhood Markets, Inc.","type":"EARLY_GROWTH","status":"completed","price":108.13,"fv_old":49.305,"fv_new":43.104,"fvd":-12.6,"q_old":6.3,"q_new":6.3,"qd":0.0,"wacc":11.926,"spread":-2.921,"roic5":0.154,"note":""},{"ticker":"IDR","company":"Idaho Strategic Resources, Inc.","type":"GROWTH","status":"completed","price":32.67,"fv_old":23.142,"fv_new":22.17,"fvd":-4.2,"q_old":7.3,"q_new":7.3,"qd":0.0,"wacc":11.002,"spread":4.049,"roic5":6.986,"note":""},{"ticker":"BWXT","company":"BWX Technologies, Inc.","type":"GROWTH","status":"completed","price":156.78,"fv_old":57.494,"fv_new":64.042,"fvd":11.4,"q_old":6.0,"q_new":6.0,"qd":0.0,"wacc":7.969,"spread":3.313,"roic5":13.713,"note":""},{"ticker":"SBGSY","company":"Schneider Electric SE","type":"LARGE_CAP","status":"completed","price":69.22,"fv_old":49.77,"fv_new":48.79,"fvd":-2.0,"q_old":6.6,"q_new":6.6,"qd":0.0,"wacc":9.825,"spread":2.392,"roic5":11.166,"note":""},{"ticker":"MCO","company":"Moody's Corporation","type":"FINANCIAL","status":"completed","price":503.32,"fv_old":104.216,"fv_new":110.0,"fvd":5.6,"q_old":9.1,"q_new":9.1,"qd":0.0,"wacc":10.706,"spread":13.58,"roic5":19.788,"note":""},{"ticker":"SNPS","company":"Synopsys, Inc.","type":"GROWTH","status":"completed","price":397.87,"fv_old":396.184,"fv_new":418.016,"fvd":5.5,"q_old":7.8,"q_new":7.8,"qd":0.0,"wacc":10.024,"spread":-5.799,"roic5":15.071,"note":""},{"ticker":"FIX","company":"Comfort Systems USA, Inc.","type":"MID_CAP","status":"completed","price":1655.61,"fv_old":1222.393,"fv_new":1159.016,"fvd":-5.2,"q_old":8.9,"q_new":8.9,"qd":0.0,"wacc":13.194,"spread":26.461,"roic5":27.247,"note":""},{"ticker":"TMDX","company":"TransMedics Group, Inc.","type":"GROWTH","status":"completed","price":94.77,"fv_old":115.416,"fv_new":102.678,"fvd":-11.0,"q_old":6.9,"q_new":6.9,"qd":0.0,"wacc":11.961,"spread":-2.237,"roic5":0.683,"note":""},{"ticker":"VRT","company":"Vertiv Holdings, LLC","type":"GROWTH","status":"completed","price":261.95,"fv_old":236.896,"fv_new":206.95,"fvd":-12.6,"q_old":8.9,"q_new":8.9,"qd":0.0,"wacc":14.382,"spread":6.02,"roic5":12.419,"note":""},{"ticker":"CDNS","company":"Cadence Design Systems, Inc.","type":"GROWTH","status":"completed","price":319.02,"fv_old":226.124,"fv_new":237.066,"fvd":4.8,"q_old":8.4,"q_new":8.4,"qd":0.0,"wacc":10.243,"spread":4.774,"roic5":19.006,"note":""},{"ticker":"FTNT","company":"Fortinet, Inc.","type":"GROWTH","status":"completed","price":153.51,"fv_old":119.282,"fv_new":125.922,"fvd":5.6,"q_old":9.6,"q_new":9.6,"qd":0.0,"wacc":9.997,"spread":73.487,"roic5":117.467,"note":""},{"ticker":"SHOP","company":"Shopify Inc.","type":"GROWTH","status":"completed","price":149.25,"fv_old":80.592,"fv_new":68.564,"fvd":-14.9,"q_old":6.8,"q_new":6.8,"qd":0.0,"wacc":14.728,"spread":-3.311,"roic5":3.603,"note":""},{"ticker":"STRL","company":"Sterling Infrastructure, Inc.","type":"GROWTH","status":"completed","price":516.81,"fv_old":365.218,"fv_new":345.23,"fvd":-5.5,"q_old":9.1,"q_new":9.1,"qd":0.0,"wacc":13.98,"spread":9.215,"roic5":19.965,"note":""},{"ticker":"CCJ","company":"Cameco Corporation","type":"CYCLICAL","status":"completed","price":102.51,"fv_old":19.751,"fv_new":18.898,"fvd":-4.3,"q_old":6.6,"q_new":6.6,"qd":0.0,"wacc":9.598,"spread":-1.216,"roic5":4.908,"note":""},{"ticker":"ENB","company":"Enbridge Inc","type":"DIVIDEND","status":"completed","price":50.46,"fv_old":61.48,"fv_new":68.162,"fvd":10.9,"q_old":4.4,"q_new":4.4,"qd":0.0,"wacc":6.237,"spread":1.074,"roic5":6.141,"note":""},{"ticker":"DLR","company":"Digital Realty Trust, Inc.","type":"ASSET_HEAVY","status":"completed","price":190.62,"fv_old":114.142,"fv_new":113.34,"fvd":-0.7,"q_old":6.2,"q_new":6.2,"qd":0.0,"wacc":8.785,"spread":-4.497,"roic5":3.305,"note":""},{"ticker":"FLNC","company":"Fluence Energy, Inc.","type":"PRE_PROFIT","status":"failed","price":11.34,"fv_old":null,"fv_new":null,"fvd":null,"q_old":3.0,"q_new":3.0,"qd":0.0,"wacc":null,"spread":null,"roic5":null,"note":""},{"ticker":"NXE","company":"Nexgen Energy Ltd.","type":"PRE_PROFIT","status":"failed","price":10.86,"fv_old":null,"fv_new":null,"fvd":null,"q_old":1.3,"q_new":1.3,"qd":0.0,"wacc":null,"spread":null,"roic5":null,"note":""},{"ticker":"ELF","company":"e.l.f. Beauty, Inc.","type":"GROWTH","status":"completed","price":101.94,"fv_old":107.746,"fv_new":96.074,"fvd":-10.8,"q_old":7.7,"q_new":7.7,"qd":0.0,"wacc":13.179,"spread":-10.494,"roic5":8.314,"note":""},{"ticker":"ARM","company":"Arm Holdings plc","type":"GROWTH","status":"completed","price":243.32,"fv_old":98.67,"fv_new":84.724,"fvd":-14.1,"q_old":5.7,"q_new":5.7,"qd":0.0,"wacc":14.717,"spread":-6.159,"roic5":8.211,"note":""},{"ticker":"CEG","company":"Constellation Energy Corporatio","type":"GROWTH","status":"completed","price":272.88,"fv_old":191.504,"fv_new":191.086,"fvd":-0.2,"q_old":5.9,"q_new":5.9,"qd":0.0,"wacc":8.865,"spread":2.461,"roic5":8.756,"note":""},{"ticker":"ZETA","company":"Zeta Global Holdings Corp.","type":"EARLY_GROWTH","status":"completed","price":29.07,"fv_old":34.508,"fv_new":30.974,"fvd":-10.2,"q_old":null,"q_new":null,"qd":null,"wacc":11.458,"spread":-14.568,"roic5":-34.939,"note":"qnew_fail:TypeError qold_fail:TypeError"},{"ticker":"GEV","company":"GE Vernova Inc.","type":"GROWTH","status":"completed","price":956.85,"fv_old":589.058,"fv_new":558.614,"fvd":-5.2,"q_old":6.1,"q_new":6.1,"qd":0.0,"wacc":9.814,"spread":-0.278,"roic5":-0.875,"note":""},{"ticker":"GRAB","company":"Grab Holdings Limited","type":"GROWTH","status":"completed","price":3.48,"fv_old":2.973,"fv_new":2.918,"fvd":-1.8,"q_old":5.3,"q_new":5.3,"qd":0.0,"wacc":8.48,"spread":-5.523,"roic5":-4.124,"note":""},{"ticker":"MA","company":"Mastercard Incorporated","type":"GROWTH","status":"completed","price":580.63,"fv_old":576.474,"fv_new":646.97,"fvd":12.2,"q_old":9.1,"q_new":9.1,"qd":0.0,"wacc":8.133,"spread":50.025,"roic5":52.258,"note":""},{"ticker":"APPS","company":"Digital Turbine, Inc.","type":"EARLY_GROWTH","status":"completed","price":10.87,"fv_old":7.97,"fv_new":7.09,"fvd":-11.0,"q_old":3.1,"q_new":3.1,"qd":0.0,"wacc":12.204,"spread":-8.511,"roic5":-0.786,"note":""},{"ticker":"RBRK","company":"Rubrik, Inc.","type":"EARLY_GROWTH","status":"completed","price":100.09,"fv_old":46.322,"fv_new":43.473,"fvd":-6.2,"q_old":5.8,"q_new":5.8,"qd":0.0,"wacc":10.17,"spread":-40.53,"roic5":-30.36,"note":""},{"ticker":"WDC","company":"Western Digital Corporation","type":"GROWTH","status":"completed","price":459.44,"fv_old":704.448,"fv_new":652.532,"fvd":-7.4,"q_old":8.7,"q_new":8.7,"qd":0.0,"wacc":14.727,"spread":81.749,"roic5":26.51,"note":""},{"ticker":"FIG","company":"Figma, Inc.","type":"EARLY_GROWTH","status":"completed","price":27.1,"fv_old":19.378,"fv_new":19.378,"fvd":0.0,"q_old":5.0,"q_new":5.0,"qd":0.0,"wacc":null,"spread":null,"roic5":-48.447,"note":""},{"ticker":"COIN","company":"Coinbase Global, Inc.","type":"MID_CAP","status":"completed","price":186.49,"fv_old":120.046,"fv_new":102.103,"fvd":-14.9,"q_old":6.5,"q_new":6.5,"qd":0.0,"wacc":13.106,"spread":-7.177,"roic5":-1.246,"note":""},{"ticker":"GLW","company":"Corning Incorporated","type":"GROWTH","status":"completed","price":149.84,"fv_old":84.916,"fv_new":80.116,"fvd":-5.7,"q_old":6.3,"q_new":6.3,"qd":0.0,"wacc":10.04,"spread":-0.024,"roic5":7.475,"note":""},{"ticker":"ONON","company":"On Holding AG","type":"GROWTH","status":"completed","price":30.02,"fv_old":26.272,"fv_new":22.11,"fvd":-15.8,"q_old":7.4,"q_new":7.4,"qd":0.0,"wacc":14.205,"spread":-0.395,"roic5":12.581,"note":""},{"ticker":"ISRG","company":"Intuitive Surgical, Inc.","type":"GROWTH","status":"completed","price":378.81,"fv_old":305.006,"fv_new":276.73,"fvd":-9.3,"q_old":7.7,"q_new":7.7,"qd":0.0,"wacc":12.038,"spread":2.323,"roic5":12.683,"note":""},{"ticker":"PFE","company":"Pfizer, Inc.","type":"DIVIDEND","status":"completed","price":28.07,"fv_old":22.273,"fv_new":31.538,"fvd":41.6,"q_old":7.5,"q_new":7.5,"qd":0.0,"wacc":5.458,"spread":-0.106,"roic5":8.629,"note":""},{"ticker":"ZS","company":"Zscaler, Inc.","type":"EARLY_GROWTH","status":"completed","price":181.745,"fv_old":137.292,"fv_new":134.92,"fvd":-1.7,"q_old":5.9,"q_new":5.9,"qd":0.0,"wacc":8.99,"spread":-9.284,"roic5":-6.264,"note":""},{"ticker":"APP","company":"Applovin Corporation","type":"GROWTH","status":"completed","price":305.77,"fv_old":557.274,"fv_new":511.532,"fvd":-8.2,"q_old":9.5,"q_new":9.5,"qd":0.0,"wacc":14.418,"spread":49.555,"roic5":28.805,"note":""},{"ticker":"AMBA","company":"Ambarella, Inc.","type":"MID_CAP","status":"completed","price":73.73,"fv_old":40.295,"fv_new":32.522,"fvd":-19.3,"q_old":5.2,"q_new":5.2,"qd":0.0,"wacc":14.689,"spread":-23.014,"roic5":-11.442,"note":""},{"ticker":"ENPH","company":"Enphase Energy, Inc.","type":"MID_CAP","status":"completed","price":38.61,"fv_old":21.327,"fv_new":19.585,"fvd":-8.2,"q_old":4.4,"q_new":4.4,"qd":0.0,"wacc":12.024,"spread":-4.341,"roic5":12.596,"note":""},{"ticker":"TSLA","company":"Tesla, Inc.","type":"MEGA_CAP","status":"completed","price":362.86,"fv_old":55.307,"fv_new":47.324,"fvd":-14.4,"q_old":4.7,"q_new":4.7,"qd":0.0,"wacc":13.757,"spread":-9.217,"roic5":11.422,"note":""},{"ticker":"ADBE","company":"Adobe Inc.","type":"GROWTH","status":"completed","price":275.3,"fv_old":457.318,"fv_new":463.214,"fvd":1.3,"q_old":9.0,"q_new":9.0,"qd":0.0,"wacc":11.247,"spread":30.123,"roic5":31.651,"note":""},{"ticker":"CRM","company":"Salesforce, Inc.","type":"GROWTH","status":"completed","price":209.17,"fv_old":253.718,"fv_new":247.644,"fvd":-2.4,"q_old":9.3,"q_new":9.3,"qd":0.0,"wacc":9.149,"spread":0.364,"roic5":6.773,"note":""},{"ticker":"OKTA","company":"Okta, Inc.","type":"GROWTH","status":"completed","price":135.14,"fv_old":116.014,"fv_new":115.466,"fvd":-0.5,"q_old":6.9,"q_new":6.7,"qd":-0.2,"wacc":8.477,"spread":-5.231,"roic5":-2.478,"note":""},{"ticker":"NBIS","company":"Nebius Group N.V.","type":"EARLY_GROWTH","status":"completed","price":219.13,"fv_old":56.96,"fv_new":52.95,"fvd":-7.0,"q_old":4.2,"q_new":4.2,"qd":0.0,"wacc":10.585,"spread":-9.972,"roic5":-3.935,"note":""},{"ticker":"SOFI","company":"SoFi Technologies, Inc.","type":"FINANCIAL","status":"completed","price":18.91,"fv_old":5.795,"fv_new":5.795,"fvd":0.0,"q_old":5.4,"q_new":5.4,"qd":0.0,"wacc":16.73,"spread":null,"roic5":null,"note":""},{"ticker":"VST","company":"Vistra Corp.","type":"MID_CAP","status":"completed","price":136.21,"fv_old":56.905,"fv_new":54.668,"fvd":-3.9,"q_old":5.6,"q_new":5.6,"qd":0.0,"wacc":9.464,"spread":-1.662,"roic5":8.343,"note":""},{"ticker":"USAR","company":"USA Rare Earth, Inc.","type":"PRE_PROFIT","status":"failed","price":19.26,"fv_old":null,"fv_new":null,"fvd":null,"q_old":4.5,"q_new":4.5,"qd":0.0,"wacc":null,"spread":null,"roic5":null,"note":""},{"ticker":"QCOM","company":"QUALCOMM Incorporated","type":"LARGE_CAP","status":"completed","price":160.75,"fv_old":134.854,"fv_new":132.288,"fvd":-1.9,"q_old":7.8,"q_new":7.8,"qd":0.0,"wacc":12.281,"spread":16.951,"roic5":26.113,"note":""},{"ticker":"V","company":"Visa Inc.","type":"GROWTH","status":"completed","price":371.04,"fv_old":212.566,"fv_new":223.67,"fvd":5.2,"q_old":8.0,"q_new":8.0,"qd":0.0,"wacc":8.317,"spread":null,"roic5":null,"note":""},{"ticker":"ASTS","company":"AST SpaceMobile, Inc.","type":"EARLY_GROWTH","status":"failed","price":68.65,"fv_old":null,"fv_new":null,"fvd":null,"q_old":3.1,"q_new":3.1,"qd":0.0,"wacc":null,"spread":null,"roic5":null,"note":""},{"ticker":"ORCL","company":"Oracle Corporation","type":"LARGE_CAP","status":"completed","price":146.47,"fv_old":258.564,"fv_new":253.202,"fvd":-2.1,"q_old":8.0,"q_new":8.0,"qd":0.0,"wacc":10.718,"spread":1.913,"roic5":13.087,"note":""},{"ticker":"CRWV","company":"CoreWeave, Inc.","type":"EARLY_GROWTH","status":"completed","price":87.85,"fv_old":50.12,"fv_new":50.12,"fvd":0.0,"q_old":4.5,"q_new":4.5,"qd":0.0,"wacc":null,"spread":null,"roic5":-19.916,"note":""},{"ticker":"ASML","company":"ASML Holding N.V. - New York Re","type":"GROWTH","status":"completed","price":1763.76,"fv_old":1100.532,"fv_new":1117.582,"fvd":1.5,"q_old":8.9,"q_new":8.9,"qd":0.0,"wacc":11.544,"spread":27.97,"roic5":38.821,"note":""},{"ticker":"LUNR","company":"Intuitive Machines, Inc.","type":"EARLY_GROWTH","status":"failed","price":18.32,"fv_old":null,"fv_new":null,"fvd":null,"q_old":3.7,"q_new":3.7,"qd":0.0,"wacc":null,"spread":null,"roic5":null,"note":""},{"ticker":"PL","company":"Planet Labs PBC","type":"EARLY_GROWTH","status":"completed","price":22.29,"fv_old":5.382,"fv_new":4.434,"fvd":-17.6,"q_old":4.5,"q_new":4.5,"qd":0.0,"wacc":14.05,"spread":-36.599,"roic5":-18.332,"note":""},{"ticker":"RKLB","company":"Rocket Lab Corporation","type":"EARLY_GROWTH","status":"completed","price":72.57,"fv_old":8.97,"fv_new":7.45,"fvd":-16.9,"q_old":3.5,"q_new":3.5,"qd":0.0,"wacc":14.746,"spread":-24.068,"roic5":-15.793,"note":""},{"ticker":"SPCX","company":"Space Exploration Technologies ","type":"EARLY_GROWTH","status":"completed","price":136.97,"fv_old":21.25,"fv_new":21.25,"fvd":0.0,"q_old":5.5,"q_new":5.5,"qd":0.0,"wacc":null,"spread":null,"roic5":0.331,"note":""},{"ticker":"BE","company":"Bloom Energy Corporation","type":"GROWTH","status":"completed","price":201.45,"fv_old":143.701,"fv_new":133.997,"fvd":-6.8,"q_old":5.2,"q_new":5.2,"qd":0.0,"wacc":14.24,"spread":-14.952,"roic5":-9.488,"note":""},{"ticker":"AAOI","company":"Applied Optoelectronics, Inc.","type":"EARLY_GROWTH","status":"completed","price":124.82,"fv_old":71.28,"fv_new":59.69,"fvd":-16.3,"q_old":4.6,"q_new":4.6,"qd":0.0,"wacc":14.438,"spread":-18.234,"roic5":-16.503,"note":""},{"ticker":"COHR","company":"Coherent Corp.","type":"GROWTH","status":"completed","price":289.52,"fv_old":270.737,"fv_new":250.726,"fvd":-7.4,"q_old":6.0,"q_new":6.0,"qd":0.0,"wacc":14.163,"spread":-7.329,"roic5":2.72,"note":""},{"ticker":"CBRS","company":"Cerebras Systems Inc.","type":"EARLY_GROWTH","status":"completed","price":196.13,"fv_old":30.77,"fv_new":30.77,"fvd":0.0,"q_old":6.0,"q_new":6.0,"qd":0.0,"wacc":null,"spread":null,"roic5":null,"note":""},{"ticker":"LITE","company":"Lumentum Holdings Inc.","type":"EARLY_GROWTH","status":"completed","price":866.71,"fv_old":337.569,"fv_new":296.952,"fvd":-12.0,"q_old":5.0,"q_new":5.0,"qd":0.0,"wacc":12.141,"spread":-122.343,"roic5":-31.518,"note":""},{"ticker":"KVYO","company":"Klaviyo, Inc. Series A","type":"EARLY_GROWTH","status":"completed","price":18.33,"fv_old":26.766,"fv_new":27.895,"fvd":4.2,"q_old":6.1,"q_new":6.1,"qd":0.0,"wacc":7.344,"spread":-11.818,"roic5":-13.15,"note":""},{"ticker":"WING","company":"Wingstop Inc.","type":"MID_CAP","status":"completed","price":115.43,"fv_old":176.851,"fv_new":181.489,"fvd":2.6,"q_old":7.8,"q_new":7.8,"qd":0.0,"wacc":10.805,"spread":31.656,"roic5":29.699,"note":""},{"ticker":"TPL","company":"Texas Pacific Land Corporation","type":"GROWTH","status":"completed","price":383.64,"fv_old":314.893,"fv_new":345.574,"fvd":9.7,"q_old":8.4,"q_new":8.4,"qd":0.0,"wacc":7.9,"spread":25.145,"roic5":41.193,"note":""},{"ticker":"WM","company":"Waste Management, Inc.","type":"MID_CAP","status":"completed","price":224.06,"fv_old":121.751,"fv_new":148.488,"fvd":22.0,"q_old":5.7,"q_new":5.7,"qd":0.0,"wacc":6.266,"spread":4.164,"roic5":11.098,"note":""},{"ticker":"MRVL","company":"Marvell Technology, Inc.","type":"GROWTH","status":"completed","price":237.04,"fv_old":138.676,"fv_new":119.962,"fvd":-13.5,"q_old":7.3,"q_new":7.3,"qd":0.0,"wacc":14.482,"spread":0.675,"roic5":2.554,"note":""},{"ticker":"TEM","company":"Tempus AI, Inc.","type":"EARLY_GROWTH","status":"completed","price":72.69,"fv_old":35.34,"fv_new":30.21,"fvd":-14.5,"q_old":5.8,"q_new":5.8,"qd":0.0,"wacc":13.673,"spread":-24.166,"roic5":-59.401,"note":""},{"ticker":"MP","company":"MP Materials Corp.","type":"EARLY_GROWTH","status":"failed","price":60.05,"fv_old":null,"fv_new":null,"fvd":null,"q_old":4.3,"q_new":4.3,"qd":0.0,"wacc":null,"spread":null,"roic5":null,"note":""},{"ticker":"AMKR","company":"Amkor Technology, Inc.","type":"GROWTH","status":"completed","price":50.26,"fv_old":35.523,"fv_new":31.807,"fvd":-10.5,"q_old":4.3,"q_new":4.3,"qd":0.0,"wacc":12.842,"spread":-5.405,"roic5":9.844,"note":""},{"ticker":"VEEV","company":"Veeva Systems Inc.","type":"GROWTH","status":"completed","price":247.9,"fv_old":288.662,"fv_new":279.044,"fvd":-3.3,"q_old":7.5,"q_new":7.5,"qd":0.0,"wacc":9.333,"spread":0.332,"roic5":8.781,"note":""},{"ticker":"NXT","company":"Nextpower Inc.","type":"MID_CAP","status":"completed","price":86.18,"fv_old":64.908,"fv_new":59.634,"fvd":-8.1,"q_old":8.4,"q_new":8.4,"qd":0.0,"wacc":14.462,"spread":10.735,"roic5":34.86,"note":""},{"ticker":"SMR","company":"NuScale Power Corporation","type":"PRE_PROFIT","status":"failed","price":9.4,"fv_old":null,"fv_new":null,"fvd":null,"q_old":2.7,"q_new":2.7,"qd":0.0,"wacc":null,"spread":null,"roic5":null,"note":""},{"ticker":"LEU","company":"Centrus Energy Corp.","type":"GROWTH","status":"completed","price":186.26,"fv_old":79.014,"fv_new":83.828,"fvd":6.1,"q_old":6.2,"q_new":6.0,"qd":-0.2,"wacc":9.75,"spread":-5.206,"roic5":30.754,"note":""},{"ticker":"NAK","company":"Northern Dynasty Minerals, Ltd.","type":"PRE_PROFIT","status":"failed","price":1.74,"fv_old":null,"fv_new":null,"fvd":null,"q_old":1.9,"q_new":1.9,"qd":0.0,"wacc":null,"spread":null,"roic5":null,"note":""},{"ticker":"UUUU","company":"Energy Fuels Inc","type":"EARLY_GROWTH","status":"failed","price":15.14,"fv_old":null,"fv_new":null,"fvd":null,"q_old":3.5,"q_new":3.5,"qd":0.0,"wacc":null,"spread":null,"roic5":null,"note":""},{"ticker":"RR","company":"Richtech Robotics Inc.","type":"PRE_PROFIT","status":"failed","price":1.7,"fv_old":null,"fv_new":null,"fvd":null,"q_old":2.9,"q_new":2.9,"qd":0.0,"wacc":null,"spread":null,"roic5":null,"note":""},{"ticker":"SERV","company":"Serve Robotics Inc.","type":"PRE_PROFIT","status":"failed","price":4.98,"fv_old":null,"fv_new":null,"fvd":null,"q_old":2.6,"q_new":2.6,"qd":0.0,"wacc":null,"spread":null,"roic5":null,"note":""},{"ticker":"MBLY","company":"Mobileye Global Inc.","type":"MID_CAP","status":"completed","price":9.03,"fv_old":6.905,"fv_new":6.363,"fvd":-7.9,"q_old":5.1,"q_new":5.1,"qd":0.0,"wacc":10.723,"spread":-13.575,"roic5":-1.61,"note":""},{"ticker":"CGNX","company":"Cognex Corporation","type":"GROWTH","status":"completed","price":60.54,"fv_old":44.474,"fv_new":39.612,"fvd":-10.9,"q_old":6.0,"q_new":6.0,"qd":0.0,"wacc":12.187,"spread":-5.366,"roic5":7.092,"note":""},{"ticker":"TDY","company":"Teledyne Technologies Incorpora","type":"MID_CAP","status":"completed","price":636.15,"fv_old":729.757,"fv_new":715.289,"fvd":-2.0,"q_old":6.0,"q_new":6.0,"qd":0.0,"wacc":8.986,"spread":-1.719,"roic5":6.873,"note":""},{"ticker":"RTX","company":"RTX Corporation","type":"LARGE_CAP","status":"completed","price":209.91,"fv_old":164.021,"fv_new":184.881,"fvd":12.7,"q_old":6.3,"q_new":6.3,"qd":0.0,"wacc":5.921,"spread":2.372,"roic5":6.21,"note":""},{"ticker":"RHM","company":"Round Hill Music Royalty Ltd","type":"MID_CAP","status":"failed","price":1.145,"fv_old":null,"fv_new":null,"fvd":null,"q_old":null,"q_new":null,"qd":null,"wacc":null,"spread":null,"roic5":null,"note":""},{"ticker":"GWRE","company":"Guidewire Software, Inc.","type":"GROWTH","status":"completed","price":189.19,"fv_old":100.386,"fv_new":97.25,"fvd":-3.1,"q_old":5.7,"q_new":5.7,"qd":0.0,"wacc":9.122,"spread":-6.802,"roic5":-3.518,"note":""},{"ticker":"NUAI","company":"New Era Energy & Digital, Inc.","type":"PRE_PROFIT","status":"failed","price":4.855,"fv_old":null,"fv_new":null,"fvd":null,"q_old":3.7,"q_new":3.7,"qd":0.0,"wacc":null,"spread":null,"roic5":null,"note":""},{"ticker":"APLD","company":"Applied Digital Corporation","type":"EARLY_GROWTH","status":"completed","price":27.21,"fv_old":11.65,"fv_new":11.0,"fvd":-5.6,"q_old":3.9,"q_new":3.9,"qd":0.0,"wacc":10.012,"spread":-11.374,"roic5":-14.918,"note":""},{"ticker":"SYM","company":"Symbotic Inc.","type":"GROWTH","status":"completed","price":41.83,"fv_old":33.804,"fv_new":27.718,"fvd":-18.0,"q_old":6.5,"q_new":6.5,"qd":0.0,"wacc":14.543,"spread":-55.34,"roic5":-67200.196,"note":""},{"ticker":"EOSE","company":"Eos Energy Enterprises, Inc.","type":"PRE_PROFIT","status":"failed","price":3.81,"fv_old":null,"fv_new":null,"fvd":null,"q_old":2.1,"q_new":2.1,"qd":0.0,"wacc":null,"spread":null,"roic5":null,"note":""},{"ticker":"DKNG","company":"DraftKings Inc.","type":"MID_CAP","status":"completed","price":26.17,"fv_old":12.326,"fv_new":10.909,"fvd":-11.5,"q_old":5.9,"q_new":5.9,"qd":0.0,"wacc":11.7,"spread":-12.206,"roic5":-23.928,"note":""},{"ticker":"UBER","company":"Uber Technologies, Inc.","type":"GROWTH","status":"completed","price":78.8,"fv_old":83.06,"fv_new":80.556,"fvd":-3.0,"q_old":7.2,"q_new":7.2,"qd":0.0,"wacc":9.941,"spread":3.183,"roic5":-1.488,"note":""},{"ticker":"RIOT","company":"Riot Platforms, Inc.","type":"PRE_PROFIT","status":"failed","price":19.83,"fv_old":null,"fv_new":null,"fvd":null,"q_old":2.7,"q_new":2.7,"qd":0.0,"wacc":null,"spread":null,"roic5":null,"note":""},{"ticker":"IONQ","company":"IonQ, Inc.","type":"EARLY_GROWTH","status":"failed","price":44.86,"fv_old":null,"fv_new":null,"fvd":null,"q_old":3.8,"q_new":3.8,"qd":0.0,"wacc":null,"spread":null,"roic5":null,"note":""},{"ticker":"WULF","company":"TeraWulf Inc.","type":"PRE_PROFIT","status":"failed","price":15.64,"fv_old":null,"fv_new":null,"fvd":null,"q_old":4.2,"q_new":4.2,"qd":0.0,"wacc":null,"spread":null,"roic5":null,"note":""},{"ticker":"CORZ","company":"Core Scientific, Inc.","type":"EARLY_GROWTH","status":"failed","price":17.81,"fv_old":null,"fv_new":null,"fvd":null,"q_old":3.2,"q_new":3.2,"qd":0.0,"wacc":null,"spread":null,"roic5":null,"note":""},{"ticker":"ONDS","company":"Ondas Inc","type":"EARLY_GROWTH","status":"failed","price":8.71,"fv_old":null,"fv_new":null,"fvd":null,"q_old":3.9,"q_new":3.9,"qd":0.0,"wacc":null,"spread":null,"roic5":null,"note":""},{"ticker":"CRVW","company":"Careview Communications, Inc.","type":"MID_CAP","status":"completed","price":0.04,"fv_old":0.039,"fv_new":0.049,"fvd":25.8,"q_old":5.7,"q_new":5.7,"qd":0.0,"wacc":6.458,"spread":null,"roic5":null,"note":""},{"ticker":"CIFR","company":"Cipher Digital Inc.","type":"PRE_PROFIT","status":"failed","price":15.765,"fv_old":null,"fv_new":null,"fvd":null,"q_old":2.5,"q_new":2.5,"qd":0.0,"wacc":null,"spread":null,"roic5":null,"note":""},{"ticker":"HUT","company":"Hut 8 Corp.","type":"EARLY_GROWTH","status":"failed","price":80.86,"fv_old":null,"fv_new":null,"fvd":null,"q_old":2.9,"q_new":2.9,"qd":0.0,"wacc":null,"spread":null,"roic5":null,"note":""}];
+const $=s=>document.querySelector(s);
+const fmt=(x,d=2)=>x==null?null:x.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+const MAXABS=45; // bar scale (%)
+
+// movers panels
+function moverRow(r){
+  const pos=r.fvd>0, cls=pos?'pos':'neg';
+  return `<div class="mv"><span class="t">${r.ticker}</span><span class="c">${r.company||''}</span><span class="d ${cls}">${pos?'+':''}${r.fvd.toFixed(1)}%</span></div>`;
+}
+const valued=DATA.filter(r=>r.fvd!=null);
+$('#upList').innerHTML=valued.filter(r=>r.fvd>0.05).sort((a,b)=>b.fvd-a.fvd).slice(0,9).map(moverRow).join('');
+$('#dnList').innerHTML=valued.filter(r=>r.fvd<-0.05).sort((a,b)=>a.fvd-b.fvd).slice(0,9).map(moverRow).join('');
+
+// table
+let sortK='fvd', sortDir=1, filt='all', term='';
+const tb=$('#tb'), countEl=$('#count');
+
+function passes(r){
+  if(term){const t=term.toLowerCase(); if(!(r.ticker.toLowerCase().includes(t)||(r.company||'').toLowerCase().includes(t))) return false;}
+  if(filt==='up') return r.fvd!=null&&r.fvd>0.05;
+  if(filt==='down') return r.fvd!=null&&r.fvd<-0.05;
+  if(filt==='qmoved') return r.qd!=null&&Math.abs(r.qd)>1e-9;
+  if(filt==='na') return r.fvd==null;
+  return true;
+}
+function dcell(v){
+  if(v==null) return `<td class="dcell"><span class="na mono">—</span></td>`;
+  const pos=v>0.05, neg=v<-0.05, cls=pos?'pos':neg?'neg':'flat';
+  const w=Math.min(Math.abs(v)/MAXABS,1)*46;
+  const bar = (pos||neg)?`<span class="dbar ${cls}" style="width:${w}%"></span>`:'';
+  const sign=pos?'+':'';
+  return `<td class="dcell"><div class="dtrack"><span class="dmid"></span>${bar}<span class="dval ${cls}">${sign}${v.toFixed(1)}%</span></div></td>`;
+}
+function qcell(o,n,d){
+  if(o==null||n==null) return `<td class="num"><span class="na">—</span></td><td class="num"><span class="na">—</span></td><td class="num"><span class="na">—</span></td>`;
+  const cls=Math.abs(d)<1e-9?'z':d>0?'pos':'neg', s=d>0?'+':'';
+  return `<td class="num">${o.toFixed(1)}</td><td class="num">${n.toFixed(1)}</td><td class="num qd ${cls}">${Math.abs(d)<1e-9?'·':s+d.toFixed(1)}</td>`;
+}
+function render(){
+  const rows=DATA.filter(passes).sort((a,b)=>{
+    let x=a[sortK], y=b[sortK];
+    if(typeof x==='string'){x=(x||'').toLowerCase(); y=(y||'').toLowerCase(); return x<y?-sortDir:x>y?sortDir:0;}
+    if(x==null) return 1; if(y==null) return -1; // nulls last
+    return (x-y)*sortDir;
+  });
+  tb.innerHTML=rows.map(r=>{
+    const fo=fmt(r.fv_old), fn=fmt(r.fv_new);
+    return `<tr>
+      <td class="tk">${r.ticker}</td>
+      <td class="co" title="${(r.company||'').replace(/"/g,'&quot;')}">${r.company||''}</td>
+      <td><span class="badge">${(r.type||'').replace(/_/g,' ')}</span></td>
+      <td class="num">${fmt(r.price)??'<span class="na">—</span>'}</td>
+      <td class="num">${fo??'<span class="na">—</span>'}</td>
+      <td class="num">${fn??'<span class="na">—</span>'}</td>
+      ${dcell(r.fvd)}
+      ${qcell(r.q_old,r.q_new,r.qd)}
+      <td class="num">${r.wacc!=null?r.wacc.toFixed(1):'<span class="na">—</span>'}</td>
+      <td class="num">${r.spread!=null?(r.spread>0?'+':'')+r.spread.toFixed(1):'<span class="na">—</span>'}</td>
+    </tr>`;
+  }).join('');
+  countEl.textContent=`${rows.length} of ${DATA.length} tickers shown`;
+  document.querySelectorAll('th[data-k]').forEach(th=>{
+    if(th.dataset.k===sortK){th.setAttribute('aria-sort',sortDir>0?'ascending':'descending');}
+    else th.removeAttribute('aria-sort');
+  });
+}
+document.querySelectorAll('th[data-k]').forEach(th=>{
+  th.tabIndex=0;
+  const go=()=>{const k=th.dataset.k; if(sortK===k) sortDir*=-1; else{sortK=k; sortDir=(k==='ticker'||k==='company'||k==='type')?1:-1;} render();};
+  th.addEventListener('click',go);
+  th.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}});
+});
+document.querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>{
+  filt=c.dataset.f;
+  document.querySelectorAll('.chip').forEach(x=>x.setAttribute('aria-pressed', x===c?'true':'false'));
+  render();
+}));
+$('#q').addEventListener('input',e=>{term=e.target.value; render();});
+// default sort: most-negative FV delta first is less useful; start descending by ΔFV (biggest up first)
+sortDir=-1; render();
+</script>
