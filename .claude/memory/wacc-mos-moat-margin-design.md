@@ -1,14 +1,35 @@
 ---
 name: wacc-mos-moat-margin-design
-description: "DESIGN CHECKPOINT (not yet implemented) -- WACC-driven FV discount rate, ROIC-WACC-spread-driven moat-adjusted margin replacing flat MOS=0.90, and an incremental-ROIC-on-reinvested-capital Quality metric. Next step: live sweep to calibrate pivots, then TDD."
+description: "IMPLEMENTED + LANDED (2026-08-23) on branch wacc-mos-moat-margin-design, awaiting merge -- WACC-driven FV discount rate + ROIC-WACC-spread moat-adjusted MOS (replacing flat MOS=0.90) + Option A captive-finance wacc() fix. 7-task TDD, 520 tests, final opus review READY-TO-MERGE. See LANDED note at top."
 metadata: 
   node_type: memory
   type: project
   originSessionId: ab39a665-b1a3-474c-8aff-036288d4b0a8
-  modified: 2026-08-21T20:36:18.431Z
+  modified: 2026-08-22T21:07:52.957Z
 ---
 
-# Status: DESIGN FULLY SETTLED (2026-08-21) -- all decisions closed, NEXT = writing-plans -> TDD. See the 2026-08-21 UPDATE below for the final settled design.
+# Status: IMPLEMENTED + LANDED (2026-08-23) on branch `wacc-mos-moat-margin-design`, AWAITING MERGE. See LANDED note directly below. Design history preserved further down.
+
+## LANDED 2026-08-23 -- 7-task SDD complete, final opus review READY-TO-MERGE
+
+Executed the settled design via `subagent-driven-development` (7 tasks, each implement -> scoped review -> fix-loop). Commits `846feed..3b95716` on `wacc-mos-moat-margin-design` (branch base = master merge-base `ab6df3b`). **520 tests pass** (60 warnings = 100% third-party FastAPI/Starlette `asyncio.iscoroutinefunction` deprecations on py3.14, not ours).
+
+**What shipped (matches the settled design below exactly):**
+- **T1** Option A captive-finance fix IN `screener.metrics.wacc()` (non-financials only): `cost_debt = max(cost_debt, rf*(1-tax))`, `w_debt = min(w_debt, 0.50)`. `CAPTIVE_DEBT_WEIGHT_CAP = 0.50`. Algebraically byte-identical for normal names (cap/floor are the only deltas).
+- **T2** pure fns in `valuation/models.py`: `blended_discount_rate(wacc_pct)` = `clamp(0.7*0.10 + 0.3*(wacc/100), 0.085, 0.13)`, `ddm_discount_rate(rate)` = `max(rate, 0.09)`, `quality_margin_of_safety(spread_pp, roic5_pct, wacc_pct)` = `0.85 + max(spread/15, (roic5-wacc)/5)*0.10` clamped [0.85,0.95]. All return today's flat globals (0.10 / 0.90) when inputs None -- the backward-compat identity.
+- **T3/T4/T5** threaded per-company `discount_rate`/`ddm_rate`/`mos` through EVERY FV leg via the `fin` dict (`fin.get(k) or DEFAULT`): DCF/FCFE/EV-EBITDA/EV-Sales (T3), calc_ddm (T4), calc_pe/pb/rim/nav MOS (T5). NEVER mutates module globals (thread-pool safe).
+- **T6** `engine.evaluate()` injects the three keys after the FINANCIAL COE block; **FINANCIAL is rate-invariant** (MOS-only -- book legs keep FINANCIAL_COE).
+- **T7** `engine.run()` sources `fin["wacc"/"roic_wacc_spread"/"roic_5y_avg"]` by reusing `screener.metrics` as a LIBRARY (`fetch_screener_inputs`+`compute_metrics`), **failure-isolated** (`try/except Exception: pass`; the `evaluate()` call is OUTSIDE the try, so it can't mask valuation bugs). This is what makes the feature live.
+
+**Live landing spot-check** (`engine.run`, scratchpad `landing_spotcheck.py`) -- all move in the sweep-recorded directions: **F −24.8%** (EXACT sweep "A −24.8"), PG blue-chip lift preserved, **JPM byte-identical** (FINANCIAL rate-invariant + no spread/roic5 -> neutral MOS), **VZ stays +12.4%** (path i accepted), GM modest −4.1% (the one flagged down-mover).
+
+**Final opus whole-branch review: READY TO MERGE**, 0 Critical/Important. Minors: (1) `except: pass` silent-degradation has no observability -> ADJUDICATED accept (backend has ZERO logging infra; a framework for one nit = scope creep) -- **known observability gap** if the app later gains logging; (2) cost-of-debt floor breadth is intended; (3) DCF rate-only test gap -> FIXED `3b95716`.
+
+NEXT: `finishing-a-development-branch` (merge decision). SDD ledger: `.superpowers/sdd/2026-08-21-fv-quality-discount-mos/progress.md`. Spec/plan committed on-branch (`docs/superpowers/specs|plans/...fv-quality-discount-mos*`).
+
+---
+
+# (design history below -- was: DESIGN FULLY SETTLED 2026-08-21, NEXT = writing-plans -> TDD)
 
 ## UPDATE 2026-08-17 -- brainstorm session: scope narrowed, spec committed, NEXT = writing-plans
 
