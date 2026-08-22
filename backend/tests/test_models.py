@@ -825,3 +825,20 @@ def test_ddm_absent_keys_are_identical_to_today():
     fin = {"dividend_rate": 2.0}
     explicit = m.calc_ddm({**fin, "ddm_rate": m.DISCOUNT_RATE, "mos": m.MOS}, GROWTH)
     assert m.calc_ddm(fin, GROWTH)["fair_value"] == pytest.approx(explicit["fair_value"])
+
+
+def test_book_and_pe_legs_use_fin_mos():
+    nav = {"book_value_per_share": 10.0, "net_debt": 0, "shares_outstanding": 1_000}
+    assert m.calc_nav({**nav, "mos": 0.95})["fair_value"] == pytest.approx(10.0 * 0.95)
+    pb = {"book_value_per_share": 10.0, "return_on_equity": 0.10}
+    assert m.calc_pb({**pb, "mos": 0.95})["fair_value"] == pytest.approx(10.0 * 1.0 * 0.95)
+    pe = {"eps_ttm": 1.0, "trailing_pe": 10.0}
+    assert m.calc_pe({**pe, "mos": 0.95})["fair_value"] == pytest.approx(1.0 * 10.0 * 0.95)
+
+
+def test_book_legs_absent_mos_identical_to_today():
+    nav = {"book_value_per_share": 10.0, "net_debt": 0, "shares_outstanding": 1_000}
+    assert m.calc_nav(nav)["fair_value"] == pytest.approx(9.0)   # 10 * 0.90, unchanged
+    rim = {"book_value_per_share": 10.0, "eps_ttm": 1.0}
+    assert m.calc_rim(rim, GROWTH)["fair_value"] == pytest.approx(
+        m.calc_rim({**rim, "mos": m.MOS}, GROWTH)["fair_value"])

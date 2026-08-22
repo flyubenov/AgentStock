@@ -556,7 +556,7 @@ def calc_pe(fin: dict, forward: bool = False) -> dict:
         if trailing_pe is None or trailing_pe <= 0:
             return _null_result(False)
         target_pe = min(trailing_pe, MATURE_PE_CAP)
-    fv = _apply_mos(eps * target_pe)
+    fv = _apply_mos(eps * target_pe, fin.get("mos") or MOS)
     return {"scenarios": {k: fv for k in SCENARIO_KEYS}, "fair_value": fv,
             "weight": 0.0, "has_scenarios": False}
 
@@ -596,7 +596,7 @@ def calc_pb(fin: dict) -> dict:
     roe = min(roe, ROE_PB_CAP_MULT * coe)
     g = min(TERMINAL_GROWTH, coe - 0.01)
     justified_pb = (roe - g) / (coe - g)
-    fv = _apply_mos(bvps * max(justified_pb, 0.1))
+    fv = _apply_mos(bvps * max(justified_pb, 0.1), fin.get("mos") or MOS)
     return {"scenarios": {k: fv for k in SCENARIO_KEYS}, "fair_value": fv,
             "weight": 0.0, "has_scenarios": False}
 
@@ -622,6 +622,7 @@ def calc_rim(fin: dict, growth: dict) -> dict:
     coe = fin.get("cost_of_equity") or 0.10
     roe = eps / bvps if bvps > 0 else 0
     roe = min(roe, ROE_PB_CAP_MULT * coe)
+    mos = fin.get("mos") or MOS
 
     def scenario_rim(g: float) -> float:
         total = 0.0
@@ -630,7 +631,7 @@ def calc_rim(fin: dict, growth: dict) -> dict:
             bv_prev = bv
             bv = bv * (1 + g)
             total += _pv(bv_prev * (roe - coe), coe, t)
-        return _apply_mos(bvps + total)
+        return _apply_mos(bvps + total, mos)
 
     scenarios = {k: scenario_rim(growth[k]) for k in SCENARIO_KEYS}
     return {"scenarios": scenarios, "fair_value": _avg(scenarios), "weight": 0.0, "has_scenarios": True}
@@ -645,7 +646,7 @@ def calc_nav(fin: dict) -> dict:
         return _null_result(False)
     # book_value_per_share already nets all liabilities (equity = assets - liabilities),
     # so subtracting net debt again double-debits it (drove NAV negative for levered REITs).
-    fv = _apply_mos(bvps)
+    fv = _apply_mos(bvps, fin.get("mos") or MOS)
     return {"scenarios": {k: fv for k in SCENARIO_KEYS}, "fair_value": fv, "weight": 0.0, "has_scenarios": False}
 
 
