@@ -754,3 +754,101 @@ def test_rim_distorted_roe_is_capped():
 def test_rim_missing_inputs_return_null():
     assert m.calc_rim({"book_value_per_share": None, "eps_ttm": 3.0}, GROWTH)["fair_value"] is None
     assert m.calc_rim({"book_value_per_share": 10.0, "eps_ttm": None}, GROWTH)["fair_value"] is None
+
+
+def test_blended_discount_rate_neutral_fallback():
+    # No WACC signal -> exactly the flat prior (backward-compatible identity).
+    assert m.blended_discount_rate(None) == pytest.approx(m.DISCOUNT_RATE)
+
+
+def test_blended_discount_rate_blends_and_clamps():
+    # 0.7*0.10 + 0.3*(wacc/100), clamped to [0.085, 0.13].
+    assert m.blended_discount_rate(8.6) == pytest.approx(0.7 * 0.10 + 0.3 * 0.086)   # ~0.0958
+    assert m.blended_discount_rate(4.0) == pytest.approx(0.085)   # low WACC hits the floor
+    assert m.blended_discount_rate(20.0) == pytest.approx(0.13)   # high WACC hits the ceiling
+
+
+def test_ddm_discount_rate_floors_at_9pct():
+    assert m.ddm_discount_rate(0.085) == pytest.approx(0.09)   # perpetuity floor binds
+    assert m.ddm_discount_rate(0.12) == pytest.approx(0.12)    # above the floor, unchanged
+
+
+def test_quality_mos_neutral_fallback():
+    # Both durability signals missing -> exactly the flat 0.90 (backward-compatible identity).
+    assert m.quality_margin_of_safety(None, None, None) == pytest.approx(m.MOS)
+
+
+def test_quality_mos_ramps_within_band():
+    # Full spot spread (>=15pp) -> ceiling 0.95; zero/negative durability -> floor 0.85.
+    assert m.quality_margin_of_safety(15.0, None, None) == pytest.approx(0.95)
+    assert m.quality_margin_of_safety(0.0, None, None) == pytest.approx(0.85)
+    # Takes the GREATER of the spot-spread ramp and the (roic5 - wacc) durability ramp.
+    # spread 0 but roic5 25 vs wacc 20 -> durability ramp = 5/5 = 1.0 -> ceiling.
+    assert m.quality_margin_of_safety(0.0, 25.0, 20.0) == pytest.approx(0.95)
+    # Half of the spot pivot -> midpoint 0.90.
+    assert m.quality_margin_of_safety(7.5, None, None) == pytest.approx(0.90)
+
+
+def test_dcf_uses_fin_discount_rate_and_mos():
+    fin = {"fcf_ttm": 1_000.0, "shares_outstanding": 100.0, "net_debt": 0}
+    base = m.calc_dcf(fin, GROWTH)["fair_value"]
+    # A LOWER discount rate raises the DCF; a HIGHER mos (less haircut) raises it too.
+    tuned = m.calc_dcf({**fin, "discount_rate": 0.085, "mos": 0.95}, GROWTH)["fair_value"]
+    assert tuned > base
+
+
+def test_dcf_uses_fin_discount_rate_in_isolation():
+    # Isolating guard: with mos held at the flat default, the discount_rate alone must move
+    # the DCF (a lower rate -> higher PV). Guards against a future regression that drops the
+    # rate thread from calc_dcf but keeps mos -- which the combined test above would not catch.
+    fin = {"fcf_ttm": 1_000.0, "shares_outstanding": 100.0, "net_debt": 0}
+    base = m.calc_dcf({**fin, "mos": m.MOS}, GROWTH)["fair_value"]
+    lower_rate = m.calc_dcf({**fin, "discount_rate": 0.085, "mos": m.MOS}, GROWTH)["fair_value"]
+    assert lower_rate > base
+
+
+def test_dcf_absent_keys_are_identical_to_today():
+    # Backward-compatible identity: no discount_rate/mos in fin -> the flat-10%/0.90 result.
+    fin = {"fcf_ttm": 1_000.0, "shares_outstanding": 100.0, "net_debt": 0}
+    explicit = m.calc_dcf({**fin, "discount_rate": m.DISCOUNT_RATE, "mos": m.MOS}, GROWTH)
+    assert m.calc_dcf(fin, GROWTH)["fair_value"] == pytest.approx(explicit["fair_value"])
+
+
+def test_ev_ebitda_uses_fin_discount_rate():
+    fin = {"ebitda_ttm": 500.0, "shares_outstanding": 100.0, "net_debt": 0,
+           "ev_ebitda": 12.0, "fcf_ttm": 300.0}
+    base = m.calc_ev_ebitda(fin, GROWTH)["fair_value"]
+    lower_rate = m.calc_ev_ebitda({**fin, "discount_rate": 0.085}, GROWTH)["fair_value"]
+    # The future EV is discounted back 10 years at the per-company rate: a lower rate -> higher PV.
+    assert lower_rate > base
+
+
+def test_ddm_uses_fin_ddm_rate_and_mos():
+    fin = {"dividend_rate": 2.0}
+    base = m.calc_ddm(fin, GROWTH)["fair_value"]
+    # A HIGHER ddm_rate widens the Gordon denominator -> LOWER value (the guard's whole point).
+    higher_rate = m.calc_ddm({**fin, "ddm_rate": 0.12}, GROWTH)["fair_value"]
+    assert higher_rate < base
+
+
+def test_ddm_absent_keys_are_identical_to_today():
+    fin = {"dividend_rate": 2.0}
+    explicit = m.calc_ddm({**fin, "ddm_rate": m.DISCOUNT_RATE, "mos": m.MOS}, GROWTH)
+    assert m.calc_ddm(fin, GROWTH)["fair_value"] == pytest.approx(explicit["fair_value"])
+
+
+def test_book_and_pe_legs_use_fin_mos():
+    nav = {"book_value_per_share": 10.0, "net_debt": 0, "shares_outstanding": 1_000}
+    assert m.calc_nav({**nav, "mos": 0.95})["fair_value"] == pytest.approx(10.0 * 0.95)
+    pb = {"book_value_per_share": 10.0, "return_on_equity": 0.10}
+    assert m.calc_pb({**pb, "mos": 0.95})["fair_value"] == pytest.approx(10.0 * 1.0 * 0.95)
+    pe = {"eps_ttm": 1.0, "trailing_pe": 10.0}
+    assert m.calc_pe({**pe, "mos": 0.95})["fair_value"] == pytest.approx(1.0 * 10.0 * 0.95)
+
+
+def test_book_legs_absent_mos_identical_to_today():
+    nav = {"book_value_per_share": 10.0, "net_debt": 0, "shares_outstanding": 1_000}
+    assert m.calc_nav(nav)["fair_value"] == pytest.approx(9.0)   # 10 * 0.90, unchanged
+    rim = {"book_value_per_share": 10.0, "eps_ttm": 1.0}
+    assert m.calc_rim(rim, GROWTH)["fair_value"] == pytest.approx(
+        m.calc_rim({**rim, "mos": m.MOS}, GROWTH)["fair_value"])

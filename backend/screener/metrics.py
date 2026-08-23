@@ -82,6 +82,17 @@ def goodwill_intangibles(bal: StatementSeries | None, idx: int) -> float | None:
     return (gw or 0.0) + (intang or 0.0)
 
 
+# Option A — captive-finance WACC correction (spec §4.4). A captive-finance arm
+# (Ford Credit, GM Financial) inflates info['totalDebt'] with match-funded lending
+# debt whose interest is booked against finance revenue, not the "Interest Expense"
+# line — so interest/totalDebt collapses to ~0.5% and drags WACC toward the risk-free
+# floor. Classifier-free: we key on the distortion signature (cheap implied cost of
+# debt + debt dominance), not the industry string, so a low-debt automaker (TSLA,
+# debt-weight ~0.01) never triggers. Excluded for financials (legitimately debt-funded;
+# also keeps Quality's roic_wacc_spread for banks unchanged).
+CAPTIVE_DEBT_WEIGHT_CAP = 0.50
+
+
 def wacc(inp: ScreenerInputs, tax_rate: float) -> float | None:
     info = inp.info
     beta = info.get("beta")
@@ -99,7 +110,14 @@ def wacc(inp: ScreenerInputs, tax_rate: float) -> float | None:
     if inp.income is not None:
         interest = inp.income.latest("Interest Expense")
     cost_debt = (abs(interest) / debt) * (1 - tax_rate) if (interest and debt > 0) else 0.0
-    return (equity / total) * cost_equity + (debt / total) * cost_debt
+    w_debt = debt / total
+    if info.get("sector") != "Financial Services":
+        # (1) No large borrower funds at ~0.5% after tax; floor the implied cost of debt
+        #     at the after-tax risk-free rate to reject the finance-arm artifact.
+        cost_debt = max(cost_debt, rf * (1 - tax_rate))
+        # (2) Match-funded finance debt must not dominate the equity hurdle.
+        w_debt = min(w_debt, CAPTIVE_DEBT_WEIGHT_CAP)
+    return (1 - w_debt) * cost_equity + w_debt * cost_debt
 
 
 def compute_metrics(inp: ScreenerInputs) -> ScreenerMetrics:

@@ -4,6 +4,21 @@ DISCOUNT_RATE = 0.10
 TERMINAL_GROWTH = 0.03
 HORIZON = 10
 MOS = 0.90
+# Quality-adjusted discount rate (spec §4.1): nudge the flat prior partway toward the
+# company's beta-driven WACC, then clamp to a tight band. Gentler 0.30 blend + 8.5%
+# floor were chosen because aggressive settings over-inflated low-WACC DDM-heavy names.
+RATE_BLEND_W = 0.30
+RATE_FLOOR = 0.085
+RATE_CEIL = 0.13
+# DDM perpetuity guard: (rate - g) in the Gordon denominator is hypersensitive at low
+# rates, so the DDM leg floors its discount rate higher than the DCF/EV legs.
+DDM_RATE_FLOOR = 0.09
+# Quality-adjusted margin of safety (spec §4.2, Variant A): nudge the flat 0.90 within a
+# tight band by business durability (ROIC-WACC spot spread, or 5y-ROIC-vs-WACC ramp).
+MOS_FLOOR = 0.85
+MOS_CEIL = 0.95
+MOS_SPREAD_PIVOT = 15.0       # pp of ROIC-WACC spot spread for the full nudge
+MOS_DURABILITY_PIVOT = 5.0    # pp of (roic_5y_avg - wacc) for the full nudge
 EV_EBITDA_CAP = 20.0
 # Growth-coupled ceiling for the EV/EBITDA exit multiple. EV_EBITDA_CAP is the ceiling for
 # a slow/no-growth name; a genuine grower earns
@@ -136,13 +151,47 @@ def _pv(cf: float, rate: float, year: int) -> float:
     return cf / (1 + rate) ** year
 
 
-def _apply_mos(value: float) -> float:
-    return value * MOS
+def _apply_mos(value: float, mos: float = MOS) -> float:
+    return value * mos
 
 
 def _avg(scenarios: dict) -> float | None:
     vals = [v for v in scenarios.values() if v is not None]
     return sum(vals) / len(vals) if vals else None
+
+
+def _clamp(x: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, x))
+
+
+def blended_discount_rate(wacc_pct: float | None) -> float:
+    """Per-company DCF/EV discount rate: blend the flat prior toward the company WACC,
+    clamped to [RATE_FLOOR, RATE_CEIL]. Neutral flat prior when WACC is unavailable
+    (spec §4.3) — this makes the no-signal case byte-identical to today's model."""
+    if wacc_pct is None:
+        return DISCOUNT_RATE
+    return _clamp((1 - RATE_BLEND_W) * DISCOUNT_RATE + RATE_BLEND_W * (wacc_pct / 100.0),
+                  RATE_FLOOR, RATE_CEIL)
+
+
+def ddm_discount_rate(rate: float) -> float:
+    """DDM perpetuity-leg rate: the DCF/EV rate floored at DDM_RATE_FLOOR (Gordon guard)."""
+    return max(rate, DDM_RATE_FLOOR)
+
+
+def quality_margin_of_safety(spread_pp: float | None, roic5_pct: float | None,
+                             wacc_pct: float | None) -> float:
+    """Variant-A MOS: nudge the flat MOS within [MOS_FLOOR, MOS_CEIL] on the GREATER of the
+    ROIC-WACC spot-spread ramp and the 5y-ROIC-vs-WACC durability ramp. Neutral flat MOS
+    when both signals are missing (spec §4.3) — byte-identical to today's model."""
+    ramps = []
+    if spread_pp is not None:
+        ramps.append(_clamp(spread_pp / MOS_SPREAD_PIVOT, 0.0, 1.0))
+    if roic5_pct is not None and wacc_pct is not None:
+        ramps.append(_clamp((roic5_pct - wacc_pct) / MOS_DURABILITY_PIVOT, 0.0, 1.0))
+    if not ramps:
+        return MOS
+    return MOS_FLOOR + max(ramps) * (MOS_CEIL - MOS_FLOOR)
 
 
 def _null_result(has_scenarios: bool) -> dict:
@@ -213,24 +262,26 @@ def _faded_rate(g_start: float, hold: int, year: int) -> float:
 
 
 def _scenario_dcf_equity(cf: float, growth: float, net_debt: float, shares: float,
-                         hold: int = HORIZON) -> float:
+                         hold: int = HORIZON, rate: float = DISCOUNT_RATE,
+                         mos: float = MOS) -> float:
     total = 0.0
     cf_t = cf
     for t in range(1, HORIZON + 1):
         cf_t *= (1 + _faded_rate(growth, hold, t))
-        total += _pv(cf_t, DISCOUNT_RATE, t)
-    tv = cf_t * (1 + TERMINAL_GROWTH) / (DISCOUNT_RATE - TERMINAL_GROWTH)
-    total += _pv(tv, DISCOUNT_RATE, HORIZON)
-    return _apply_mos((total - net_debt) / shares)
+        total += _pv(cf_t, rate, t)
+    tv = cf_t * (1 + TERMINAL_GROWTH) / (rate - TERMINAL_GROWTH)
+    total += _pv(tv, rate, HORIZON)
+    return _apply_mos((total - net_debt) / shares, mos)
 
 
 def _scenario_ev_multiple(base: float, growth: float, multiple: float, net_debt: float,
-                          shares: float, hold: int = HORIZON) -> float:
+                          shares: float, hold: int = HORIZON, rate: float = DISCOUNT_RATE,
+                          mos: float = MOS) -> float:
     projected = base
     for t in range(1, HORIZON + 1):
         projected *= (1 + _faded_rate(growth, hold, t))
     future_ev = projected * multiple
-    return _apply_mos((future_ev - net_debt) / shares / (1 + DISCOUNT_RATE) ** HORIZON)
+    return _apply_mos((future_ev - net_debt) / shares / (1 + rate) ** HORIZON, mos)
 
 
 def exit_net_debt(fin: dict, rev0: float | None, growth: float, hold: int,
@@ -309,7 +360,10 @@ def calc_dcf(fin: dict, growth: dict, base_override: float | None = None,
         return _null_result(True)
     net_debt = fin.get("net_debt") or 0
     hold = _fade_hold_years(fin.get("market_cap"), fin.get("revenue_growth"))
-    scenarios = {k: _scenario_dcf_equity(base, growth[k], net_debt, shares, hold) for k in SCENARIO_KEYS}
+    rate = fin.get("discount_rate") or DISCOUNT_RATE
+    mos = fin.get("mos") or MOS
+    scenarios = {k: _scenario_dcf_equity(base, growth[k], net_debt, shares, hold,
+                                         rate=rate, mos=mos) for k in SCENARIO_KEYS}
     if value_cap is not None:
         scenarios = {k: (min(v, value_cap) if v is not None else None) for k, v in scenarios.items()}
     return {"scenarios": scenarios, "fair_value": _avg(scenarios), "weight": 0.0, "has_scenarios": True}
@@ -325,7 +379,10 @@ def calc_fcfe(fin: dict, growth: dict) -> dict:
     tax_rate = 0.21 if tax_rate is None else tax_rate
     interest_adj = (fin.get("interest_expense") or 0) * (1 - tax_rate)
     fcfe = fcf - interest_adj
-    scenarios = {k: _scenario_dcf_equity(fcfe, growth[k], 0, shares) for k in SCENARIO_KEYS}
+    mos = fin.get("mos") or MOS
+    rate = fin.get("discount_rate") or DISCOUNT_RATE
+    scenarios = {k: _scenario_dcf_equity(fcfe, growth[k], 0, shares, rate=rate, mos=mos)
+                 for k in SCENARIO_KEYS}
     return {"scenarios": scenarios, "fair_value": _avg(scenarios), "weight": 0.0, "has_scenarios": True}
 
 
@@ -379,7 +436,10 @@ def calc_ev_ebitda(fin: dict, growth: dict, hist_multiple: float | None = None,
     # which the funding gap extrapolates into a nonsensical accretion (~$12B against a ~$4.8B EV)
     # — an over-correction on top of a leg already tuned for these names. The correction stays
     # scoped to the EARLY_GROWTH forward-sales bridge (calc_ev_sales — CRWV, NBIS).
-    scenarios = {k: _scenario_ev_multiple(ebitda, growth[k], multiple, net_debt, shares, hold) for k in SCENARIO_KEYS}
+    rate = fin.get("discount_rate") or DISCOUNT_RATE
+    mos = fin.get("mos") or MOS
+    scenarios = {k: _scenario_ev_multiple(ebitda, growth[k], multiple, net_debt, shares, hold,
+                                          rate=rate, mos=mos) for k in SCENARIO_KEYS}
     return {"scenarios": scenarios, "fair_value": _avg(scenarios), "weight": 0.0, "has_scenarios": True}
 
 
@@ -436,9 +496,12 @@ def calc_ev_sales(fin: dict, growth: dict) -> dict:
     # Forward EV/Sales projects a year-10 revenue; bridge it to equity with the year-10
     # funding-adjusted net debt (self-gating — unchanged for FCF-positive names). hold=HORIZON
     # to match this leg's flat (unfaded) revenue projection.
+    rate = fin.get("discount_rate") or DISCOUNT_RATE
+    mos = fin.get("mos") or MOS
     scenarios = {k: _scenario_ev_multiple(
                     revenue, growth[k], multiple,
-                    exit_net_debt(fin, revenue, growth[k], HORIZON, net_debt), shares)
+                    exit_net_debt(fin, revenue, growth[k], HORIZON, net_debt), shares,
+                    rate=rate, mos=mos)
                  for k in SCENARIO_KEYS}
     return {"scenarios": scenarios, "fair_value": _avg(scenarios), "weight": 0.0, "has_scenarios": True}
 
@@ -493,7 +556,7 @@ def calc_pe(fin: dict, forward: bool = False) -> dict:
         if trailing_pe is None or trailing_pe <= 0:
             return _null_result(False)
         target_pe = min(trailing_pe, MATURE_PE_CAP)
-    fv = _apply_mos(eps * target_pe)
+    fv = _apply_mos(eps * target_pe, fin.get("mos") or MOS)
     return {"scenarios": {k: fv for k in SCENARIO_KEYS}, "fair_value": fv,
             "weight": 0.0, "has_scenarios": False}
 
@@ -503,12 +566,14 @@ def calc_ddm(fin: dict, growth: dict) -> dict:
     div = fin.get("dividend_rate")
     if div is None or div <= 0:
         return _null_result(True)
+    rate = fin.get("ddm_rate") or DISCOUNT_RATE
+    mos = fin.get("mos") or MOS
 
     def scenario_ddm(g: float) -> float | None:
-        capped_g = min(g, DISCOUNT_RATE - 0.01)
-        if DISCOUNT_RATE <= capped_g:
+        capped_g = min(g, rate - 0.01)
+        if rate <= capped_g:
             return None
-        return _apply_mos(div * (1 + capped_g) / (DISCOUNT_RATE - capped_g))
+        return _apply_mos(div * (1 + capped_g) / (rate - capped_g), mos)
 
     scenarios = {k: scenario_ddm(growth[k]) for k in SCENARIO_KEYS}
     return {"scenarios": scenarios, "fair_value": _avg(scenarios), "weight": 0.0, "has_scenarios": True}
@@ -531,7 +596,7 @@ def calc_pb(fin: dict) -> dict:
     roe = min(roe, ROE_PB_CAP_MULT * coe)
     g = min(TERMINAL_GROWTH, coe - 0.01)
     justified_pb = (roe - g) / (coe - g)
-    fv = _apply_mos(bvps * max(justified_pb, 0.1))
+    fv = _apply_mos(bvps * max(justified_pb, 0.1), fin.get("mos") or MOS)
     return {"scenarios": {k: fv for k in SCENARIO_KEYS}, "fair_value": fv,
             "weight": 0.0, "has_scenarios": False}
 
@@ -557,6 +622,7 @@ def calc_rim(fin: dict, growth: dict) -> dict:
     coe = fin.get("cost_of_equity") or 0.10
     roe = eps / bvps if bvps > 0 else 0
     roe = min(roe, ROE_PB_CAP_MULT * coe)
+    mos = fin.get("mos") or MOS
 
     def scenario_rim(g: float) -> float:
         total = 0.0
@@ -565,7 +631,7 @@ def calc_rim(fin: dict, growth: dict) -> dict:
             bv_prev = bv
             bv = bv * (1 + g)
             total += _pv(bv_prev * (roe - coe), coe, t)
-        return _apply_mos(bvps + total)
+        return _apply_mos(bvps + total, mos)
 
     scenarios = {k: scenario_rim(growth[k]) for k in SCENARIO_KEYS}
     return {"scenarios": scenarios, "fair_value": _avg(scenarios), "weight": 0.0, "has_scenarios": True}
@@ -580,7 +646,7 @@ def calc_nav(fin: dict) -> dict:
         return _null_result(False)
     # book_value_per_share already nets all liabilities (equity = assets - liabilities),
     # so subtracting net debt again double-debits it (drove NAV negative for levered REITs).
-    fv = _apply_mos(bvps)
+    fv = _apply_mos(bvps, fin.get("mos") or MOS)
     return {"scenarios": {k: fv for k in SCENARIO_KEYS}, "fair_value": fv, "weight": 0.0, "has_scenarios": False}
 
 

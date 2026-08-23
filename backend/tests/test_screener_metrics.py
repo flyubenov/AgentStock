@@ -151,6 +151,82 @@ def test_wacc_caps_inflated_beta():
     assert normal < capped
 
 
+def test_wacc_floors_implausibly_cheap_captive_debt():
+    from screener.metrics import wacc as wacc_fn
+    # Ford-shaped: huge finance-arm debt at a ~0.5% implied cost (interest booked against
+    # finance revenue, not the Interest Expense line) dominating a small equity base.
+    inp = _mk_inputs(info={"beta": 1.85, "totalDebt": 163_000.0, "marketCap": 57_000.0})
+    inp.income.rows["Interest Expense"] = [1_000.0, 1_000.0, 1_000.0, 1_000.0]  # ~0.6% of debt
+    w = wacc_fn(inp, 0.21)
+    # Without the fix this collapses to ~4%; the cost-of-debt floor + 0.50 debt-weight cap
+    # keep it a defensible industrial hurdle well above the risk-free rate.
+    assert w > 0.08
+
+
+def test_wacc_debt_weight_capped_at_half():
+    from screener.metrics import wacc as wacc_fn
+    # Debt-weight would be 0.74; capped to 0.50 so match-funded debt can't dominate the hurdle.
+    heavy = _mk_inputs(info={"beta": 1.85, "totalDebt": 163_000.0, "marketCap": 57_000.0})
+    heavy.income.rows["Interest Expense"] = [1_000.0] * 4
+    # Hand-computed expected WACC with both guards applied:
+    #   cost_equity = 0.045 + 1.85*0.05 = 0.1375
+    #   cost_debt floored = max((1000/163000)*(1-0.21), 0.045*(1-0.21))
+    #                     = max(0.004847, 0.03555) = 0.03555
+    #   debt-weight capped at 0.50 (raw would be 163000/220000 = 0.7409)
+    #   WACC = 0.5*0.1375 + 0.5*0.03555 = 0.086525
+    # This would fail against the pre-fix formula (~0.039, uncapped 0.74 debt weight
+    # dragged toward the unfloored ~0.0048 cost of debt).
+    assert wacc_fn(heavy, 0.21) == pytest.approx(0.086525, abs=1e-4)
+    # Same company but with the debt weight already <= 0.50 (double the equity): the cap
+    # doesn't bind, so the only lift comes from the cost-of-debt floor. The capped
+    # (heavy) WACC should still exceed what an uncapped 0.74 debt weight would give,
+    # confirming the cap is actually reducing the debt weight's drag.
+    lighter = _mk_inputs(info={"beta": 1.85, "totalDebt": 163_000.0, "marketCap": 200_000.0})
+    lighter.income.rows["Interest Expense"] = [1_000.0] * 4
+    assert wacc_fn(lighter, 0.21) is not None
+    uncapped_debt_weight_wacc = 0.74 * 0.03555 + 0.26 * 0.1375
+    assert wacc_fn(heavy, 0.21) > uncapped_debt_weight_wacc
+
+
+def test_wacc_low_debt_name_untouched_by_captive_fix():
+    from screener.metrics import wacc as wacc_fn
+    # TSLA-shaped: also an automaker but debt-weight ~0.01 -> neither guard binds -> identical
+    # to the pre-fix value. Compare against a hand-computed equity-dominated WACC.
+    inp = _mk_inputs(info={"beta": 1.0, "totalDebt": 100.0, "marketCap": 5000.0,
+                           "sector": "Consumer Cyclical"})
+    w = wacc_fn(inp, 0.21)
+    # equity weight ~0.98 * cost_equity(0.045+1.0*0.05=0.095) dominates -> ~0.093-0.095
+    assert w == pytest.approx(0.0937, abs=0.002)
+
+
+def test_wacc_financials_excluded_from_captive_fix():
+    from screener.metrics import wacc as wacc_fn
+    # A bank legitimately carries a high debt weight and low implied cost of debt; the fix
+    # must NOT touch it (keeps Quality's roic_wacc_spread for banks unchanged).
+    bank = _mk_inputs(info={"beta": 1.0, "totalDebt": 100_000.0, "marketCap": 90_000.0,
+                            "sector": "Financial Services"})
+    bank.income.rows["Interest Expense"] = [200.0] * 4  # low implied cost
+    no_fix = _mk_inputs(info={"beta": 1.0, "totalDebt": 100_000.0, "marketCap": 90_000.0,
+                              "sector": "Financial Services"})
+    no_fix.income.rows["Interest Expense"] = [200.0] * 4
+    # Recompute the pre-fix formula by hand to prove no floor/cap was applied:
+    rf, erp = 0.045, 0.05
+    ce = rf + 1.0 * erp
+    cd = (200.0 / 100_000.0) * (1 - 0.21)
+    total = 100_000.0 + 90_000.0
+    expected = (90_000.0 / total) * ce + (100_000.0 / total) * cd
+    assert wacc_fn(bank, 0.21) == pytest.approx(expected, abs=1e-9)
+
+
+def test_wacc_normal_name_unchanged_regression():
+    from screener.metrics import wacc as wacc_fn
+    # The default _mk_inputs (Technology, debt-weight ~0.02, cost_debt ~0.079*(1-tax)) is a
+    # normal name: cost-of-debt floor may nudge but the debt weight is tiny, so WACC stays
+    # in its established band (guards the existing test_roic_and_wacc expectation).
+    w = wacc_fn(_mk_inputs(), 0.21)
+    assert 0.05 < w < 0.12
+
+
 def test_roic_ex_goodwill_computed_from_tangible_capital():
     from screener.metrics import compute_metrics
     # Add goodwill & intangibles to the balance sheet: tangible IC = 1000 - 600 = 400,
