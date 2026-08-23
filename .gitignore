@@ -20,6 +20,9 @@ backend/credentials/
 .vscode/
 .idea/
 
+# Brainstorming visual-companion scratch files
+.superpowers/
+
 # Local Claude Platform deploy scripts (may contain secrets) — do not commit
 /SetupClaudePlatform.ps1
 /SetupClaudePlatform2.ps1
