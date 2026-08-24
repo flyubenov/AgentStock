@@ -105,3 +105,40 @@ def test_gate_caps_no_durable_excess_names():
     val, bd = score(m, "INDUSTRIAL_CYCLICAL")
     assert bd["gated"] is True
     assert val is not None and val <= scoring.MOAT_GATE_CEIL
+
+
+def test_fcf_conversion_excluded_for_financials():
+    m = _wide_moat_metrics()
+    m.rote = 22.0
+    m.rote_5y_avg = 21.0
+    m.rote_series = [22.0, 21.0, 20.0, 21.0, 21.0]
+    m.fcf = 50.0
+    m.ebitda = 100.0
+    _, bd = score(m, "FINANCIALS")
+    assert "C1" not in bd["pillars"]
+    assert "C1 FCF conversion" in bd["excluded"]
+    assert bd["variant"] == "FINANCIAL_ROTE"
+
+
+def test_fcf_conversion_scored_for_normal_company():
+    m = _wide_moat_metrics()
+    m.gross_margin_series = [70.0, 70.0, 70.0, 70.0, 70.0]
+    m.op_margin_series = [30.0, 30.0, 30.0, 30.0, 30.0]
+    m.gross_margin_trajectory = 0.0
+    m.op_margin_trajectory = 0.0
+    m.fcf = 95.0
+    m.ebitda = 100.0                    # 0.95 conversion -> top band
+    _, bd = score(m, "TECH_GROWTH")
+    assert bd["pillars"]["C1"] == 10
+
+
+def test_bank_produces_sane_score_on_rote_axis():
+    m = ScreenerMetrics()
+    m.rote = 16.0
+    m.rote_5y_avg = 15.0
+    m.rote_series = [16.0, 15.0, 14.0, 15.0, 15.0]
+    m.roic_5y_avg = None               # ROIC frame irrelevant for a bank
+    m.wacc = None
+    val, bd = score(m, "FINANCIALS")
+    assert val is not None
+    assert bd["gated"] is False        # ROTE 15% > COE 8.5%

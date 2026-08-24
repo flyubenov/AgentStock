@@ -25,6 +25,8 @@ B2_COV_BANDS = [(0.10, 10), (0.20, 8), (0.35, 5), (0.50, 3)]
 GROSS_STDEV_BANDS = [(1.0, 10), (2.0, 8), (4.0, 5), (7.0, 3)]   # score_low, pp
 OP_STDEV_BANDS = [(1.0, 10), (2.0, 8), (4.0, 5), (7.0, 3)]      # score_low, pp
 MARGIN_TRAJ_BANDS = [(2, 10), (0, 7), (-2, 4)]                  # score_high, pp
+# C1 FCF conversion (max 10) — score_high on fcf/ebitda
+C1_FCF_BANDS = [(0.90, 10), (0.70, 8), (0.50, 6), (0.30, 3)]
 
 
 def _return_axis(m: ScreenerMetrics, profile: str) -> dict:
@@ -83,6 +85,7 @@ def score(m: ScreenerMetrics, profile: str) -> tuple[float | None, dict]:
     axis = _return_axis(m, profile)
     pillars: dict[str, float] = {}   # name -> earned points
     maxima: dict[str, float] = {}    # name -> max points
+    excluded: list[str] = []
 
     def add(name: str, earned: float | None, cap: float) -> None:
         if earned is not None:
@@ -102,7 +105,14 @@ def score(m: ScreenerMetrics, profile: str) -> tuple[float | None, dict]:
     # B3 — margin durability
     add("B3", _margin_durability(m), 15)
 
-    # (Cash-backing C1 is added in Task 6.)
+    # C1 — cash-backing: FCF conversion. Structurally distorted for lenders and
+    # heavy-capex reinvestors -> excluded and renormalized out (mirrors Quality).
+    is_fin = profile == "FINANCIALS"
+    heavy_capex = _heavy_capex_distortion(m)
+    if is_fin or heavy_capex:
+        excluded.append("C1 FCF conversion")
+    elif m.fcf is not None and m.ebitda is not None and m.ebitda > 0:
+        add("C1", score_high(m.fcf / m.ebitda, C1_FCF_BANDS, 0.0), 10)
 
     available = sum(maxima.values())
     breakdown: dict = {
@@ -112,6 +122,7 @@ def score(m: ScreenerMetrics, profile: str) -> tuple[float | None, dict]:
         "earned": round(sum(pillars.values()), 2),
         "available": available,
         "gated": False,
+        "excluded": excluded,
     }
     series_len = len(axis["series"] or [])
     if series_len < MOAT_MIN_YEARS or len(pillars) < MOAT_MIN_PILLARS or available <= 0:
