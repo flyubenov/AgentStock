@@ -43,3 +43,11 @@ def test_magnitude_only_score_is_renormalized_to_100():
     # push pillar count to >=3 and this assertion should be restored to
     # `assert val is not None` at that point.
     assert val is None  # TODO(Task 5): restore to 'assert val is not None' once durability pillars land
+
+
+def test_coverage_floor_returns_none_for_short_history():
+    m = _wide_moat_metrics()
+    m.roic_series = [30.0, 31.0]           # only 2 years < MOAT_MIN_YEARS
+    val, bd = score(m, "TECH_GROWTH")
+    assert val is None
+    assert bd["moat_score"] is None

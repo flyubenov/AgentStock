@@ -89,5 +89,9 @@ def score(m: ScreenerMetrics, profile: str) -> tuple[float | None, dict]:
         return None, breakdown
 
     moat = 100.0 * sum(pillars.values()) / available
+    level, hurdle = axis["level"], axis["hurdle"]
+    if level is not None and hurdle is not None and level <= hurdle:
+        moat = min(moat, MOAT_GATE_CEIL)
+        breakdown["gated"] = True
     breakdown["moat_score"] = round(moat, 1)
     return round(moat, 1), breakdown
