@@ -3,25 +3,26 @@ import { createPortal } from 'react-dom'
 import { Link, useNavigate } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import type { TickerResult } from '../types'
-import { fvGapColor, qualityScoreColor, riskRewardColor, riskRewardRatio } from '../types'
+import { fvGapColor, qualityScoreColor, moatScoreColor, riskRewardColor, riskRewardRatio } from '../types'
 import { fetchWatchlists, saveWatchlist, deleteWatchlist } from '../lib/watchlists'
 import type { Watchlist, SerializedFilters } from '../lib/watchlists'
 
 import { API_BASE as API } from '../lib/api'
 
-type SortKey = 'quality' | 'fair_value' | 'price_vs_fair_value_pct' | 'risk_reward'
+type SortKey = 'quality' | 'moat' | 'fair_value' | 'price_vs_fair_value_pct' | 'risk_reward'
 
 // ---- Filtering -------------------------------------------------------------
 
 /** Sentinel checkbox value representing a null stock_type. */
 const NONE = '(none)'
 
-type ColKey = 'ticker' | 'stockType' | 'quality' | 'gap' | 'riskReward'
+type ColKey = 'ticker' | 'stockType' | 'quality' | 'moat' | 'gap' | 'riskReward'
 type NumRange = { min: number | null; max: number | null }
 type Filters = {
   tickers: Set<string>
   stockTypes: Set<string>
   quality: NumRange
+  moat: NumRange
   gap: NumRange
   riskReward: NumRange
 }
@@ -30,6 +31,7 @@ const EMPTY_FILTERS: Filters = {
   tickers: new Set(),
   stockTypes: new Set(),
   quality: { min: null, max: null },
+  moat: { min: null, max: null },
   gap: { min: null, max: null },
   riskReward: { min: null, max: null },
 }
@@ -38,6 +40,7 @@ const serializeFilters = (f: Filters): SerializedFilters => ({
   tickers: [...f.tickers].sort(),
   stockTypes: [...f.stockTypes].sort(),
   quality: f.quality,
+  moat: f.moat,
   gap: f.gap,
   riskReward: f.riskReward,
 })
@@ -46,6 +49,7 @@ const deserializeFilters = (s: Partial<SerializedFilters> | undefined): Filters 
   tickers: new Set(s?.tickers ?? []),
   stockTypes: new Set(s?.stockTypes ?? []),
   quality: s?.quality ?? { min: null, max: null },
+  moat: s?.moat ?? { min: null, max: null },
   gap: s?.gap ?? { min: null, max: null },
   riskReward: s?.riskReward ?? { min: null, max: null },
 })
@@ -256,6 +260,7 @@ export default function Database() {
     ticker: filters.tickers.size > 0,
     stockType: filters.stockTypes.size > 0,
     quality: rangeActive(filters.quality),
+    moat: rangeActive(filters.moat),
     gap: rangeActive(filters.gap),
     riskReward: rangeActive(filters.riskReward),
   }
@@ -308,6 +313,7 @@ export default function Database() {
     if (filters.tickers.size && !filters.tickers.has(r.ticker)) return false
     if (filters.stockTypes.size && !filters.stockTypes.has(r.stock_type ?? NONE)) return false
     if (!inRange(r.quality_score, filters.quality)) return false
+    if (!inRange(r.moat_score, filters.moat)) return false
     if (!inRange(r.price_vs_fair_value_pct, filters.gap)) return false
     if (!inRange(riskRewardRatio(r), filters.riskReward)) return false
     return true
@@ -315,6 +321,7 @@ export default function Database() {
 
   const sortVal = (r: TickerResult, key: SortKey): number | null => {
     if (key === 'quality') return r.quality_score ?? null
+    if (key === 'moat') return r.moat_score ?? null
     if (key === 'risk_reward') return riskRewardRatio(r)
     return r[key] ?? null
   }
@@ -518,6 +525,17 @@ export default function Database() {
                 </th>
                 <th className="text-right py-2 px-2">
                   <FilterHeader
+                    label={<span className="cursor-pointer hover:text-slate-300 select-none" onClick={() => toggleSort('moat')}>Moat</span>}
+                    active={colActive.moat}
+                    open={openFilter === 'moat'}
+                    align="right"
+                    onToggle={() => toggleFilter('moat')}
+                  >
+                    <RangeFilter value={filters.moat} step="1" onChange={v => setFilters(f => ({ ...f, moat: v }))} />
+                  </FilterHeader>
+                </th>
+                <th className="text-right py-2 px-2">
+                  <FilterHeader
                     label={<span className="cursor-pointer hover:text-slate-300 select-none" onClick={() => toggleSort('risk_reward')}>R/R</span>}
                     active={colActive.riskReward}
                     open={openFilter === 'riskReward'}
@@ -560,6 +578,9 @@ export default function Database() {
                   <td className="py-2 px-2 text-xs text-slate-500 font-mono">{r.stock_type || '—'}</td>
                   <td className={`py-2 px-2 text-right font-mono text-xs ${qualityScoreColor(r.quality_score)}`}>
                     {r.quality_score != null ? r.quality_score.toFixed(1) : '—'}
+                  </td>
+                  <td className={`py-2 px-2 text-right font-mono text-xs ${moatScoreColor(r.moat_score)}`}>
+                    {r.moat_score != null ? r.moat_score.toFixed(0) : '—'}
                   </td>
                   <td className={`py-2 px-2 text-right font-mono text-xs ${riskRewardColor(riskRewardRatio(r))}`}>
                     {riskRewardRatio(r) != null ? riskRewardRatio(r)!.toFixed(2) : '—'}

@@ -21,6 +21,7 @@ export interface TickerResult {
   status: 'completed' | 'failed'
   errors: string[]
   quality_score?: number | null
+  moat_score?: number | null
   screener?: ScreenerResult | null
   risk_reward?: RiskRewardResult | null      // nested object — Results grid + detail
   risk_reward_ratio?: number | null          // mirrored number — Database grid
@@ -163,6 +164,15 @@ export function qualityScoreBadgeClass(score: number | null | undefined): string
   if (score >= 6.5) return 'bg-blue-900/40 text-blue-400 border border-blue-700'
   if (score >= 5) return 'bg-yellow-900/40 text-yellow-400 border border-yellow-700'
   return 'bg-red-900/40 text-red-400 border border-red-700'
+}
+
+/** 0-100 moat score -> text color band (gate ceiling is 35). */
+export function moatScoreColor(score: number | null | undefined): string {
+  if (score == null) return 'text-slate-400'
+  if (score >= 70) return 'text-green-400'
+  if (score >= 50) return 'text-blue-400'
+  if (score >= 35) return 'text-yellow-400'
+  return 'text-red-400'
 }
 
 export interface RiskRewardMetricScore {

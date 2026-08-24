@@ -6,6 +6,7 @@ export interface SerializedFilters {
   tickers: string[]
   stockTypes: string[]
   quality: NumRange
+  moat: NumRange
   gap: NumRange
   riskReward: NumRange
 }
