@@ -77,3 +77,14 @@ async def test_run_failed_when_no_inputs():
         r = await engine.run("BADX")
     assert r.status == "failed"
     assert r.quality_score is None and r.errors
+
+
+@pytest.mark.asyncio
+async def test_engine_attaches_moat_score():
+    inp = _full_inputs()
+    with patch("screener.engine.fetch_screener_inputs", return_value=inp):
+        result = await engine.run("AAPL")
+    assert result.status == "completed"
+    assert result.moat_score is not None
+    assert 0.0 <= result.moat_score <= 100.0
+    assert result.moat_breakdown.get("variant") in {"ROIC", "TANGIBLE_ROIC", "FINANCIAL_ROTE"}

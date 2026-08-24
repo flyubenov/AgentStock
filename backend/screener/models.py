@@ -107,6 +107,8 @@ class ScreenerResult(BaseModel):
     company_name: str | None = None
     last_evaluated: str | None = None
     quality_score: float | None = None
+    moat_score: float | None = None
+    moat_breakdown: dict = {}
     sector: str | None = None
     sector_profile: str | None = None
     section_scores: dict[str, float | None] = {}
