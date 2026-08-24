@@ -44,11 +44,32 @@ def test_round_trip_preserves_core_fields():
 
 
 def test_row_to_result_tolerates_missing_breakdown_column():
-    # a legacy row written before the Score Breakdown column existed
-    legacy = _result_to_row(_res())[:-1]   # drop the JSON column
+    # a legacy row written before Score Breakdown/Moat Score/Moat Breakdown existed
+    legacy = _result_to_row(_res())[:-3]   # drop the JSON + moat trailing columns
     r = _row_to_result(legacy)
     assert r.ticker == "AAPL"
     assert r.score_breakdown == {}
+    assert r.moat_score is None
+    assert r.moat_breakdown == {}
+
+
+def test_moat_score_survives_row_roundtrip():
+    r = ScreenerResult(
+        ticker="AAPL", company_name="Apple", quality_score=8.1,
+        sector="Technology", sector_profile="TECH_GROWTH",
+        section_scores={"I": 8, "II": 9, "III": 7, "IV": 8},
+        metrics={}, score_breakdown={"final": 8.1},
+        moat_score=82.4, moat_breakdown={"variant": "ROIC"},
+    )
+    row = _result_to_row(r)
+    back = _row_to_result(row)
+    assert back.moat_score == 82.4
+    assert back.moat_breakdown.get("variant") == "ROIC"
+
+
+def test_moat_header_appended_after_score_breakdown():
+    assert _SCREENER_HEADERS[-2] == "Moat Score"
+    assert _SCREENER_HEADERS[-1] == "Moat Breakdown"
 
 
 def test_database_qscore_col_constant():

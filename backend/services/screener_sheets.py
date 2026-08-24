@@ -24,7 +24,7 @@ _SCREENER_HEADERS = [
     "Ticker", "Company", "Last Evaluated", "Quality Score", "Sector", "Sector Profile",
     "Section I", "Section II", "Section III", "Section IV",
     *[c.replace("_", " ").title() for c in _METRIC_COLS],
-    "Score Breakdown",
+    "Score Breakdown", "Moat Score", "Moat Breakdown",
 ]
 
 
@@ -45,6 +45,8 @@ def _result_to_row(r: ScreenerResult) -> list:
         *[_num(sec.get(s)) for s in _SECTION_COLS],
         *[_num(metrics.get(c)) for c in _METRIC_COLS],
         json.dumps(r.score_breakdown or {}),
+        _num(r.moat_score),
+        json.dumps(r.moat_breakdown or {}),
     ]
 
 
@@ -69,17 +71,21 @@ def _row_to_result(row: list) -> ScreenerResult:
     row = list(row) + [""] * (len(_SCREENER_HEADERS) - len(row))
     sections = {s: _to_float(row[6 + i]) for i, s in enumerate(_SECTION_COLS)}
     metrics = {c: _to_float(row[10 + i]) for i, c in enumerate(_METRIC_COLS)}
-    breakdown = _parse_breakdown(row[10 + len(_METRIC_COLS)])
+    bd_idx = 10 + len(_METRIC_COLS)
+    breakdown = _parse_breakdown(row[bd_idx])
+    moat_score = _to_float(row[bd_idx + 1])
+    moat_breakdown = _parse_breakdown(row[bd_idx + 2])
     return ScreenerResult(
         ticker=row[0], company_name=row[1] or None, last_evaluated=row[2] or None,
         quality_score=_to_float(row[3]), sector=row[4] or None,
         sector_profile=row[5] or None, section_scores=sections, metrics=metrics,
-        score_breakdown=breakdown,
+        score_breakdown=breakdown, moat_score=moat_score, moat_breakdown=moat_breakdown,
     )
 
 
 _SCREENER_TAB = "Screener"
 DATABASE_QSCORE_COL = "Q"
+DATABASE_MOAT_COL = "S"
 
 
 def _col_range() -> str:
@@ -156,6 +162,26 @@ def _mirror_quality_score(svc, sheet_id: str, ticker: str, score) -> None:
             return
 
 
+def _mirror_moat_score(svc, sheet_id: str, ticker: str, score) -> None:
+    # ensure the Database S1 header, then update S{row} for this ticker if present
+    _execute(svc.spreadsheets().values().update(
+        spreadsheetId=sheet_id, range=f"Database!{DATABASE_MOAT_COL}1",
+        valueInputOption="RAW", body={"values": [["Moat Score"]]},
+    ))
+    existing = _execute(svc.spreadsheets().values().get(
+        spreadsheetId=sheet_id, range="Database!A:A"))
+    rows = existing.get("values", [])
+    for i, row in enumerate(rows):
+        if row and row[0].strip().upper() == ticker.upper():
+            _execute(svc.spreadsheets().values().update(
+                spreadsheetId=sheet_id,
+                range=f"Database!{DATABASE_MOAT_COL}{i + 1}",
+                valueInputOption="RAW",
+                body={"values": [[_num(score)]]},
+            ))
+            return
+
+
 def _upsert_sync(r: ScreenerResult) -> None:
     svc = _get_service()
     sheet_id = _sheet_id()
@@ -179,6 +205,7 @@ def _upsert_sync(r: ScreenerResult) -> None:
             spreadsheetId=sheet_id, range=f"{_SCREENER_TAB}!A{target}",
             valueInputOption="RAW", body={"values": [new_row]}))
     _mirror_quality_score(svc, sheet_id, r.ticker, r.quality_score)
+    _mirror_moat_score(svc, sheet_id, r.ticker, r.moat_score)
 
 
 async def upsert_screener_result(r: ScreenerResult) -> None:
