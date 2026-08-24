@@ -19,6 +19,12 @@ MOAT_MIN_PILLARS = 3         # min scored pillar-metrics, else None
 A1_ROIC_BANDS = [(25, 20), (20, 17), (15, 13), (12, 8), (8, 4)]
 # A2 economic spread, ROIC-WACC blend (max 20) — score_high on pp
 A2_SPREAD_BANDS = [(15, 20), (10, 16), (5, 11), (0, 5)]
+# B2 consistency (max 10) — score_low on coefficient of variation
+B2_COV_BANDS = [(0.10, 10), (0.20, 8), (0.35, 5), (0.50, 3)]
+# B3 margin durability (max 15) — three 0-10 components, mean scaled to 15
+GROSS_STDEV_BANDS = [(1.0, 10), (2.0, 8), (4.0, 5), (7.0, 3)]   # score_low, pp
+OP_STDEV_BANDS = [(1.0, 10), (2.0, 8), (4.0, 5), (7.0, 3)]      # score_low, pp
+MARGIN_TRAJ_BANDS = [(2, 10), (0, 7), (-2, 4)]                  # score_high, pp
 
 
 def _return_axis(m: ScreenerMetrics, profile: str) -> dict:
@@ -57,6 +63,22 @@ def _spread_blend(spot: float | None, five: float | None) -> float | None:
     return sum(parts) / len(parts) if parts else None
 
 
+def _margin_durability(m: ScreenerMetrics) -> float | None:
+    """Mean of up to three 0-10 components (gross stability, op stability,
+    non-erosion), scaled to 15. Emphasis on stability + non-erosion, not level."""
+    comps: list[float] = []
+    if len(m.gross_margin_series) >= 2:
+        comps.append(score_low(pstdev(m.gross_margin_series), GROSS_STDEV_BANDS, 0.0))
+    if len(m.op_margin_series) >= 2:
+        comps.append(score_low(pstdev(m.op_margin_series), OP_STDEV_BANDS, 0.0))
+    traj = m.gross_margin_trajectory if m.gross_margin_trajectory is not None \
+        else m.op_margin_trajectory
+    if traj is not None:
+        comps.append(score_high(traj, MARGIN_TRAJ_BANDS, 0.0))
+    avg = mean(comps)
+    return None if avg is None else 15.0 * avg / 10.0
+
+
 def score(m: ScreenerMetrics, profile: str) -> tuple[float | None, dict]:
     axis = _return_axis(m, profile)
     pillars: dict[str, float] = {}   # name -> earned points
@@ -72,7 +94,15 @@ def score(m: ScreenerMetrics, profile: str) -> tuple[float | None, dict]:
     # A2 — economic spread blend
     add("A2", score_high(_spread_blend(axis["spot"], axis["five"]), A2_SPREAD_BANDS, 0.0), 20)
 
-    # (Durability B1/B2/B3 and cash-backing C1 are added in Tasks 4-6.)
+    # B1 — persistence: fraction of years the business out-earned its hurdle
+    frac = persistence_fraction(axis["series"], axis["hurdle"])
+    add("B1", (25.0 * frac) if frac is not None else None, 25)
+    # B2 — consistency: low variability of the return series
+    add("B2", score_low(coef_of_variation(axis["series"]), B2_COV_BANDS, 0.0), 10)
+    # B3 — margin durability
+    add("B3", _margin_durability(m), 15)
+
+    # (Cash-backing C1 is added in Task 6.)
 
     available = sum(maxima.values())
     breakdown: dict = {
