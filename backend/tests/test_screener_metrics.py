@@ -303,3 +303,46 @@ def test_earnings_quality_still_computed_when_net_income_positive():
     from screener.metrics import compute_metrics
     m = compute_metrics(_mk_inputs())
     assert m.earnings_quality == pytest.approx(200.0 / 160.0, abs=1e-3)
+
+
+def _series(rows):
+    return StatementSeries(years=[2025, 2024, 2023, 2022], rows=rows)
+
+
+def _inputs_for_series():
+    income = _series({
+        "EBIT": [200, 180, 150, 120], "Tax Rate For Calcs": [0.21] * 4,
+        "Net Income": [160, 150, 130, 100], "Total Revenue": [1000, 900, 800, 700],
+        "Gross Profit": [500, 450, 400, 350],
+        "Operating Income": [220, 190, 160, 130]})
+    balance = _series({"Invested Capital": [1000, 950, 900, 850],
+                       "Tangible Book Value": [800, 750, 700, 650]})
+    info = {"symbol": "T", "sector": "Technology", "beta": 1.1,
+            "marketCap": 1_000_000, "totalDebt": 0.0}
+    return ScreenerInputs(ticker="T", info=info, income=income, balance=balance,
+                          cashflow=None, price_monthly=(), risk_free=0.043)
+
+
+def test_stores_roic_and_rote_series_percent_scaled_latest_first():
+    from screener.metrics import compute_metrics
+    m = compute_metrics(_inputs_for_series())
+    # 4 years present -> 4 observations; latest first
+    assert len(m.roic_series) == 4
+    # ROIC yr0 = 200*(1-0.21)/1000 = 0.158 -> 15.8%
+    assert m.roic_series[0] == pytest.approx(15.8, abs=0.05)
+    assert m.roic_series[0] > m.roic_series[-1]  # improving, latest first
+    # ROTE yr0 = 160/800 = 20%
+    assert len(m.rote_series) == 4
+    assert m.rote_series[0] == pytest.approx(20.0, abs=0.05)
+    assert m.rote_5y_avg == pytest.approx(sum(m.rote_series) / len(m.rote_series), abs=1e-6)
+
+
+def test_stores_margin_series_and_gross_trajectory():
+    from screener.metrics import compute_metrics
+    m = compute_metrics(_inputs_for_series())
+    # gross margin yr0 = 500/1000 = 50%
+    assert m.gross_margin_series[0] == pytest.approx(50.0, abs=0.05)
+    # op margin yr0 = 220/1000 = 22%
+    assert m.op_margin_series[0] == pytest.approx(22.0, abs=0.05)
+    # trajectory = latest(50) - oldest(350/700=50) = 0pp here
+    assert m.gross_margin_trajectory == pytest.approx(0.0, abs=0.05)

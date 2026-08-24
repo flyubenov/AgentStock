@@ -141,10 +141,22 @@ def compute_metrics(inp: ScreenerInputs) -> ScreenerMetrics:
                 r_ex = roic(inc.value("EBIT", i), tax, ic - gwi)
                 if r_ex is not None:
                     annual_ex.append(r_ex)
+        m.roic_series = [x * 100.0 for x in annual]
+        m.roic_series_ex_goodwill = [x * 100.0 for x in annual_ex]
         if annual:
             m.roic_5y_avg = pct(sum(annual) / len(annual))
         if annual_ex:
             m.roic_5y_ex_goodwill = pct(sum(annual_ex) / len(annual_ex))
+        # per-year ROTE (Net Income / Tangible Book Value), percent
+        rote_series = []
+        for i in range(len(inc.years)):
+            ni_i = inc.value("Net Income", i)
+            tbv_i = bal.value("Tangible Book Value", i)
+            if ni_i is not None and tbv_i and tbv_i > 0:
+                rote_series.append(ni_i / tbv_i * 100.0)
+        m.rote_series = rote_series
+        if rote_series:
+            m.rote_5y_avg = sum(rote_series) / len(rote_series)
         ic0 = bal.latest("Invested Capital")
         gwi0 = goodwill_intangibles(bal, 0)
         if ic0 is not None and gwi0 is not None:
@@ -212,6 +224,27 @@ def compute_metrics(inp: ScreenerInputs) -> ScreenerMetrics:
         oi_new = inc.latest("Operating Income")
         if oi_old is not None and rev_old and oi_new is not None and revenue:
             m.op_margin_trajectory = (oi_new / revenue - oi_old / rev_old) * 100.0
+
+    # per-year margin series (percent), for Moat margin-durability
+    if inc is not None:
+        gm_series, om_series = [], []
+        for i in range(len(inc.years)):
+            rev_i = inc.value("Total Revenue", i)
+            gp_i = inc.value("Gross Profit", i)
+            oi_i = inc.value("Operating Income", i)
+            if gp_i is not None and rev_i:
+                gm_series.append(gp_i / rev_i * 100.0)
+            if oi_i is not None and rev_i:
+                om_series.append(oi_i / rev_i * 100.0)
+        m.gross_margin_series = gm_series
+        m.op_margin_series = om_series
+        # gross-margin trajectory: latest minus oldest available (pp), twin of op_margin_trajectory
+        gp_old = inc.value("Gross Profit", min(3, len(inc.years) - 1))
+        rev_old = inc.value("Total Revenue", min(3, len(inc.years) - 1))
+        gp_new = inc.latest("Gross Profit")
+        rev_new = inc.latest("Total Revenue")
+        if gp_old is not None and rev_old and gp_new is not None and rev_new:
+            m.gross_margin_trajectory = (gp_new / rev_new - gp_old / rev_old) * 100.0
 
     # --- Section IV ---
     if inc is not None:

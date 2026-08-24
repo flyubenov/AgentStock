@@ -61,6 +61,15 @@ class ScreenerMetrics(BaseModel):
     roic_ex_goodwill: float | None = None
     roic_5y_ex_goodwill: float | None = None
     goodwill_intangible_share: float | None = None
+    # Moat inputs — per-year series (percent), latest-first, matching roic_5y_avg's basis.
+    # Stored here so the Moat module can measure durability without any extra fetch.
+    roic_series: list[float] = []
+    roic_series_ex_goodwill: list[float] = []
+    rote_series: list[float] = []
+    rote_5y_avg: float | None = None
+    gross_margin_series: list[float] = []
+    op_margin_series: list[float] = []
+    gross_margin_trajectory: float | None = None
     # Section III (ratios; tangible_bv_per_share is currency)
     net_debt_ebitda: float | None = None
     net_debt_fcf: float | None = None
