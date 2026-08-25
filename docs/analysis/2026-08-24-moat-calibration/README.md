@@ -197,3 +197,25 @@ follow-up TDD edit.
 Not proposed here (out of scope / needs its own investigation): the V EBIT
 fallback (Quality-engine-level fix, not Moat-specific) and the CRWV
 `wacc=None` gate-bypass noted above.
+
+## Resolution (user decision, 2026-08-25)
+
+Both proposals **approved and applied** as follow-up TDD edits to
+`moat/scoring.py`; the §3.1 band tables were kept unchanged.
+
+1. **B1 thin-spread cap** — added `B1_THIN_SPREAD_PP = 2.0` /
+   `B1_THIN_SPREAD_CAP = 15.0`: when the blended spread is below 2pp, B1 is
+   capped at 15 (still out of 25, so renormalization penalizes). Latent in this
+   sample — no ticker's spread fell below 2pp (VZ's 4pp stays uncapped, score
+   59.0 unchanged). Covered by `test_b1_capped_on_thin_spread_despite_full_persistence`
+   and `test_b1_not_capped_on_healthy_spread`.
+2. **B3 excluded for FINANCIALS** — mirrors the C1 exclusion; the breakdown now
+   records `"B3 margin durability"` in `excluded` for banks. Effect on the
+   re-run: **OPFI 66.9 → 66.2**; AXP/JPM/SOFI unchanged (B3 was already absent
+   by data). Every non-financial and every wide-moat name is byte-identical to
+   the pre-change sweep. Covered by `test_b3_excluded_for_financials_even_with_margin_data`
+   and `test_b3_still_scored_for_non_financial_with_margin_data`.
+
+**Deferred** (not addressed in the Moat branch, per the same decision): the V
+EBIT-fallback (a Quality/Section-II change with wider blast radius — own task)
+and the CRWV `wacc=None` gate-bypass. Full suite after the changes: 542 passing.

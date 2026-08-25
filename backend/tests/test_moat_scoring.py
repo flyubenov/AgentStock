@@ -55,6 +55,27 @@ def test_persistence_pillar_scales_with_years_above_hurdle():
     assert bd["pillars"]["B1"] == pytest.approx(25.0)     # 25 * 5/5
 
 
+def test_b1_capped_on_thin_spread_despite_full_persistence():
+    # A name that clears its hurdle every year but only by ~1pp: full persistence
+    # (5/5) would normally bank all 25, but the thin blended spread caps B1 so
+    # stability alone cannot masquerade as a wide moat.
+    m = ScreenerMetrics()
+    m.roic_5y_avg = 10.0
+    m.roic_ttm = 10.0
+    m.wacc = 9.0
+    m.roic_wacc_spread = 1.0                          # spot spread ~1pp
+    m.roic_series = [10.0, 10.0, 10.0, 10.0, 10.0]    # clears 9 every year -> 5/5
+    _, bd = score(m, "TECH_GROWTH")
+    assert bd["pillars"]["B1"] == pytest.approx(scoring.B1_THIN_SPREAD_CAP)
+    assert bd["maxima"]["B1"] == 25                   # still out of 25 (renorm penalizes)
+
+
+def test_b1_not_capped_on_healthy_spread():
+    m = _wide_moat_metrics()          # 22pp spread, full persistence -> uncapped 25
+    _, bd = score(m, "TECH_GROWTH")
+    assert bd["pillars"]["B1"] == pytest.approx(25.0)
+
+
 def test_eroding_margins_score_below_stable_peer_at_equal_level():
     stable = _wide_moat_metrics()
     stable.gross_margin_series = [70.0, 71.0, 69.0, 72.0, 70.0]
@@ -81,6 +102,33 @@ def test_b3_drops_gross_component_when_gross_series_missing():
     m.op_margin_trajectory = 0.0
     _, bd = score(m, "TECH_GROWTH")
     assert "B3" in bd["pillars"]        # still scored on op-margin components only
+
+
+def test_b3_excluded_for_financials_even_with_margin_data():
+    # A lender whose income statement happens to carry a gross-profit-shaped line
+    # (e.g. OPFI) must not bank B3 margin-durability: for a bank that line is a
+    # net-interest proxy, not a moat signal. B3 is excluded like C1.
+    m = _wide_moat_metrics()
+    m.rote = 22.0
+    m.rote_5y_avg = 21.0
+    m.rote_series = [22.0, 21.0, 20.0, 21.0, 21.0]
+    m.gross_margin_series = [80.0, 79.0, 80.0, 81.0, 80.0]
+    m.op_margin_series = [55.0, 54.0, 56.0, 55.0, 55.0]
+    m.gross_margin_trajectory = 0.0
+    m.op_margin_trajectory = 0.0
+    _, bd = score(m, "FINANCIALS")
+    assert "B3" not in bd["pillars"]
+    assert "B3 margin durability" in bd["excluded"]
+
+
+def test_b3_still_scored_for_non_financial_with_margin_data():
+    m = _wide_moat_metrics()
+    m.gross_margin_series = [80.0, 79.0, 80.0, 81.0, 80.0]
+    m.op_margin_series = [55.0, 54.0, 56.0, 55.0, 55.0]
+    m.gross_margin_trajectory = 0.0
+    m.op_margin_trajectory = 0.0
+    _, bd = score(m, "TECH_GROWTH")
+    assert "B3" in bd["pillars"]
 
 
 def _no_moat_metrics():

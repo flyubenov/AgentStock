@@ -13,6 +13,11 @@ FINANCIAL_COE_PCT = 8.5      # banks' hurdle: cost of equity, percent
 MOAT_GATE_CEIL = 35.0        # no-durable-excess names capped here
 MOAT_MIN_YEARS = 3           # min observations in the return series
 MOAT_MIN_PILLARS = 3         # min scored pillar-metrics, else None
+# B1 persistence is all-or-nothing per year, so a name that clears its hurdle by
+# a hair every year banks full B1. On a razor-thin blended spread that lets
+# stability masquerade as a wide moat; cap B1 so it can't (calibration Task 10).
+B1_THIN_SPREAD_PP = 2.0      # blended spread below this (pp) caps B1
+B1_THIN_SPREAD_CAP = 15.0    # capped B1 value (uncapped max is 25)
 
 # --- bands ------------------------------------------------------------------
 # A1 ROIC level, 5y avg (max 20) — score_high on percent
@@ -97,18 +102,29 @@ def score(m: ScreenerMetrics, profile: str) -> tuple[float | None, dict]:
     # A2 — economic spread blend
     add("A2", score_high(_spread_blend(axis["spot"], axis["five"]), A2_SPREAD_BANDS, 0.0), 20)
 
-    # B1 — persistence: fraction of years the business out-earned its hurdle
+    is_fin = profile == "FINANCIALS"
+    heavy_capex = _heavy_capex_distortion(m)
+
+    # B1 — persistence: fraction of years the business out-earned its hurdle.
+    # Capped on a thin blended spread so mere not-losing-money can't bank full B1.
     frac = persistence_fraction(axis["series"], axis["hurdle"])
-    add("B1", (25.0 * frac) if frac is not None else None, 25)
+    b1 = (25.0 * frac) if frac is not None else None
+    spread = _spread_blend(axis["spot"], axis["five"])
+    if b1 is not None and spread is not None and spread < B1_THIN_SPREAD_PP:
+        b1 = min(b1, B1_THIN_SPREAD_CAP)
+    add("B1", b1, 25)
     # B2 — consistency: low variability of the return series
     add("B2", score_low(coef_of_variation(axis["series"]), B2_COV_BANDS, 0.0), 10)
-    # B3 — margin durability
-    add("B3", _margin_durability(m), 15)
+    # B3 — margin durability. Excluded for lenders: yfinance's Gross Profit row
+    # for a bank is a net-interest proxy, not a moat signal, and fires only by
+    # accident of which lenders it populates -> renormalized out (mirrors C1).
+    if is_fin:
+        excluded.append("B3 margin durability")
+    else:
+        add("B3", _margin_durability(m), 15)
 
     # C1 — cash-backing: FCF conversion. Structurally distorted for lenders and
     # heavy-capex reinvestors -> excluded and renormalized out (mirrors Quality).
-    is_fin = profile == "FINANCIALS"
-    heavy_capex = _heavy_capex_distortion(m)
     if is_fin or heavy_capex:
         excluded.append("C1 FCF conversion")
     elif m.fcf is not None and m.ebitda is not None and m.ebitda > 0:
