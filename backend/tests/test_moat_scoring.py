@@ -76,6 +76,19 @@ def test_b1_not_capped_on_healthy_spread():
     assert bd["pillars"]["B1"] == pytest.approx(25.0)
 
 
+def test_b1_uncapped_exactly_at_thin_spread_threshold():
+    # Blended spread == B1_THIN_SPREAD_PP exactly: the cap uses strict `<`, so a
+    # name sitting right on the threshold keeps full B1.
+    m = ScreenerMetrics()
+    m.roic_5y_avg = 11.0
+    m.roic_ttm = 11.0
+    m.wacc = 9.0
+    m.roic_wacc_spread = scoring.B1_THIN_SPREAD_PP   # spot spread == threshold
+    m.roic_series = [11.0, 11.0, 11.0, 11.0, 11.0]   # five = 11-9 = 2.0 -> blend == 2.0
+    _, bd = score(m, "TECH_GROWTH")
+    assert bd["pillars"]["B1"] == pytest.approx(25.0)
+
+
 def test_eroding_margins_score_below_stable_peer_at_equal_level():
     stable = _wide_moat_metrics()
     stable.gross_margin_series = [70.0, 71.0, 69.0, 72.0, 70.0]

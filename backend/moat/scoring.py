@@ -97,10 +97,11 @@ def score(m: ScreenerMetrics, profile: str) -> tuple[float | None, dict]:
             pillars[name] = earned
             maxima[name] = cap
 
+    spread = _spread_blend(axis["spot"], axis["five"])
     # A1 — ROIC/ROTE level
     add("A1", score_high(axis["level"], A1_ROIC_BANDS, 0.0), 20)
     # A2 — economic spread blend
-    add("A2", score_high(_spread_blend(axis["spot"], axis["five"]), A2_SPREAD_BANDS, 0.0), 20)
+    add("A2", score_high(spread, A2_SPREAD_BANDS, 0.0), 20)
 
     is_fin = profile == "FINANCIALS"
     heavy_capex = _heavy_capex_distortion(m)
@@ -109,7 +110,6 @@ def score(m: ScreenerMetrics, profile: str) -> tuple[float | None, dict]:
     # Capped on a thin blended spread so mere not-losing-money can't bank full B1.
     frac = persistence_fraction(axis["series"], axis["hurdle"])
     b1 = (25.0 * frac) if frac is not None else None
-    spread = _spread_blend(axis["spot"], axis["five"])
     if b1 is not None and spread is not None and spread < B1_THIN_SPREAD_PP:
         b1 = min(b1, B1_THIN_SPREAD_CAP)
     add("B1", b1, 25)
