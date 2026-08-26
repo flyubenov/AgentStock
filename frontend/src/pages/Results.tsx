@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { useParams, useLocation, Link } from 'react-router-dom'
 import type { TickerResult } from '../types'
-import { fvGapColor, fvGapLabel, qualityScoreColor, riskRewardColor, riskRewardRatio } from '../types'
+import { fvGapColor, fvGapLabel, moatScore, moatScoreColor, qualityScoreColor, riskRewardColor, riskRewardRatio } from '../types'
 
-type SortKey = 'fair_value' | 'price_vs_fair_value_pct' | 'ticker' | 'quality_score' | 'risk_reward'
+type SortKey = 'fair_value' | 'price_vs_fair_value_pct' | 'ticker' | 'quality_score' | 'risk_reward' | 'moat'
 
 export default function Results() {
   const { jobId } = useParams()
@@ -15,6 +15,7 @@ export default function Results() {
   const sortVal = (r: TickerResult): string | number | null | undefined =>
     sortKey === 'quality_score' ? r.screener?.quality_score
     : sortKey === 'risk_reward' ? riskRewardRatio(r)
+    : sortKey === 'moat' ? moatScore(r)
     : r[sortKey]
 
   const sorted = [...results].sort((a, b) => {
@@ -29,10 +30,10 @@ export default function Results() {
   }
 
   const exportCSV = () => {
-    const headers = ['Ticker', 'Company', 'Stock Type', 'Quality Score', 'Risk-Reward', 'Fair Value', 'Price', 'FV Gap%', 'Verdict']
+    const headers = ['Ticker', 'Company', 'Stock Type', 'Quality Score', 'FV Gap%', 'Risk-Reward', 'Moat', 'Fair Value', 'Price', 'Verdict']
     const rows = sorted.map(r => [
       r.ticker, r.company_name, r.stock_type,
-      r.screener?.quality_score, riskRewardRatio(r), r.fair_value, r.current_price, r.price_vs_fair_value_pct,
+      r.screener?.quality_score, r.price_vs_fair_value_pct, riskRewardRatio(r), moatScore(r), r.fair_value, r.current_price,
       fvGapLabel(r.price_vs_fair_value_pct),
     ])
     const esc = (v: unknown) => {
@@ -67,10 +68,11 @@ export default function Results() {
               <th className="text-left py-2">Company</th>
               <th className="text-left py-2 px-2">Stock Type</th>
               <th className="text-right py-2 px-2 cursor-pointer hover:text-slate-300" onClick={() => toggleSort('quality_score')}>Quality</th>
+              <th className="text-right py-2 px-2 cursor-pointer hover:text-slate-300" onClick={() => toggleSort('price_vs_fair_value_pct')}>Gap%</th>
               <th className="text-right py-2 px-2 cursor-pointer hover:text-slate-300" onClick={() => toggleSort('risk_reward')}>R/R</th>
+              <th className="text-right py-2 px-2 cursor-pointer hover:text-slate-300" onClick={() => toggleSort('moat')}>Moat</th>
               <th className="text-right py-2 px-2 cursor-pointer hover:text-slate-300" onClick={() => toggleSort('fair_value')}>Fair Value</th>
-              <th className="text-right py-2 px-2">Price</th>
-              <th className="text-right py-2 px-4 cursor-pointer hover:text-slate-300" onClick={() => toggleSort('price_vs_fair_value_pct')}>FV Gap%</th>
+              <th className="text-right py-2 px-4">Price</th>
             </tr>
           </thead>
           <tbody>
@@ -86,17 +88,20 @@ export default function Results() {
                 <td className={`py-2 px-2 text-right font-mono text-xs ${qualityScoreColor(r.screener?.quality_score)}`}>
                   {r.screener?.quality_score != null ? r.screener.quality_score.toFixed(1) : '—'}
                 </td>
+                <td className={`py-2 px-2 text-right font-mono text-xs ${fvGapColor(r.price_vs_fair_value_pct)}`}>
+                  {r.price_vs_fair_value_pct != null ? `${r.price_vs_fair_value_pct > 0 ? '+' : ''}${r.price_vs_fair_value_pct.toFixed(1)}%` : '—'}
+                </td>
                 <td className={`py-2 px-2 text-right font-mono text-xs ${riskRewardColor(riskRewardRatio(r))}`}>
                   {riskRewardRatio(r) != null ? riskRewardRatio(r)!.toFixed(2) : '—'}
+                </td>
+                <td className={`py-2 px-2 text-right font-mono text-xs ${moatScoreColor(moatScore(r))}`}>
+                  {moatScore(r) != null ? moatScore(r)!.toFixed(0) : '—'}
                 </td>
                 <td className="py-2 px-2 text-right font-mono text-xs text-slate-300">
                   {r.fair_value != null ? `$${r.fair_value.toFixed(2)}` : '—'}
                 </td>
-                <td className="py-2 px-2 text-right font-mono text-xs text-slate-400">
+                <td className="py-2 px-4 text-right font-mono text-xs text-slate-400">
                   {r.current_price != null ? `$${r.current_price.toFixed(2)}` : '—'}
-                </td>
-                <td className={`py-2 px-4 text-right font-mono text-xs ${fvGapColor(r.price_vs_fair_value_pct)}`}>
-                  {r.price_vs_fair_value_pct != null ? `${r.price_vs_fair_value_pct > 0 ? '+' : ''}${r.price_vs_fair_value_pct.toFixed(1)}%` : '—'}
                 </td>
               </tr>
             ))}

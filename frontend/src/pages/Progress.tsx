@@ -3,10 +3,10 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useAnalysisStream } from '../hooks/useAnalysisStream'
 import ProgressBar from '../components/ProgressBar'
 import type { TickerResult } from '../types'
-import { fvGapColor, qualityScoreColor } from '../types'
+import { fvGapColor, moatScore, moatScoreColor, qualityScoreColor, riskRewardColor, riskRewardRatio } from '../types'
 import { cn } from '../lib/utils'
 
-type SortKey = 'quality' | 'fair_value' | 'price_vs_fair_value_pct'
+type SortKey = 'quality' | 'risk_reward' | 'moat' | 'fair_value' | 'price_vs_fair_value_pct'
 
 export default function Progress() {
   const { jobId } = useParams<{ jobId: string }>()
@@ -18,6 +18,8 @@ export default function Progress() {
 
   const sortVal = (r: TickerResult, key: SortKey): number | null => {
     if (key === 'quality') return r.screener?.quality_score ?? null
+    if (key === 'risk_reward') return riskRewardRatio(r)
+    if (key === 'moat') return moatScore(r)
     return r[key] ?? null
   }
   const sorted = [...results].sort((a, b) => {
@@ -100,8 +102,10 @@ export default function Progress() {
                 <th className="text-left py-2 px-4">Ticker</th>
                 <th className="text-left py-2">Company</th>
                 <th className="text-right py-2 px-2 cursor-pointer hover:text-slate-300 select-none" onClick={() => toggleSort('quality')}>Quality{arrow('quality')}</th>
-                <th className="text-right py-2 px-2 cursor-pointer hover:text-slate-300 select-none" onClick={() => toggleSort('fair_value')}>Fair Value{arrow('fair_value')}</th>
-                <th className="text-right py-2 pr-4 cursor-pointer hover:text-slate-300 select-none" onClick={() => toggleSort('price_vs_fair_value_pct')}>vs Price{arrow('price_vs_fair_value_pct')}</th>
+                <th className="text-right py-2 px-2 cursor-pointer hover:text-slate-300 select-none" onClick={() => toggleSort('price_vs_fair_value_pct')}>Gap%{arrow('price_vs_fair_value_pct')}</th>
+                <th className="text-right py-2 px-2 cursor-pointer hover:text-slate-300 select-none" onClick={() => toggleSort('risk_reward')}>R/R{arrow('risk_reward')}</th>
+                <th className="text-right py-2 px-2 cursor-pointer hover:text-slate-300 select-none" onClick={() => toggleSort('moat')}>Moat{arrow('moat')}</th>
+                <th className="text-right py-2 pr-4 cursor-pointer hover:text-slate-300 select-none" onClick={() => toggleSort('fair_value')}>Fair Value{arrow('fair_value')}</th>
               </tr>
             </thead>
             <tbody>
@@ -112,13 +116,19 @@ export default function Progress() {
                   <td className={`py-2 px-2 text-right font-mono text-xs ${qualityScoreColor(r.screener?.quality_score)}`}>
                     {r.screener?.quality_score != null ? r.screener.quality_score.toFixed(1) : '—'}
                   </td>
-                  <td className="py-2 px-2 text-right font-mono text-slate-300">
-                    {r.fair_value != null ? `$${r.fair_value.toFixed(2)}` : '—'}
-                  </td>
-                  <td className={`py-2 pr-4 text-right font-mono text-xs ${fvGapColor(r.price_vs_fair_value_pct)}`}>
+                  <td className={`py-2 px-2 text-right font-mono text-xs ${fvGapColor(r.price_vs_fair_value_pct)}`}>
                     {r.price_vs_fair_value_pct != null
                       ? `${r.price_vs_fair_value_pct > 0 ? '+' : ''}${r.price_vs_fair_value_pct.toFixed(1)}%`
                       : '—'}
+                  </td>
+                  <td className={`py-2 px-2 text-right font-mono text-xs ${riskRewardColor(riskRewardRatio(r))}`}>
+                    {riskRewardRatio(r) != null ? riskRewardRatio(r)!.toFixed(2) : '—'}
+                  </td>
+                  <td className={`py-2 px-2 text-right font-mono text-xs ${moatScoreColor(moatScore(r))}`}>
+                    {moatScore(r) != null ? moatScore(r)!.toFixed(0) : '—'}
+                  </td>
+                  <td className="py-2 pr-4 text-right font-mono text-slate-300">
+                    {r.fair_value != null ? `$${r.fair_value.toFixed(2)}` : '—'}
                   </td>
                 </tr>
               ))}

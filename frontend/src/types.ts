@@ -21,7 +21,7 @@ export interface TickerResult {
   status: 'completed' | 'failed'
   errors: string[]
   quality_score?: number | null
-  moat_score?: number | null
+  moat_score?: number | null                 // mirrored number — Database grid (persisted rows)
   screener?: ScreenerResult | null
   risk_reward?: RiskRewardResult | null      // nested object — Results grid + detail
   risk_reward_ratio?: number | null          // mirrored number — Database grid
@@ -145,6 +145,7 @@ export interface ScreenerResult {
   section_scores: Record<string, number | null>
   metrics: Partial<ScreenerMetrics>
   score_breakdown?: ScoreBreakdown
+  moat_score?: number | null                 // nested — live Results/Progress grids
   status: 'completed' | 'failed'
   errors: string[]
 }
@@ -204,6 +205,14 @@ export function riskRewardRatio(
   r: { risk_reward?: RiskRewardResult | null; risk_reward_ratio?: number | null },
 ): number | null {
   return r.risk_reward?.ratio ?? r.risk_reward_ratio ?? null
+}
+
+/** Live grids carry moat nested under screener; the Database grid carries the
+ *  mirrored top-level number. One helper reads whichever is present. */
+export function moatScore(
+  r: { moat_score?: number | null; screener?: ScreenerResult | null },
+): number | null {
+  return r.moat_score ?? r.screener?.moat_score ?? null
 }
 
 export function riskRewardTier(ratio: number | null | undefined): string | null {

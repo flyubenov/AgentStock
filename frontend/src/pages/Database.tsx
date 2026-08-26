@@ -284,7 +284,7 @@ export default function Database() {
 
   const saveCurrentAsWatchlist = async () => {
     if (!anyActive) { setError('Apply a filter before saving a watchlist.'); return }
-    const name = window.prompt('Watchlist name')?.trim()
+    const name = window.prompt('Watchlist name', activeWatchlist)?.trim()
     if (!name) return
     const exists = watchlists.some(w => w.name.toLowerCase() === name.toLowerCase())
     if (exists && !confirm(`Overwrite the existing watchlist "${name}"?`)) return
@@ -525,13 +525,13 @@ export default function Database() {
                 </th>
                 <th className="text-right py-2 px-2">
                   <FilterHeader
-                    label={<span className="cursor-pointer hover:text-slate-300 select-none" onClick={() => toggleSort('moat')}>Moat</span>}
-                    active={colActive.moat}
-                    open={openFilter === 'moat'}
+                    label={<span className="cursor-pointer hover:text-slate-300 select-none" onClick={() => toggleSort('price_vs_fair_value_pct')}>Gap%</span>}
+                    active={colActive.gap}
+                    open={openFilter === 'gap'}
                     align="right"
-                    onToggle={() => toggleFilter('moat')}
+                    onToggle={() => toggleFilter('gap')}
                   >
-                    <RangeFilter value={filters.moat} step="1" onChange={v => setFilters(f => ({ ...f, moat: v }))} />
+                    <RangeFilter value={filters.gap} step="1" onChange={v => setFilters(f => ({ ...f, gap: v }))} />
                   </FilterHeader>
                 </th>
                 <th className="text-right py-2 px-2">
@@ -545,19 +545,19 @@ export default function Database() {
                     <RangeFilter value={filters.riskReward} step="0.1" onChange={v => setFilters(f => ({ ...f, riskReward: v }))} />
                   </FilterHeader>
                 </th>
-                <th className="text-right py-2 px-2 cursor-pointer hover:text-slate-300 select-none" onClick={() => toggleSort('fair_value')}>Fair Value</th>
-                <th className="text-right py-2 px-2">Price</th>
-                <th className="text-right py-2 px-4">
+                <th className="text-right py-2 px-2">
                   <FilterHeader
-                    label={<span className="cursor-pointer hover:text-slate-300 select-none" onClick={() => toggleSort('price_vs_fair_value_pct')}>Gap%</span>}
-                    active={colActive.gap}
-                    open={openFilter === 'gap'}
+                    label={<span className="cursor-pointer hover:text-slate-300 select-none" onClick={() => toggleSort('moat')}>Moat</span>}
+                    active={colActive.moat}
+                    open={openFilter === 'moat'}
                     align="right"
-                    onToggle={() => toggleFilter('gap')}
+                    onToggle={() => toggleFilter('moat')}
                   >
-                    <RangeFilter value={filters.gap} step="1" onChange={v => setFilters(f => ({ ...f, gap: v }))} />
+                    <RangeFilter value={filters.moat} step="1" onChange={v => setFilters(f => ({ ...f, moat: v }))} />
                   </FilterHeader>
                 </th>
+                <th className="text-right py-2 px-2 cursor-pointer hover:text-slate-300 select-none" onClick={() => toggleSort('fair_value')}>Fair Value</th>
+                <th className="text-right py-2 px-2">Price</th>
                 <th className="text-right py-2 px-4">Evaluated</th>
                 <th></th>
               </tr>
@@ -579,22 +579,22 @@ export default function Database() {
                   <td className={`py-2 px-2 text-right font-mono text-xs ${qualityScoreColor(r.quality_score)}`}>
                     {r.quality_score != null ? r.quality_score.toFixed(1) : '—'}
                   </td>
-                  <td className={`py-2 px-2 text-right font-mono text-xs ${moatScoreColor(r.moat_score)}`}>
-                    {r.moat_score != null ? r.moat_score.toFixed(0) : '—'}
+                  <td className={`py-2 px-2 text-right font-mono text-xs ${fvGapColor(r.price_vs_fair_value_pct)}`}>
+                    {r.price_vs_fair_value_pct != null
+                      ? `${r.price_vs_fair_value_pct > 0 ? '+' : ''}${r.price_vs_fair_value_pct.toFixed(1)}%`
+                      : '—'}
                   </td>
                   <td className={`py-2 px-2 text-right font-mono text-xs ${riskRewardColor(riskRewardRatio(r))}`}>
                     {riskRewardRatio(r) != null ? riskRewardRatio(r)!.toFixed(2) : '—'}
+                  </td>
+                  <td className={`py-2 px-2 text-right font-mono text-xs ${moatScoreColor(r.moat_score)}`}>
+                    {r.moat_score != null ? r.moat_score.toFixed(0) : '—'}
                   </td>
                   <td className="py-2 px-2 text-right font-mono text-xs text-slate-300">
                     {r.fair_value != null ? `$${r.fair_value.toFixed(2)}` : '—'}
                   </td>
                   <td className="py-2 px-2 text-right font-mono text-xs text-slate-400">
                     {r.current_price != null ? `$${r.current_price.toFixed(2)}` : '—'}
-                  </td>
-                  <td className={`py-2 px-4 text-right font-mono text-xs ${fvGapColor(r.price_vs_fair_value_pct)}`}>
-                    {r.price_vs_fair_value_pct != null
-                      ? `${r.price_vs_fair_value_pct > 0 ? '+' : ''}${r.price_vs_fair_value_pct.toFixed(1)}%`
-                      : '—'}
                   </td>
                   <td className="py-2 px-4 text-right text-xs text-slate-600">
                     {r.last_evaluated ? new Date(r.last_evaluated).toLocaleDateString() : '—'}
