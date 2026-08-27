@@ -1,15 +1,15 @@
 ---
 name: validating-agent-stock
-description: Use when the user questions, sanity-checks, or asks you to validate Agent Stock's fair value or quality score for a specific ticker ("is PLTR's FV right?", "why is X rated so low?", "does −63% look fair?", "cross-check this number"), or suspects the valuation/scoring pipeline unfairly mis-rated a company, or the newly added Risk-Reward (R-R) ratio ("is X's R-R right?", "why is this a Value Trap?", "does this R-R look fair?").
+description: Use when the user questions, sanity-checks, or asks you to validate Agent Stock's fair value or quality score for a specific ticker ("is PLTR's FV right?", "why is X rated so low?", "does −63% look fair?", "cross-check this number"), or suspects the valuation/scoring pipeline unfairly mis-rated a company, or the newly added Risk-Reward (R-R) ratio ("is X's R-R right?", "why is this a Value Trap?", "does this R-R look fair?"), or the Moat score / whether a company has a real economic moat ("does X have a real moat?", "what is X's moat?", "why is X's moat score so high/low?").
 ---
 
 # Validating Agent Stock
 
 ## Overview
 
-You are an expert financial analyst validating a result that Agent Stock — a three-pipeline Python app (Fair Value, Quality Score, Risk-Reward) — produced for one ticker. **Your default deliverable is a verdict + evidence, not a code change.** Agent Stock has been through many tuning passes (see the memory dir); most numbers are sound. Confirm or fault the number honestly; only cross into fixing the engine when a *real* gap is proven and the user is in the loop.
+You are an expert financial analyst validating a result that Agent Stock — a three-pipeline Python app (Fair Value, Quality Score, Risk-Reward) plus a Moat score that rides the Quality/Screener pipeline — produced for one ticker. **Your default deliverable is a verdict + evidence, not a code change.** Agent Stock has been through many tuning passes (see the memory dir); most numbers are sound. Confirm or fault the number honestly; only cross into fixing the engine when a *real* gap is proven and the user is in the loop.
 
-**Core principle:** a fair value is a *range*, not a point. Agent Stock reports a single number; your job is to judge whether that number is a defensible center of a reasonable range, and if not, *why* — data problem, or logic problem. Risk-Reward is different in kind: unlike a fair value (a range around a market/DCF truth), the **R-R ratio is a constructed index with no external market truth** — there is no "true" R-R to converge on. Validate its **internal correctness** (inputs, scoring, aggregation) and whether the **tier's story matches the company**, not its distance from a market price.
+**Core principle:** a fair value is a *range*, not a point. Agent Stock reports a single number; your job is to judge whether that number is a defensible center of a reasonable range, and if not, *why* — data problem, or logic problem. Risk-Reward is different in kind: unlike a fair value (a range around a market/DCF truth), the **R-R ratio is a constructed index with no external market truth** — there is no "true" R-R to converge on. Validate its **internal correctness** (inputs, scoring, aggregation) and whether the **tier's story matches the company**, not its distance from a market price. Moat is different again, and inverted: validating a moat is **qualitative-primary** — the real question is *whether a durable economic moat exists and what its source is*, answered from research; the pipeline's numeric Moat score only **corroborates** it (it can suggest a moat but cannot prove one). "No durable moat found" is a valid, expected verdict.
 
 ## When to use
 
@@ -17,6 +17,7 @@ You are an expert financial analyst validating a result that Agent Stock — a t
 - User says a company looks mis-rated (too cheap/expensive, quality too low/high).
 - You suspect a classifier tier, method weight, guard, or cap distorted a result.
 - User asks whether a ticker's Risk-Reward ratio or tier (e.g. "Value Trap") is right / fair.
+- User asks whether a ticker has a real economic moat, what its source is, or why its Moat score is what it is.
 
 **When NOT to use:** building new features, screener work unrelated to a specific verdict, or generic finance questions with no Agent Stock result in play.
 
@@ -40,6 +41,8 @@ python3 ".claude/skills/validating-agent-stock/validate_ticker.py" PLTR --inputs
 
 **Validating a Risk-Reward ratio? Read `risk-reward-validation.md`** (in this skill dir) — it carries the full R-R recipe, the qualitative read, the traps, and the calibration flow. Run that recipe **only when the question is about R-R.** An FV/Quality validation may add a **one-line** R-R cross-reference (ratio + tier, straight from the harness dump) when it's relevant or contradicts the FV/Quality verdict — it does not run the full R-R recipe unprompted.
 
+**Validating a Moat score — or "does this company have a real moat"? Read `moat-validation.md`** (in this skill dir). It carries the qualitative-primary method (frame the business from research → enumerate sources against an exhaustive taxonomy → grade DATA/JUDGMENT/COMPANY-CLAIM → four durability tests), the quant reconciliation (recompute from the harness `MOAT` block; the gate, coverage floor, and three variants), and the divergence matrix. The harness now always dumps a `MOAT` block (score + breakdown + pillar metrics; it rides the screener, so **no extra fetch**). Run that recipe **only when the question is about the moat.** A Quality validation may add a **one-line** moat cross-reference (score + one-word read) when relevant — Quality ≠ Moat, so never read one from the other.
+
 To test **logic on synthetic inputs** (no network), call the pure cores directly:
 `valuation.engine.evaluate(fin)`, `valuation.classifier.classify(fin)`, `screener.scoring.score(metrics, sector)`.
 
@@ -53,6 +56,8 @@ To test **logic on synthetic inputs** (no network), call the pure cores directly
 | Stock-type tiers + method weights | `backend/valuation/classifier.py` | `classify(fin)`, `_TYPE_WEIGHTS` |
 | Quality — live | `backend/screener/engine.py` | `run(ticker)` → `ScreenerResult` |
 | Quality — metrics / scoring | `backend/screener/{metrics,scoring}.py` | `compute_metrics`, `score` |
+| Moat — score (rides screener) | `backend/moat/scoring.py` | `score(metrics, profile)` → `(float│None, breakdown)` |
+| Moat — pillar inputs | `backend/screener/models.py` | `ScreenerMetrics` moat series (roic/rote/margin series, wacc) |
 | Risk-Reward — live | `backend/risk_reward/engine.py` | `run(ticker)` → `RiskRewardResult` |
 | R-R scoring / aggregation | `backend/risk_reward/scoring.py` | `build_metric_scores`, `aggregate` |
 | R-R config (anchors/weights/tiers/clamp) | `backend/risk_reward/config.py` | — |
@@ -67,6 +72,8 @@ R-R is **fully isolated** from Fair Value and Quality Score — an R-R change ca
 **FV tiers** (`classify`): FINANCIAL, ASSET_HEAVY, CONGLOMERATE, EARLY_GROWTH, GROWTH, DIVIDEND, CYCLICAL, then size default MEGA_CAP (>$1T) / LARGE_CAP (>$100B) / MID_CAP. Each has fixed method weights.
 
 **Quality sections** (`section_scores`): **I** growth & margins, **II** capital efficiency (ROIC / ROIC−WACC / ROTE), **III** balance sheet & leverage, **IV** capital allocation. Weighted by sector profile (`PROFILES`).
+
+**Moat** rides the screener (same `sc_run`, no extra I/O) and is **numeric only, 0–100, no bands** — pure durability of realized economic profit (Magnitude 40 / Durability 50 / Cash 10 + an economic-profit gate). Quality ≠ Moat: broad fundamentals vs narrow durability-of-excess-return.
 
 ## The validation recipe
 
