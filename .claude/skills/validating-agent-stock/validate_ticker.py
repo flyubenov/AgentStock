@@ -3,7 +3,8 @@
 Runs all three pipelines live (yfinance) for one ticker and dumps everything an
 analyst needs to cross-check the result against the pipeline logic:
 the extracted `fin` inputs, the raw statement fetches, the classifier verdict,
-the full FV breakdown (per-leg weight + scenarios), the Quality sections, and
+the full FV breakdown (per-leg weight + scenarios), the Quality sections, the Moat
+block (score + breakdown + pillar metrics; rides the screener, no extra fetch), and
 the Risk-Reward breakdown (ratio/tier/reward/risk + per-metric scoring).
 
 Usage (from anywhere; it locates backend/ itself):
@@ -53,6 +54,22 @@ _RR_INFO_FIELDS = [
     "operatingMargins", "profitMargins", "currentRatio", "quickRatio", "beta",
 ]
 
+# The moat-relevant slice of ScreenerMetrics (sc.metrics), dumped in the MOAT
+# block so every moat pillar is cross-checkable without a second fetch. Series
+# are latest-first; percents/pp per ScreenerMetrics. See moat-validation.md.
+_MOAT_METRIC_FIELDS = [
+    # A1/A2/B1/B2 return axis + spread
+    "roic_series", "roic_5y_avg", "roic_ttm", "wacc", "roic_wacc_spread",
+    "roic_series_ex_goodwill", "roic_5y_ex_goodwill", "goodwill_intangible_share",
+    "rote_series", "rote_5y_avg", "rote",
+    # B3 margin durability
+    "gross_margin_series", "op_margin_series",
+    "gross_margin_trajectory", "op_margin_trajectory",
+    # C1 cash backing
+    "fcf", "ebitda",
+    "sector",
+]
+
 
 async def dump_inputs(ticker: str) -> dict:
     """Reproduce the raw inputs engine.run() feeds the pipeline, for cross-checking."""
@@ -81,6 +98,15 @@ async def main(ticker: str, with_inputs: bool):
             "score_breakdown": sc.score_breakdown,
             "status": sc.status,
             "errors": sc.errors,
+        },
+        # Moat Score — durability of realized economic profit (rides the screener;
+        # no extra fetch). moat_breakdown carries variant/pillars/maxima/earned/
+        # available/gated/excluded; the metrics slice makes every pillar checkable.
+        # Qualitative-primary: the number corroborates. See moat-validation.md.
+        "MOAT": {
+            "moat_score": sc.moat_score,
+            "moat_breakdown": sc.moat_breakdown,
+            "metrics": {k: sc.metrics.get(k) for k in _MOAT_METRIC_FIELDS},
         },
         # Third pipeline. The full result: ratio, tier, reward_score, risk_score,
         # actionable_insight, per-slot metric_scores (raw/source/score/weight/dropped),
