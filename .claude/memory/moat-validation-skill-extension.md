@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: cd567975-3d92-49b9-95bc-462fcb83e2cb
-  modified: 2026-08-27T20:09:19.251Z
+  modified: 2026-08-27T20:16:32.404Z
 ---
 
 **Task:** extend the `validating-agent-stock` skill to also validate a ticker's **Moat
@@ -25,7 +25,7 @@ master==origin/main @`88fcf48`). Three implementation commits:
 followed `moat-validation.md`'s quant-reconciliation + divergence-matrix recipe end to
 end:
 - **MCO:** `moat_score 79.5`, `variant: ROIC`, `gated: false`, ROIC 5y-avg 19.79% vs WACC
-  10.65% (+13.6pp spread), goodwill 74.5% (does NOT trigger tangible-ROIC routing since
+  10.65% (+9.1pp spread), goodwill 74.5% (does NOT trigger tangible-ROIC routing since
   tpe/fpe < 1.5). Reconciles exactly: `round(100*79.5/100,1)==79.5`. Qual = Wide → **cell:
   CORROBORATED.** Matches the worked example in `moat-validation.md` almost exactly — no
   doc drift, no edit needed.
