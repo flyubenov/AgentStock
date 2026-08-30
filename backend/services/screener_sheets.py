@@ -2,6 +2,7 @@ from __future__ import annotations
 import asyncio, json, os
 from datetime import datetime, timezone
 from screener.models import ScreenerResult
+from screener.gics import to_gics_sector
 from services.sheets import (
     _get_service, _sheet_id, _execute, _run_sheets, delete_ticker_row,
 )
@@ -86,6 +87,11 @@ def _row_to_result(row: list) -> ScreenerResult:
 _SCREENER_TAB = "Screener"
 DATABASE_QSCORE_COL = "Q"
 DATABASE_MOAT_COL = "S"
+# Sector/Industry mirror columns on the Database tab — appended after the Moat
+# mirror (S) so the FV writer's A:P block and the Q/R/S mirrors keep their fixed
+# positions. Sector is GICS-mapped; industry is Yahoo's value verbatim.
+DATABASE_SECTOR_COL = "T"
+DATABASE_INDUSTRY_COL = "U"
 
 
 def _col_range() -> str:
@@ -182,6 +188,27 @@ def _mirror_moat_score(svc, sheet_id: str, ticker: str, score) -> None:
             return
 
 
+def _mirror_sector_industry(svc, sheet_id: str, ticker: str, sector, industry) -> None:
+    # ensure the Database T1/U1 headers, then update T{row}:U{row} for this ticker
+    _execute(svc.spreadsheets().values().update(
+        spreadsheetId=sheet_id,
+        range=f"Database!{DATABASE_SECTOR_COL}1:{DATABASE_INDUSTRY_COL}1",
+        valueInputOption="RAW", body={"values": [["Sector", "Industry"]]},
+    ))
+    existing = _execute(svc.spreadsheets().values().get(
+        spreadsheetId=sheet_id, range="Database!A:A"))
+    rows = existing.get("values", [])
+    for i, row in enumerate(rows):
+        if row and row[0].strip().upper() == ticker.upper():
+            _execute(svc.spreadsheets().values().update(
+                spreadsheetId=sheet_id,
+                range=f"Database!{DATABASE_SECTOR_COL}{i + 1}:{DATABASE_INDUSTRY_COL}{i + 1}",
+                valueInputOption="RAW",
+                body={"values": [[to_gics_sector(sector) or "", industry or ""]]},
+            ))
+            return
+
+
 def _upsert_sync(r: ScreenerResult) -> None:
     svc = _get_service()
     sheet_id = _sheet_id()
@@ -206,6 +233,7 @@ def _upsert_sync(r: ScreenerResult) -> None:
             valueInputOption="RAW", body={"values": [new_row]}))
     _mirror_quality_score(svc, sheet_id, r.ticker, r.quality_score)
     _mirror_moat_score(svc, sheet_id, r.ticker, r.moat_score)
+    _mirror_sector_industry(svc, sheet_id, r.ticker, r.sector, r.industry)
 
 
 async def upsert_screener_result(r: ScreenerResult) -> None:

@@ -17,10 +17,12 @@ async def run(ticker: str) -> ScreenerResult:
     quality, sections, profile, breakdown = score(metrics, metrics.sector)
     moat, moat_breakdown = moat_score(metrics, profile)
     now = datetime.now(timezone.utc).isoformat()
+    industry = inp.info.get("industry") or None
     if quality is None:
         return ScreenerResult(
             ticker=t, company_name=inp.info.get("shortName") or inp.info.get("longName"),
-            last_evaluated=now, sector=metrics.sector, sector_profile=profile,
+            last_evaluated=now, sector=metrics.sector, industry=industry,
+            sector_profile=profile,
             section_scores=sections, metrics=metrics.model_dump(),
             score_breakdown=breakdown, moat_score=moat, moat_breakdown=moat_breakdown,
             status="failed", errors=["insufficient data for a quality score"],
@@ -28,6 +30,7 @@ async def run(ticker: str) -> ScreenerResult:
     return ScreenerResult(
         ticker=t, company_name=inp.info.get("shortName") or inp.info.get("longName"),
         last_evaluated=now, quality_score=quality, sector=metrics.sector,
+        industry=industry,
         sector_profile=profile, section_scores=sections, metrics=metrics.model_dump(),
         score_breakdown=breakdown, moat_score=moat, moat_breakdown=moat_breakdown,
         status="completed", errors=[],

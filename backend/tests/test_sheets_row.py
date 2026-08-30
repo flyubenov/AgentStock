@@ -39,3 +39,26 @@ def test_database_row_blank_quality_score_is_none():
            "395"]  # short row, no Q
     dr = _row_to_database_row(row)
     assert dr.quality_score is None
+
+
+def test_database_row_parses_sector_industry_cols_t_u():
+    # A:P (16) + Q quality + R risk-reward + S moat + T sector + U industry
+    row = ["AAPL", "Apple", "2026-07-08", "LARGE_CAP", "180.5", "190.0", "-5.0",
+           "175.0", "", "", "", "", "", "", "", "",
+           "8.4", "1.6", "72",
+           "Information Technology", "Consumer Electronics"]
+    dr = _row_to_database_row(row)
+    assert dr.sector == "Information Technology"
+    assert dr.industry == "Consumer Electronics"
+    # existing mirrors still read from their own columns
+    assert dr.quality_score == 8.4
+    assert dr.risk_reward_ratio == 1.6
+    assert dr.moat_score == 72
+
+
+def test_database_row_blank_sector_industry_is_none():
+    row = ["MSFT", "Microsoft", "2026-07-08", "LARGE_CAP", "400", "410", "-2.4",
+           "395"]  # short row, no T/U
+    dr = _row_to_database_row(row)
+    assert dr.sector is None
+    assert dr.industry is None

@@ -15,6 +15,8 @@ export interface TickerResult {
   current_price: number | null
   last_evaluated: string | null
   stock_type: string | null
+  sector?: string | null                     // GICS sector — Database grid (persisted rows)
+  industry?: string | null                   // Yahoo industry, verbatim — Database grid
   fair_value: number | null
   price_vs_fair_value_pct: number | null
   fair_value_breakdown: Record<string, ModelBreakdown>
