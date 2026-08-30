@@ -16,11 +16,12 @@ type SortKey = 'quality' | 'moat' | 'fair_value' | 'price_vs_fair_value_pct' | '
 /** Sentinel checkbox value representing a null stock_type. */
 const NONE = '(none)'
 
-type ColKey = 'ticker' | 'stockType' | 'quality' | 'moat' | 'gap' | 'riskReward'
+type ColKey = 'ticker' | 'stockType' | 'sector' | 'quality' | 'moat' | 'gap' | 'riskReward'
 type NumRange = { min: number | null; max: number | null }
 type Filters = {
   tickers: Set<string>
   stockTypes: Set<string>
+  sectors: Set<string>
   quality: NumRange
   moat: NumRange
   gap: NumRange
@@ -30,6 +31,7 @@ type Filters = {
 const EMPTY_FILTERS: Filters = {
   tickers: new Set(),
   stockTypes: new Set(),
+  sectors: new Set(),
   quality: { min: null, max: null },
   moat: { min: null, max: null },
   gap: { min: null, max: null },
@@ -39,6 +41,7 @@ const EMPTY_FILTERS: Filters = {
 const serializeFilters = (f: Filters): SerializedFilters => ({
   tickers: [...f.tickers].sort(),
   stockTypes: [...f.stockTypes].sort(),
+  sectors: [...f.sectors].sort(),
   quality: f.quality,
   moat: f.moat,
   gap: f.gap,
@@ -48,6 +51,7 @@ const serializeFilters = (f: Filters): SerializedFilters => ({
 const deserializeFilters = (s: Partial<SerializedFilters> | undefined): Filters => ({
   tickers: new Set(s?.tickers ?? []),
   stockTypes: new Set(s?.stockTypes ?? []),
+  sectors: new Set(s?.sectors ?? []),
   quality: s?.quality ?? { min: null, max: null },
   moat: s?.moat ?? { min: null, max: null },
   gap: s?.gap ?? { min: null, max: null },
@@ -255,10 +259,15 @@ export default function Database() {
     () => [...new Set(results.map(r => r.stock_type ?? NONE))].sort(),
     [results],
   )
+  const sectorOptions = useMemo(
+    () => [...new Set(results.map(r => r.sector ?? NONE))].sort(),
+    [results],
+  )
 
   const colActive = {
     ticker: filters.tickers.size > 0,
     stockType: filters.stockTypes.size > 0,
+    sector: filters.sectors.size > 0,
     quality: rangeActive(filters.quality),
     moat: rangeActive(filters.moat),
     gap: rangeActive(filters.gap),
@@ -312,6 +321,7 @@ export default function Database() {
   const rowMatches = (r: TickerResult): boolean => {
     if (filters.tickers.size && !filters.tickers.has(r.ticker)) return false
     if (filters.stockTypes.size && !filters.stockTypes.has(r.stock_type ?? NONE)) return false
+    if (filters.sectors.size && !filters.sectors.has(r.sector ?? NONE)) return false
     if (!inRange(r.quality_score, filters.quality)) return false
     if (!inRange(r.moat_score, filters.moat)) return false
     if (!inRange(r.price_vs_fair_value_pct, filters.gap)) return false
@@ -512,6 +522,22 @@ export default function Database() {
                     />
                   </FilterHeader>
                 </th>
+                <th className="text-left py-2 px-2">
+                  <FilterHeader
+                    label={<span>Sector / Industry</span>}
+                    active={colActive.sector}
+                    open={openFilter === 'sector'}
+                    align="left"
+                    onToggle={() => toggleFilter('sector')}
+                  >
+                    <MultiSelectFilter
+                      options={sectorOptions}
+                      selected={filters.sectors}
+                      searchable
+                      onChange={s => setFilters(f => ({ ...f, sectors: s }))}
+                    />
+                  </FilterHeader>
+                </th>
                 <th className="text-right py-2 px-2">
                   <FilterHeader
                     label={<span className="cursor-pointer hover:text-slate-300 select-none" onClick={() => toggleSort('quality')}>Quality</span>}
@@ -576,6 +602,10 @@ export default function Database() {
                   </td>
                   <td className="py-2 text-slate-400 text-xs max-w-xs truncate">{r.company_name || '—'}</td>
                   <td className="py-2 px-2 text-xs text-slate-500 font-mono">{r.stock_type || '—'}</td>
+                  <td className="py-2 px-2 text-xs">
+                    <div className="text-slate-300">{r.sector || '—'}</div>
+                    {r.industry && <div className="text-slate-500 text-[11px]">{r.industry}</div>}
+                  </td>
                   <td className={`py-2 px-2 text-right font-mono text-xs ${qualityScoreColor(r.quality_score)}`}>
                     {r.quality_score != null ? r.quality_score.toFixed(1) : '—'}
                   </td>

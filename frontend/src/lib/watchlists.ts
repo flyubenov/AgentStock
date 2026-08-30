@@ -5,6 +5,7 @@ export type NumRange = { min: number | null; max: number | null }
 export interface SerializedFilters {
   tickers: string[]
   stockTypes: string[]
+  sectors: string[]
   quality: NumRange
   moat: NumRange
   gap: NumRange

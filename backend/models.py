@@ -25,6 +25,8 @@ class DatabaseRow(TickerResult):
     quality_score: float | None = None
     risk_reward_ratio: float | None = None
     moat_score: float | None = None
+    sector: str | None = None      # GICS sector (col T)
+    industry: str | None = None    # Yahoo industry, verbatim (col U)
 
 
 class JobStatus(BaseModel):

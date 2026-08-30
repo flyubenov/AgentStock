@@ -110,6 +110,7 @@ class ScreenerResult(BaseModel):
     moat_score: float | None = None
     moat_breakdown: dict = {}
     sector: str | None = None
+    industry: str | None = None
     sector_profile: str | None = None
     section_scores: dict[str, float | None] = {}
     metrics: dict = {}

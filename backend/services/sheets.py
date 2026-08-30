@@ -239,7 +239,7 @@ def _ensure_database_sheet(svc, sheet_id: str) -> None:
 
 
 def _row_to_database_row(row: list) -> DatabaseRow:
-    row = list(row) + [""] * (19 - len(row))  # pad to include col S (index 18)
+    row = list(row) + [""] * (21 - len(row))  # pad to include cols T/U (index 19/20)
 
     def safe_float(val):
         try:
@@ -259,6 +259,7 @@ def _row_to_database_row(row: list) -> DatabaseRow:
         fair_value_breakdown=breakdown, quality_score=safe_float(row[16]),
         risk_reward_ratio=safe_float(row[17]),
         moat_score=safe_float(row[18]),
+        sector=row[19] or None, industry=row[20] or None,
     )
 
 
@@ -268,7 +269,7 @@ def _read_database_sync() -> list[DatabaseRow]:
     try:
         result = _execute(svc.spreadsheets().values().get(
             spreadsheetId=sheet_id,
-            range="Database!A:S",      # A:R + the Moat Score mirror (S)
+            range="Database!A:U",      # A:R + Moat (S) + Sector (T) + Industry (U) mirrors
         ))
     except Exception as e:
         if "Unable to parse range" in str(e) or "400" in str(e):
