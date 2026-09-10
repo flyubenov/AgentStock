@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: ff5aa68d-fad4-41cf-828f-5e7f910be8af
-  modified: 2026-09-10T20:17:51.792Z
+  modified: 2026-09-10T20:25:37.813Z
 ---
 
 # FN validation + EV/EBITDA terminal-multiple temper (DONE on branch `ev-ebitda-terminal-multiple-temper`)
@@ -32,7 +32,7 @@ User asked to sweep op-margin vs ROIC and recommend. Added gross margin. **Sweep
 - **GROSS margin (16 movers) — WINNER, chosen:** immune to both. Every gross≥50% franchise = 0.0% (byte-unchanged). Moves FN −41.8% ($447, +7% vs price). **Of all 16 gross movers, FN is the ONLY verdict change** — all others already SELL (verdict-neutral: BWXT −59%→−68%, TSLA −87%→−89%, ETN −26%→−32%) or negligible (<2% at band edge: AAPL, AMD, SHOP). Band used GM_LO=0.25, GM_HI=0.50. **User said "go ahead with gross margin."**
 
 ## DESIGN (pinned, awaiting final approval)
-- **Signal:** trailing gross margin (`ScreenerMetrics.gross_margin_series[0]`, percent), sourced into `fin` in `engine.run()` beside existing WACC/ROIC sourcing (~line 799, failure-isolated; absent → no temper = identity/backward-compat).
+- **Signal:** trailing gross margin (`ScreenerMetrics.gross_margin_series[0]`, percent) (shipped as the scalar `met.gross_margin` — see SHIPPED below), sourced into `fin` in `engine.run()` beside existing WACC/ROIC sourcing (~line 799, failure-isolated; absent → no temper = identity/backward-compat).
 - **Action:** temper ONLY the `durable=True` branch of `_ev_ebitda_ceiling` (`models.py:206`): `ceiling = MATURE + q·(growth_ceiling − MATURE)`, `q = ramp(gross_margin, 0.25→0.50)`, `MATURE≈13x`. Spot-multiple path (EARLY_GROWTH/IREN) untouched. Reuses existing inline ramp shape.
 - **New constants:** MATURE_EBITDA_MULT (~13), GM_TEMPER_LO=0.25, GM_TEMPER_HI=0.50.
 - **Canaries verified unmoved:** KLAC, ANET, NBIS, IREN (IREN/NBIS on non-durable path). BWXT/ETN move but already SELL (verdict-neutral) — re-confirm in regression.

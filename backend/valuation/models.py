@@ -74,7 +74,10 @@ MATURE_MULTIPLE_FACTOR = (1 + TERMINAL_GROWTH) / (DISCOUNT_RATE - TERMINAL_GROWT
 # SBC/amortization, unlike op margin, and to capital structure, unlike ROIC) is
 # the franchise-vs-commodity discriminator; a full-universe sweep confirmed it
 # spares every high-gross franchise and moves only FN's verdict. FN 26x->~13x.
-MATURE_EBITDA_MULT = QUALITY_CONV_HI * MATURE_MULTIPLE_FACTOR  # 0.90 * 14.714 = 13.24x
+# Invariant: MATURE_EBITDA_MULT must stay below EV_EBITDA_CAP so the temper only ever
+# floors (lowers) the exit multiple, never inflates it — retuning DISCOUNT_RATE far
+# enough down could otherwise flip it.
+MATURE_EBITDA_MULT = QUALITY_CONV_HI * MATURE_MULTIPLE_FACTOR  # ~13x at the current DISCOUNT_RATE / TERMINAL_GROWTH
 GM_TEMPER_LO = 0.25
 GM_TEMPER_HI = 0.50
 EBITDA_CONV_FLOOR = 0.40

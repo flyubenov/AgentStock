@@ -546,6 +546,14 @@ def test_ev_ebitda_ceiling_spot_path_ignores_gross_margin():
     assert m._ev_ebitda_ceiling(0.30, durable=False, gross_margin=0.12) == pytest.approx(20.0)
 
 
+def test_ev_ebitda_ceiling_gross_margin_tempers_mega_too():
+    mature = m.QUALITY_CONV_HI * m.MATURE_MULTIPLE_FACTOR
+    # mega growth ceiling saturates at 25.0 (EV_EBITDA_CAP_CEIL_MEGA); thin gross -> tempered to MATURE.
+    assert m._ev_ebitda_ceiling(0.30, durable=True, mega=True, gross_margin=0.12) == pytest.approx(mature)
+    # high gross margin -> mega growth ceiling unchanged.
+    assert m._ev_ebitda_ceiling(0.30, durable=True, mega=True, gross_margin=0.80) == pytest.approx(25.0)
+
+
 def test_ev_ebitda_ceiling_ramps_with_growth():
     assert m._ev_ebitda_ceiling(0.05, durable=True) == pytest.approx(20.0)   # below G_LO
     assert m._ev_ebitda_ceiling(0.20, durable=True) == pytest.approx(25.0)   # midpoint
