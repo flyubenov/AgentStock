@@ -1,14 +1,14 @@
 ---
 name: fn-ev-ebitda-terminal-multiple-temper
-description: "IN-PROGRESS brainstorm (paused 2026-09-10, awaiting user): temper the uncompressed terminal EV/EBITDA multiple for thin-GROSS-margin forward-tier names. Signal CHOSEN (gross margin) + blast-radius swept; design pinned; next = pick MATURE anchor, write spec, TDD."
+description: "DONE (2026-09-10) on branch `ev-ebitda-terminal-multiple-temper`: tempers the uncompressed terminal EV/EBITDA multiple for thin-GROSS-margin forward-tier names. FN FV $769.56 (+82.6%) -> $448.37 (+11.0%). 557 tests pass. Franchise + non-durable canaries confirmed unmoved live."
 metadata: 
   node_type: memory
   type: project
   originSessionId: ff5aa68d-fad4-41cf-828f-5e7f910be8af
-  modified: 2026-09-09T21:14:55.174Z
+  modified: 2026-09-10T20:17:51.792Z
 ---
 
-# FN validation + EV/EBITDA terminal-multiple temper (brainstorm PAUSED, resume here)
+# FN validation + EV/EBITDA terminal-multiple temper (DONE on branch `ev-ebitda-terminal-multiple-temper`)
 
 **Session 2026-09-09/10.** User asked to validate FN (Fabrinet, NYSE:FN, GROWTH, optical contract manufacturer / EMS) — Quality/FV/Moat/R-R all "too high" — then to open a brainstorm to fix the FV mechanism. Brainstorm is mid-flight, **paused awaiting user approval of the design + a calibration choice.** No code changed yet (HARD GATE not crossed).
 
@@ -37,7 +37,11 @@ User asked to sweep op-margin vs ROIC and recommend. Added gross margin. **Sweep
 - **New constants:** MATURE_EBITDA_MULT (~13), GM_TEMPER_LO=0.25, GM_TEMPER_HI=0.50.
 - **Canaries verified unmoved:** KLAC, ANET, NBIS, IREN (IREN/NBIS on non-durable path). BWXT/ETN move but already SELL (verdict-neutral) — re-confirm in regression.
 
-## NEXT STEPS (resume here)
-1. **User to decide MATURE anchor:** 13x → FN +7% (fair); 14–15x → FN keeps modest ~+15–25% premium (reflects real 44% growth). (Also minor: band top 0.50→0.45 to zero out AAPL's −1.6%.)
-2. Then: write spec to `docs/superpowers/specs/2026-09-XX-ev-ebitda-terminal-multiple-temper-design.md` → user reviews → `superpowers:writing-plans` → TDD (`superpowers:test-driven-development`). Establish green first; re-validate FN + canaries after.
-3. Architectural path (new constant/mechanism, shared models.py). Record fix in memory when landed.
+## SHIPPED (2026-09-10, branch `ev-ebitda-terminal-multiple-temper`, 3-task SDD)
+- **Task 1** (`backend/valuation/models.py`): `_ev_ebitda_ceiling` durable branch tempered by gross margin. Constants: `MATURE_EBITDA_MULT = QUALITY_CONV_HI * MATURE_MULTIPLE_FACTOR` (≈13.24x), `GM_TEMPER_LO = 0.25`, `GM_TEMPER_HI = 0.50`. Spot-multiple path (EARLY_GROWTH/IREN) untouched; `gross_margin=None` is a full no-op (identity, backward-compat).
+- **Task 2** (`backend/valuation/models.py`): `calc_ev_ebitda` reads `fin.get("gross_margin")` (percent) and passes it to `_ev_ebitda_ceiling` as a fraction (÷100), durable leg only.
+- **Task 3** (`backend/valuation/engine.py`, ~line 802): `fin["gross_margin"] = met.gross_margin` sourced inside the existing failure-isolated screener-signal `try:` block (beside `wacc`/`roic_wacc_spread`/`roic_5y_avg`) — dormant until this line, now live.
+- **Full regression:** 557 backend tests pass (`python3 -m pytest` from `backend/`).
+- **Live re-validation (FN, the target):** fair_value **$769.56 (+82.6%) → $448.37 (+11.0%)** — within the predicted $440–460 / +5–10% band. EV/EBITDA terminal multiple floored from ~26x toward the ~13.2x mature anchor.
+- **Live canaries confirmed unmoved:** CDNS $229.84 (−19.3%), NOW $115.42 (−12.0%), KLAC $94.13 (−46.9%), ANET $147.12 (−22.2%) — all high-gross-margin franchises, byte-consistent with pre-change behavior (no durable temper applied). NBIS $72.70 (−68.1%, non-durable path, unaffected by design). IREN `fair_value: null` both before and after (pre-existing unrelated failure — "composite fair value non-positive", IREN misclassified FINANCIALS — confirmed identical via git-stash A/B, not caused by this change).
+- No concerns; scope held to multiple-temper only (WDC-base + CF stay separate per-memory WATCH items, untouched).
