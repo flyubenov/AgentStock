@@ -512,6 +512,48 @@ def test_ev_ebitda_durable_median_trimmed_to_terminal_ceiling():
     assert over == pytest.approx(at_ceiling)
 
 
+def test_ev_ebitda_ceiling_tempered_by_thin_gross_margin():
+    # A thin-gross-margin commodity name (12%) growing fast still gets a 30x
+    # growth ceiling today; the temper floors it to the mature anchor instead.
+    mature = m.QUALITY_CONV_HI * m.MATURE_MULTIPLE_FACTOR
+    assert m._ev_ebitda_ceiling(0.30, durable=True, gross_margin=0.12) == pytest.approx(mature)
+    assert m.MATURE_EBITDA_MULT == pytest.approx(mature)
+
+
+def test_ev_ebitda_ceiling_gross_margin_franchise_unchanged():
+    # High gross margin (>= GM_TEMPER_HI) -> no temper -> today's growth ceiling.
+    assert m._ev_ebitda_ceiling(0.30, durable=True, gross_margin=0.80) == pytest.approx(30.0)
+
+
+def test_ev_ebitda_ceiling_gross_margin_none_is_identity():
+    # Missing gross margin -> identity fallback (byte-identical to pre-temper).
+    assert m._ev_ebitda_ceiling(0.30, durable=True, gross_margin=None) == pytest.approx(30.0)
+    assert m._ev_ebitda_ceiling(0.20, durable=True, gross_margin=None) == pytest.approx(25.0)
+
+
+def test_ev_ebitda_ceiling_gross_margin_ramps_between_anchors():
+    # Midpoint gross (0.375) -> half-way between MATURE and the growth ceiling.
+    mature = m.QUALITY_CONV_HI * m.MATURE_MULTIPLE_FACTOR
+    expected = mature + 0.5 * (30.0 - mature)
+    assert m._ev_ebitda_ceiling(0.30, durable=True, gross_margin=0.375) == pytest.approx(expected)
+    # Band edges.
+    assert m._ev_ebitda_ceiling(0.30, durable=True, gross_margin=0.25) == pytest.approx(mature)
+    assert m._ev_ebitda_ceiling(0.30, durable=True, gross_margin=0.50) == pytest.approx(30.0)
+
+
+def test_ev_ebitda_ceiling_spot_path_ignores_gross_margin():
+    # Non-durable (spot) multiple path is untouched: always EV_EBITDA_CAP.
+    assert m._ev_ebitda_ceiling(0.30, durable=False, gross_margin=0.12) == pytest.approx(20.0)
+
+
+def test_ev_ebitda_ceiling_gross_margin_tempers_mega_too():
+    mature = m.QUALITY_CONV_HI * m.MATURE_MULTIPLE_FACTOR
+    # mega growth ceiling saturates at 25.0 (EV_EBITDA_CAP_CEIL_MEGA); thin gross -> tempered to MATURE.
+    assert m._ev_ebitda_ceiling(0.30, durable=True, mega=True, gross_margin=0.12) == pytest.approx(mature)
+    # high gross margin -> mega growth ceiling unchanged.
+    assert m._ev_ebitda_ceiling(0.30, durable=True, mega=True, gross_margin=0.80) == pytest.approx(25.0)
+
+
 def test_ev_ebitda_ceiling_ramps_with_growth():
     assert m._ev_ebitda_ceiling(0.05, durable=True) == pytest.approx(20.0)   # below G_LO
     assert m._ev_ebitda_ceiling(0.20, durable=True) == pytest.approx(25.0)   # midpoint
@@ -852,3 +894,30 @@ def test_book_legs_absent_mos_identical_to_today():
     rim = {"book_value_per_share": 10.0, "eps_ttm": 1.0}
     assert m.calc_rim(rim, GROWTH)["fair_value"] == pytest.approx(
         m.calc_rim({**rim, "mos": m.MOS}, GROWTH)["fair_value"])
+
+
+def test_calc_ev_ebitda_thin_gross_margin_tempers_leg():
+    # Forward-tier durable leg: a thin-gross-margin name's exit multiple is
+    # floored to the mature anchor, lowering the leg vs an untempered run.
+    base = {"ebitda_ttm": 1_000_000, "shares_outstanding": 1_000, "net_debt": 0,
+            "revenue_growth": 0.44, "market_cap": 15_000_000_000}
+    scen = {"optimistic": 0.35, "realistic": 0.25, "pessimistic": 0.13}
+    none_gm = m.calc_ev_ebitda(base, scen, hist_multiple=26.0, compress=False)["fair_value"]
+    franchise = m.calc_ev_ebitda({**base, "gross_margin": 80.0}, scen,
+                                 hist_multiple=26.0, compress=False)["fair_value"]
+    commodity = m.calc_ev_ebitda({**base, "gross_margin": 12.0}, scen,
+                                 hist_multiple=26.0, compress=False)["fair_value"]
+    # High gross margin -> identical to the no-gross-margin run.
+    assert franchise == pytest.approx(none_gm)
+    # Thin gross margin -> tempered lower.
+    assert commodity < none_gm
+
+
+def test_calc_ev_ebitda_gross_margin_only_affects_durable_leg():
+    # Spot (non-durable, no hist_multiple) multiple path is untouched by gross margin.
+    base = {"ebitda_ttm": 1_000_000, "shares_outstanding": 1_000, "net_debt": 0,
+            "revenue_growth": 0.44, "market_cap": 15_000_000_000, "ev_ebitda": 26.0}
+    scen = {"optimistic": 0.35, "realistic": 0.25, "pessimistic": 0.13}
+    no_gm = m.calc_ev_ebitda(base, scen, compress=False)["fair_value"]
+    thin = m.calc_ev_ebitda({**base, "gross_margin": 12.0}, scen, compress=False)["fair_value"]
+    assert thin == pytest.approx(no_gm)

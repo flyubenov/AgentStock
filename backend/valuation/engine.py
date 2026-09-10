@@ -799,6 +799,7 @@ async def run(ticker: str) -> TickerResult:
             fin["wacc"] = met.wacc
             fin["roic_wacc_spread"] = met.roic_wacc_spread
             fin["roic_5y_avg"] = met.roic_5y_avg
+            fin["gross_margin"] = met.gross_margin
     except Exception:
         pass
 
