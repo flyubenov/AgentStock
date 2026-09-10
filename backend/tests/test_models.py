@@ -886,3 +886,30 @@ def test_book_legs_absent_mos_identical_to_today():
     rim = {"book_value_per_share": 10.0, "eps_ttm": 1.0}
     assert m.calc_rim(rim, GROWTH)["fair_value"] == pytest.approx(
         m.calc_rim({**rim, "mos": m.MOS}, GROWTH)["fair_value"])
+
+
+def test_calc_ev_ebitda_thin_gross_margin_tempers_leg():
+    # Forward-tier durable leg: a thin-gross-margin name's exit multiple is
+    # floored to the mature anchor, lowering the leg vs an untempered run.
+    base = {"ebitda_ttm": 1_000_000, "shares_outstanding": 1_000, "net_debt": 0,
+            "revenue_growth": 0.44, "market_cap": 15_000_000_000}
+    scen = {"optimistic": 0.35, "realistic": 0.25, "pessimistic": 0.13}
+    none_gm = m.calc_ev_ebitda(base, scen, hist_multiple=26.0, compress=False)["fair_value"]
+    franchise = m.calc_ev_ebitda({**base, "gross_margin": 80.0}, scen,
+                                 hist_multiple=26.0, compress=False)["fair_value"]
+    commodity = m.calc_ev_ebitda({**base, "gross_margin": 12.0}, scen,
+                                 hist_multiple=26.0, compress=False)["fair_value"]
+    # High gross margin -> identical to the no-gross-margin run.
+    assert franchise == pytest.approx(none_gm)
+    # Thin gross margin -> tempered lower.
+    assert commodity < none_gm
+
+
+def test_calc_ev_ebitda_gross_margin_only_affects_durable_leg():
+    # Spot (non-durable, no hist_multiple) multiple path is untouched by gross margin.
+    base = {"ebitda_ttm": 1_000_000, "shares_outstanding": 1_000, "net_debt": 0,
+            "revenue_growth": 0.44, "market_cap": 15_000_000_000, "ev_ebitda": 26.0}
+    scen = {"optimistic": 0.35, "realistic": 0.25, "pessimistic": 0.13}
+    no_gm = m.calc_ev_ebitda(base, scen, compress=False)["fair_value"]
+    thin = m.calc_ev_ebitda({**base, "gross_margin": 12.0}, scen, compress=False)["fair_value"]
+    assert thin == pytest.approx(no_gm)

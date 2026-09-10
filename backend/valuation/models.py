@@ -442,8 +442,12 @@ def calc_ev_ebitda(fin: dict, growth: dict, hist_multiple: float | None = None,
     fcf_ttm, ebitda_ttm = fin.get("fcf_ttm"), fin.get("ebitda_ttm")
     conversion = (fcf_ttm / ebitda_ttm
                   if (fcf_ttm is not None and ebitda_ttm and ebitda_ttm > 0) else None)
+    # Gross margin (percent in fin) -> fraction for the thin-gross-margin temper.
+    gm = fin.get("gross_margin")
+    gm_frac = gm / 100.0 if gm is not None else None
     multiple = min(multiple, _ev_ebitda_ceiling(
-        g_demo, durable=hist_multiple is not None, mega=mega, conversion=conversion))
+        g_demo, durable=hist_multiple is not None, mega=mega, conversion=conversion,
+        gross_margin=gm_frac))
     fcf = fin.get("fcf_ttm")
     if compress and fcf is not None and ebitda > 0:
         conversion = fcf / ebitda
