@@ -512,6 +512,40 @@ def test_ev_ebitda_durable_median_trimmed_to_terminal_ceiling():
     assert over == pytest.approx(at_ceiling)
 
 
+def test_ev_ebitda_ceiling_tempered_by_thin_gross_margin():
+    # A thin-gross-margin commodity name (12%) growing fast still gets a 30x
+    # growth ceiling today; the temper floors it to the mature anchor instead.
+    mature = m.QUALITY_CONV_HI * m.MATURE_MULTIPLE_FACTOR
+    assert m._ev_ebitda_ceiling(0.30, durable=True, gross_margin=0.12) == pytest.approx(mature)
+    assert m.MATURE_EBITDA_MULT == pytest.approx(mature)
+
+
+def test_ev_ebitda_ceiling_gross_margin_franchise_unchanged():
+    # High gross margin (>= GM_TEMPER_HI) -> no temper -> today's growth ceiling.
+    assert m._ev_ebitda_ceiling(0.30, durable=True, gross_margin=0.80) == pytest.approx(30.0)
+
+
+def test_ev_ebitda_ceiling_gross_margin_none_is_identity():
+    # Missing gross margin -> identity fallback (byte-identical to pre-temper).
+    assert m._ev_ebitda_ceiling(0.30, durable=True, gross_margin=None) == pytest.approx(30.0)
+    assert m._ev_ebitda_ceiling(0.20, durable=True, gross_margin=None) == pytest.approx(25.0)
+
+
+def test_ev_ebitda_ceiling_gross_margin_ramps_between_anchors():
+    # Midpoint gross (0.375) -> half-way between MATURE and the growth ceiling.
+    mature = m.QUALITY_CONV_HI * m.MATURE_MULTIPLE_FACTOR
+    expected = mature + 0.5 * (30.0 - mature)
+    assert m._ev_ebitda_ceiling(0.30, durable=True, gross_margin=0.375) == pytest.approx(expected)
+    # Band edges.
+    assert m._ev_ebitda_ceiling(0.30, durable=True, gross_margin=0.25) == pytest.approx(mature)
+    assert m._ev_ebitda_ceiling(0.30, durable=True, gross_margin=0.50) == pytest.approx(30.0)
+
+
+def test_ev_ebitda_ceiling_spot_path_ignores_gross_margin():
+    # Non-durable (spot) multiple path is untouched: always EV_EBITDA_CAP.
+    assert m._ev_ebitda_ceiling(0.30, durable=False, gross_margin=0.12) == pytest.approx(20.0)
+
+
 def test_ev_ebitda_ceiling_ramps_with_growth():
     assert m._ev_ebitda_ceiling(0.05, durable=True) == pytest.approx(20.0)   # below G_LO
     assert m._ev_ebitda_ceiling(0.20, durable=True) == pytest.approx(25.0)   # midpoint

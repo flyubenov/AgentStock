@@ -65,6 +65,18 @@ EV_EBITDA_CAP_G_HI = 0.30
 QUALITY_CONV_LO = 0.65
 QUALITY_CONV_HI = 0.90
 MATURE_MULTIPLE_FACTOR = (1 + TERMINAL_GROWTH) / (DISCOUNT_RATE - TERMINAL_GROWTH)  # = 14.714...
+# Thin-gross-margin terminal-multiple temper (see 2026-09-10 spec). A durable
+# forward-tier multiple is blended toward MATURE_EBITDA_MULT as gross margin
+# falls from GM_TEMPER_HI (franchise, no temper) to GM_TEMPER_LO (commodity,
+# full temper). The anchor is DERIVED, not tuned to any ticker: a matured
+# business whose growth-capex has ended converts ~QUALITY_CONV_HI of EBITDA to
+# cash, capitalized at the model's own Gordon factor. Gross margin (immune to
+# SBC/amortization, unlike op margin, and to capital structure, unlike ROIC) is
+# the franchise-vs-commodity discriminator; a full-universe sweep confirmed it
+# spares every high-gross franchise and moves only FN's verdict. FN 26x->~13x.
+MATURE_EBITDA_MULT = QUALITY_CONV_HI * MATURE_MULTIPLE_FACTOR  # 0.90 * 14.714 = 13.24x
+GM_TEMPER_LO = 0.25
+GM_TEMPER_HI = 0.50
 EBITDA_CONV_FLOOR = 0.40
 EBITDA_CONV_CAP = 0.65
 MATURE_EV_SALES = 2.0
@@ -204,11 +216,13 @@ def _null_result(has_scenarios: bool) -> dict:
 
 
 def _ev_ebitda_ceiling(growth: float | None, durable: bool, mega: bool = False,
-                       conversion: float | None = None) -> float:
-    """Growth/quality-coupled ceiling for the EV/EBITDA exit multiple (see EV_EBITDA_CAP_CEIL).
-    Returns the flat EV_EBITDA_CAP for a spot (non-durable) trailing multiple. For a durable
-    historical median the ceiling ramps toward the terminal top (EV_EBITDA_CAP_CEIL_MEGA for a
-    mega-cap, else EV_EBITDA_CAP_CEIL) on the GREATER of two fractions:
+                       conversion: float | None = None,
+                       gross_margin: float | None = None) -> float:
+    """Growth/quality-coupled ceiling for the EV/EBITDA exit multiple, tempered by gross margin for
+    thin-margin commodity names (see EV_EBITDA_CAP_CEIL). Returns the flat EV_EBITDA_CAP for a spot
+    (non-durable) trailing multiple. For a durable historical median the ceiling ramps toward the
+    terminal top (EV_EBITDA_CAP_CEIL_MEGA for a mega-cap, else EV_EBITDA_CAP_CEIL) on the GREATER
+    of two fractions:
       - growth:  demonstrated revenue growth from EV_EBITDA_CAP_G_LO to _G_HI, and
       - quality: FCF/EBITDA conversion from QUALITY_CONV_LO to QUALITY_CONV_HI.
     A durable high-conversion franchise thus keeps its premium multiple even at a modest growth
@@ -221,7 +235,14 @@ def _ev_ebitda_ceiling(growth: float | None, durable: bool, mega: bool = False,
     q_frac = 0.0
     if conversion is not None and QUALITY_CONV_HI > QUALITY_CONV_LO:
         q_frac = max(0.0, min(1.0, (conversion - QUALITY_CONV_LO) / (QUALITY_CONV_HI - QUALITY_CONV_LO)))
-    return EV_EBITDA_CAP + max(g_frac, q_frac) * (top - EV_EBITDA_CAP)
+    growth_ceiling = EV_EBITDA_CAP + max(g_frac, q_frac) * (top - EV_EBITDA_CAP)
+    # Thin-gross-margin temper: blend the growth ceiling toward the mature anchor
+    # by a gross-margin quality fraction (identity when gross margin is unknown).
+    if gross_margin is None:
+        return growth_ceiling
+    gm_frac = (0.0 if gross_margin <= GM_TEMPER_LO
+               else min(1.0, (gross_margin - GM_TEMPER_LO) / (GM_TEMPER_HI - GM_TEMPER_LO)))
+    return MATURE_EBITDA_MULT + gm_frac * (growth_ceiling - MATURE_EBITDA_MULT)
 
 
 def _compressed_exit_multiple(current_mult: float, conversion: float, conv_lo: float, conv_hi: float) -> float:
