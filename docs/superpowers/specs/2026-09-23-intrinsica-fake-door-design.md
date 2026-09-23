@@ -355,6 +355,29 @@ One event per funnel step, each carrying `visitor_id` and a timestamp:
 - De-duplicate server-side by `visitor_id`; `localStorage` is a convenience, never the source
   of truth.
 
+**This list is the whole of it — there is no blanket click or scroll tracking.** Deliberately
+not instrumented: scroll depth, nav-link clicks, hovers and tooltip opens, calibration row
+expands, individual breakdown tab switches, and the **billing toggle** (decided 2026-09-23 —
+the annual/monthly shopping behaviour is not worth the noise; `plan_selected` already carries
+the billing period actually chosen). Every extra event has to be de-duplicated and reasoned
+about, and broad capture on a page with no accounts is a privacy liability with no payoff.
+
+**Backend (decided 2026-09-23):** events post to **`POST /api/events`** on the existing
+FastAPI app — a new `backend/routers/events.py` registered like the other routers
+(`app.include_router(events_router, prefix="/api")`), taking a small Pydantic body
+(`event`, `visitor_id`, `ts`, `props`). It is fire-and-forget from the client: a failed post
+must never block or break the funnel, and the endpoint always returns quickly.
+
+Storage follows the existing persistence pattern (`backend/services/*_sheets.py` → Google
+Sheets), appending one row per event to an events sheet — adequate for smoke-test volumes and
+immediately analysable in a spreadsheet. Two caveats for the implementation plan: Sheets has
+write rate limits, so appends should be **batched / queued rather than one API call per
+event**; and if volume makes that awkward, swap the sink for a local append-only file or
+SQLite table behind the same endpoint — the route and payload stay unchanged either way.
+
+Abandonment is **derived**, not logged: `checkout_started` minus `payment_button_clicked` for
+the same `visitor_id` is the final-step drop-off, so both events must fire reliably.
+
 ## 10. Demo limits and abuse
 
 - Tasting stays **login-free** — forcing registration would depress the very signal being
