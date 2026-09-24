@@ -46,7 +46,12 @@ def _append_sync(rows: list[list[str]]) -> None:
 
 
 async def record_event(ev: AnalyticsEvent) -> None:
-    """Queue one event. Flushes automatically once a batch has accumulated."""
+    """Queue one event. Flushes automatically once a batch has accumulated.
+
+    Returning normally means the event was accepted and queued — not that it
+    was confirmed written to Sheets. flush_events() swallows sink failures and
+    requeues, so a queued row survives an outage and goes out on a later flush.
+    """
     async with _lock:
         _queue.append(_to_row(ev))
         ready = len(_queue) >= _BATCH_SIZE
