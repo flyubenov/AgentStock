@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, waitFor, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import LandingPage from './LandingPage'
+import LandingPage, { FETCH_TIMEOUT_MS } from './LandingPage'
 import Layout from '../components/Layout'
 
 vi.mock('../lib/analytics', () => ({
@@ -91,6 +91,55 @@ describe('LandingPage analyze (controller addition)', () => {
     await waitFor(() => {
       expect(screen.getByText(serverMessage)).toBeInTheDocument()
     })
+  })
+})
+
+describe('LandingPage analyze (fix round 2)', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('aborts a fetch that never settles: readable notice, button re-enabled', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('fetch', vi.fn((_url: string, opts: RequestInit) => new Promise((_resolve, reject) => {
+      // Never resolves on its own — only reacts to the abort signal, exactly
+      // like a stalled connection that never delivers a response.
+      opts.signal?.addEventListener('abort', () => {
+        reject(new DOMException('The operation was aborted.', 'AbortError'))
+      })
+    })))
+
+    render(<MemoryRouter><LandingPage /></MemoryRouter>)
+    // The mount's automatic sample analyze has already set busy synchronously
+    // (see LandingPage.tsx: setBusy(true) runs before the first await), so the
+    // button reads its busy label immediately, before the timeout ever fires.
+    expect(screen.getByRole('button', { name: 'Analyzing…' })).toBeInTheDocument()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(FETCH_TIMEOUT_MS)
+    })
+
+    expect(screen.getByText(
+      'The analysis is taking longer than expected. Please try again.'
+    )).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Analyze →' })).toBeInTheDocument()
+    expect((screen.getByRole('button', { name: 'Analyze →' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('does not let a missing results field overwrite the server error', async () => {
+    const serverMessage = 'A specific, server-written error message.'
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      // `results` is deliberately absent — the backend always sends it, but this
+      // proves a malformed response can't silently clobber the server's error
+      // with the generic "could not be reached" fallback.
+      json: async () => ({ invalid: [], error: serverMessage }),
+    }))
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByText(serverMessage)).toBeInTheDocument()
+    })
+    expect(screen.queryByText('The analysis could not be reached. Please try again.'))
+      .not.toBeInTheDocument()
   })
 })
 
