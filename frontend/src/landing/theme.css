@@ -52,3 +52,39 @@
 .intrinsica .footer .legal:last-child, .intrinsica .footer .sec:last-child { margin-bottom: 0; }
 @media (max-width: 700px) { .intrinsica .links { gap: 12px; } .intrinsica .section { padding: 36px 0; }
   .intrinsica .footer { padding: 28px 0; } }
+
+/* Hero: brand, the four assessments and the analyzer input. */
+.intrinsica .hero { padding: 64px 0 48px; text-align: center; }
+.intrinsica .hero .brand { font-family: var(--fh); font-weight: 700; font-size: 15px;
+  color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; }
+.intrinsica .hero .h3 { font-family: var(--fh); font-weight: 700; font-size: 40px;
+  line-height: 1.15; margin: 10px 0 8px; color: var(--text); }
+.intrinsica .hero .sub { color: var(--dim); font-size: 16px; max-width: 620px;
+  margin: 18px auto 32px; }
+
+.intrinsica .assess4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+  margin: 32px 0; text-align: left; }
+.intrinsica .assess4 .it { display: flex; flex-direction: column; gap: 8px;
+  background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 16px;
+  cursor: pointer; font-family: inherit; text-align: left; }
+.intrinsica .assess4 .it:hover { border-color: var(--accent); }
+.intrinsica .assess4 .nm { display: flex; align-items: center; gap: 8px;
+  font-family: var(--fh); font-weight: 600; font-size: 14px; color: var(--text); }
+.intrinsica .assess4 .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.intrinsica .assess4 .go { margin-left: auto; color: var(--mute); }
+.intrinsica .assess4 .q { font-size: 13px; color: var(--mute); line-height: 1.45; }
+
+.intrinsica .analyzer { max-width: 640px; margin: 0 auto; }
+.intrinsica .an-row { display: flex; gap: 10px; }
+.intrinsica .an-field { flex: 1; }
+.intrinsica .an-field input { width: 100%; box-sizing: border-box; padding: 12px 14px;
+  border: 1px solid var(--line); border-radius: 8px; font-size: 15px; font-family: var(--fb);
+  color: var(--text); background: #fff; }
+.intrinsica .an-field input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.intrinsica .an-btn { background: var(--accent); color: #fff; border: none; border-radius: 8px;
+  padding: 12px 20px; font-size: 15px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.intrinsica .an-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.intrinsica .an-error { color: var(--neg); font-size: 13px; margin-top: 10px; }
+.intrinsica .notice { color: var(--dim); font-size: 14px; text-align: center; margin: 0 0 24px; }
+@media (max-width: 700px) { .intrinsica .assess4 { grid-template-columns: repeat(2, 1fr); }
+  .intrinsica .an-row { flex-direction: column; } }

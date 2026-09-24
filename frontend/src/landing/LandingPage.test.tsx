@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import LandingPage from './LandingPage'
 import Layout from '../components/Layout'
@@ -7,8 +7,18 @@ import Layout from '../components/Layout'
 vi.mock('../lib/analytics', () => ({
   track: vi.fn(),
   visitorId: () => 'v-test',
-  EVENTS: { pageView: 'page_view' },
+  EVENTS: {
+    pageView: 'page_view',
+    analysisStarted: 'analysis_started',
+    analysisCompleted: 'analysis_completed',
+  },
 }))
+
+beforeEach(() => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+    json: async () => ({ results: [], invalid: [], error: null }),
+  }))
+})
 
 function renderPage() {
   return render(<MemoryRouter><LandingPage /></MemoryRouter>)
@@ -51,6 +61,19 @@ describe('LandingPage shell', () => {
   it('never renders the analyst app nav — the landing page renders outside Layout', () => {
     renderPage()
     expect(screen.queryByText('Database')).not.toBeInTheDocument()
+  })
+})
+
+describe('LandingPage analyze (controller addition)', () => {
+  it('renders the server error verbatim, not a locally generated message', async () => {
+    const serverMessage = 'The analysis service is temporarily overloaded. Please try again in a minute.'
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      json: async () => ({ results: [], invalid: [], error: serverMessage }),
+    }))
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByText(serverMessage)).toBeInTheDocument()
+    })
   })
 })
 
