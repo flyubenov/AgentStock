@@ -34,7 +34,7 @@ export default function TickerDetail() {
   if (!result) {
     return (
       <div className="text-slate-500 text-center py-20">
-        Result not found. <Link to="/" className="text-blue-400">Go home</Link>.
+        Result not found. <Link to="/app" className="text-blue-400">Go home</Link>.
       </div>
     )
   }

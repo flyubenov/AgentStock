@@ -48,7 +48,7 @@ export default function Results() {
 
   if (!results.length) return (
     <div className="text-slate-500 text-center py-20">
-      No results. <Link to="/" className="text-blue-400">Run a new calculation</Link>.
+      No results. <Link to="/app" className="text-blue-400">Run a new calculation</Link>.
     </div>
   )
 

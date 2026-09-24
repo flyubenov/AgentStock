@@ -483,7 +483,7 @@ export default function Database() {
 
       {results.length === 0 ? (
         <div className="text-slate-500 text-center py-20">
-          No records yet. <Link to="/" className="text-blue-400">Run a calculation</Link>.
+          No records yet. <Link to="/app" className="text-blue-400">Run a calculation</Link>.
         </div>
       ) : (
         <div className="bg-[#16161e] border border-[#1e1e2a] rounded-lg overflow-x-auto">

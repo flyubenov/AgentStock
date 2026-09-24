@@ -1,0 +1,46 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
+
+/* Scoped to .intrinsica so the existing dark analyst app is untouched. */
+.intrinsica {
+  --bg: #ffffff;
+  --stage: #f7f8fb;
+  --text: #0f1222;
+  --dim: #454b63;
+  --mute: #7b819a;
+  --line: #e6e8f0;
+  --accent: #4f46e5;
+  --accent-soft: #eef0fe;
+  --q: #22c55e;
+  --mo: #3b82f6;
+  --fv: #4f46e5;
+  --rr: #f59e0b;
+  --pos: #16a34a;
+  --warn: #d97706;
+  --neg: #dc2626;
+  --fh: 'Space Grotesk', system-ui, sans-serif;
+  --fb: 'Inter', system-ui, sans-serif;
+  --fm: 'JetBrains Mono', monospace;
+
+  /* Do not rely on inheriting anything from body/:root — index.css sets both to a
+   * global dark theme, and this page is the one exception that must render light,
+   * including native controls (inputs, carets, scrollbars, focus rings). */
+  color-scheme: light;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--fb);
+  min-height: 100vh;
+}
+
+.intrinsica h1, .intrinsica h2, .intrinsica h3, .intrinsica h4 { font-family: var(--fh); }
+.intrinsica .section { padding: 56px 0; }
+.intrinsica .section.stage { background: var(--stage); }
+.intrinsica .container { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+.intrinsica .nav { position: sticky; top: 0; z-index: 20; background: rgba(255,255,255,.92);
+  backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+.intrinsica .nav-in { max-width: 1120px; margin: 0 auto; padding: 12px 16px;
+  display: flex; align-items: center; justify-content: space-between; }
+.intrinsica .links { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
+.intrinsica .links a { color: var(--dim); text-decoration: none; font-size: 14px; cursor: pointer; }
+.intrinsica .links a:hover { color: var(--text); }
+.intrinsica .links a.cta { background: var(--accent); color: #fff; border-radius: 8px; padding: 7px 14px; }
+@media (max-width: 700px) { .intrinsica .links { gap: 12px; } .intrinsica .section { padding: 36px 0; } }

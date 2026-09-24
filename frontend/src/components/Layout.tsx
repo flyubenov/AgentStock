@@ -9,7 +9,7 @@ export default function Layout({ children }: LayoutProps) {
   const { pathname } = useLocation()
 
   const navItems = [
-    { href: '/', label: 'Analyse' },
+    { href: '/app', label: 'Analyse' },
     { href: '/database', label: 'Database' },
   ]
 
