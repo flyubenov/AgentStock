@@ -8,7 +8,7 @@ from routers.watchlists import router as watchlists_router
 
 load_dotenv()
 
-app = FastAPI(title="Fair Value Batch Calculator")
+app = FastAPI(title="Intrinsica")
 
 # Comma-separated list of allowed frontend origins. Defaults to the local Vite
 # dev server; set CORS_ORIGINS to the deployed frontend URL(s) in the cloud

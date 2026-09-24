@@ -1,6 +1,6 @@
-# Deploying Agent Stock
+# Deploying Intrinsica
 
-Agent Stock is two deployables from this one repo:
+Intrinsica is two deployables from this one repo:
 
 - **Backend** (`backend/`) — a **persistent** FastAPI/uvicorn process. It streams
   Server-Sent Events (the live recalc progress) and runs in-process worker pools,
