@@ -6,6 +6,7 @@ from routers.analysis import router as analysis_router
 from routers.database import router as database_router
 from routers.watchlists import router as watchlists_router
 from routers.events import router as events_router
+from routers.landing import router as landing_router
 
 load_dotenv()
 
@@ -29,6 +30,7 @@ app.include_router(analysis_router, prefix="/api")
 app.include_router(database_router, prefix="/api")
 app.include_router(watchlists_router, prefix="/api")
 app.include_router(events_router, prefix="/api")
+app.include_router(landing_router, prefix="/api")
 
 
 @app.get("/api/health")
