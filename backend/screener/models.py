@@ -124,6 +124,7 @@ class ScreenerResult(BaseModel):
     industry: str | None = None
     sector_profile: str | None = None
     section_scores: dict[str, float | None] = {}
+    metric_details: dict = {}
     metrics: dict = {}
     score_breakdown: dict = {}
     status: Literal["completed", "failed"] = "completed"
