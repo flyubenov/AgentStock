@@ -276,12 +276,12 @@ def _section_iii_details(m: ScreenerMetrics, profile: str, heavy_capex: bool = F
         # Capex is deliberately consuming FCF, so the FCF-derived coverage/leverage
         # metrics are unrepresentative -> judge the balance sheet on EBITDA leverage.
         ndf, ndf_by = None, ndf_by or "Heavy capex cycle"
-        ocf, ocf_by = None, "Heavy capex cycle"
+        ocf, ocf_by = None, ocf_by or "Heavy capex cycle"
     # Balance-Sheet Dual-Check: FCF-based debt looks far worse than EBITDA-based
     # AND EBITDA leverage is healthy (<2.5) -> treat ND/FCF as capex-cycle noise.
     elif (nde is not None and ndf is not None and m.net_debt_ebitda is not None
             and m.net_debt_ebitda < 2.5 and ndf < nde - 2):
-        ndf, ndf_by = None, "Balance-sheet dual-check"   # drop the noisy metric
+        ndf, ndf_by = None, ndf_by or "Balance-sheet dual-check"  # drop the noisy metric
     return [
         _detail("Net debt / EBITDA", m.net_debt_ebitda, nde, nde_by),
         _detail("Net debt / FCF", m.net_debt_fcf, ndf, ndf_by),
