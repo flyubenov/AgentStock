@@ -102,6 +102,17 @@ class ScreenerMetrics(BaseModel):
     sector: str | None = None
 
 
+class MetricDetail(BaseModel):
+    """One scored metric inside a Quality section. `score` is None exactly when the
+    metric was excluded or its input was missing — the same condition `_mean` skips,
+    which is what keeps the section score and this list in agreement."""
+    label: str
+    raw: float | None = None
+    score: float | None = None
+    excluded: bool = False
+    excluded_by: str | None = None
+
+
 class ScreenerResult(BaseModel):
     ticker: str
     company_name: str | None = None
