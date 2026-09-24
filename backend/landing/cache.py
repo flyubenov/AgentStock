@@ -8,7 +8,7 @@ from collections import OrderedDict
 from datetime import datetime, timezone
 
 from orchestrator.batch import _run_one_guarded
-from services.yahoo import fetch_ticker_info
+from services.yahoo import fetch_quote
 from risk_reward.data import fetch_risk_reward_inputs
 from risk_reward.scoring import build_metric_scores, aggregate
 from risk_reward.models import RiskRewardInputs, RiskRewardResult
@@ -121,12 +121,18 @@ async def _refresh_fast(slow_entry: dict) -> tuple[float | None, dict | None]:
     """One quote fetch (a single call) plus the existing, un-duplicated pure scoring
     (build_metric_scores + aggregate) re-run on a price-refreshed copy of the cached
     RiskRewardInputs -- one cheap call instead of risk_reward.engine.run's full
-    three-call fetch."""
+    three-call fetch.
+
+    Uses services.yahoo.fetch_quote, not fetch_ticker_info: fetch_ticker_info's
+    underlying fetch is @lru_cache'd forever per process (see its docstring), so a
+    15-minute refresh built on it would silently keep re-deriving from the exact same
+    frozen price for the life of a warm instance -- a real bug this cache shipped
+    with once already. fetch_quote is the same single yfinance call, deliberately
+    left unmemoized for exactly this caller."""
     inputs: RiskRewardInputs | None = slow_entry.get("inputs")
     if inputs is None:
         raise RuntimeError("no cached risk-reward inputs available to refresh from")
-    quote = await fetch_ticker_info(inputs.ticker)
-    fresh_price = quote.get("currentPrice") or quote.get("regularMarketPrice")
+    fresh_price = await fetch_quote(inputs.ticker)
     if not fresh_price:
         raise RuntimeError("quote fetch returned no usable price")
     refreshed = _rescale_inputs(inputs, fresh_price)

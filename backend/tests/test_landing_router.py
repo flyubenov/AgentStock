@@ -24,7 +24,7 @@ def _isolated_landing_cache():
     cache_mod._locks.clear()
     with patch("landing.cache.fetch_risk_reward_inputs",
                new=AsyncMock(side_effect=RuntimeError("no network in tests"))), \
-         patch("landing.cache.fetch_ticker_info",
+         patch("landing.cache.fetch_quote",
                new=AsyncMock(side_effect=RuntimeError("no network in tests"))):
         yield
     cache_mod._slow.clear()

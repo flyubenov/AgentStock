@@ -54,12 +54,12 @@ def _inputs(ticker: str = "AAA", price: float = 100.0, forward_pe: float | None 
 def _patched(run=None, inputs_fetch=None, quote=None):
     run = run if run is not None else AsyncMock(side_effect=lambda t: _ok_run(t))
     inputs_fetch = inputs_fetch if inputs_fetch is not None else AsyncMock(side_effect=lambda t: _inputs(t))
-    quote = quote if quote is not None else AsyncMock(return_value={"currentPrice": 100.0})
+    quote = quote if quote is not None else AsyncMock(return_value=100.0)
     return patch.multiple(
         cache,
         _run_one_guarded=run,
         fetch_risk_reward_inputs=inputs_fetch,
-        fetch_ticker_info=quote,
+        fetch_quote=quote,
     )
 
 
@@ -94,7 +94,7 @@ async def test_slow_entry_past_ttl_reruns_engines(monkeypatch):
 async def test_fast_entry_past_ttl_refreshes_price_and_reward_risk_only(monkeypatch):
     run = AsyncMock(side_effect=lambda t: _ok_run(t, price=100.0, fair_value=110.0))
     inputs_fetch = AsyncMock(side_effect=lambda t: _inputs(t, price=100.0, forward_pe=20.0))
-    quote = AsyncMock(return_value={"currentPrice": 150.0})
+    quote = AsyncMock(return_value=150.0)
     fake_time = [0.0]
     monkeypatch.setattr(cache, "_now", lambda: fake_time[0])
 
@@ -118,7 +118,7 @@ async def test_fast_entry_past_ttl_refreshes_price_and_reward_risk_only(monkeypa
 async def test_pct_vs_price_recomputed_from_fresh_price(monkeypatch):
     run = AsyncMock(side_effect=lambda t: _ok_run(t, price=100.0, fair_value=120.0))
     inputs_fetch = AsyncMock(side_effect=lambda t: _inputs(t, price=100.0))
-    quote = AsyncMock(return_value={"currentPrice": 80.0})
+    quote = AsyncMock(return_value=80.0)
     fake_time = [0.0]
     monkeypatch.setattr(cache, "_now", lambda: fake_time[0])
 
@@ -142,7 +142,7 @@ async def test_failed_fast_refresh_serves_stale(monkeypatch):
     # Cold-fill (seeds the fast layer from the run's own price, no quote call yet),
     # then one real, successful fast refresh to establish a known fast-layer value.
     with _patched(run=run, inputs_fetch=inputs_fetch,
-                  quote=AsyncMock(return_value={"currentPrice": 130.0})):
+                  quote=AsyncMock(return_value=130.0)):
         await cache.get_analysis("AAA")
         fake_time[0] += cache.FAST_TTL + 1
         first = await cache.get_analysis("AAA")
@@ -220,7 +220,7 @@ async def test_fast_refresh_rescales_price_derived_info_only():
 
     run = AsyncMock(side_effect=lambda t: _ok_run(t, price=cached_price))
     inputs_fetch = AsyncMock(return_value=inp)
-    quote = AsyncMock(return_value={"currentPrice": fresh_price})
+    quote = AsyncMock(return_value=fresh_price)
     fake_time = [0.0]
 
     with patch("landing.cache._now", lambda: fake_time[0]):
@@ -245,3 +245,48 @@ async def test_fast_refresh_rescales_price_derived_info_only():
     assert scores["rsi"]["raw"] == pytest.approx(55.0)
     assert scores["volatility"]["raw"] == pytest.approx(0.3)
     assert scores["beta"]["raw"] == pytest.approx(1.0)
+
+
+# --- 10 (fix round 1). The fast layer's quote comes from fetch_quote, never the
+# @lru_cache'd fetch_ticker_info -- this is the test that would have caught the
+# frozen-price bug the coordinator flagged. ---
+async def test_fast_refresh_uses_fetch_quote_not_fetch_ticker_info(monkeypatch):
+    run = AsyncMock(side_effect=lambda t: _ok_run(t, price=100.0))
+    inputs_fetch = AsyncMock(side_effect=lambda t: _inputs(t, price=100.0))
+    quote = AsyncMock(return_value=140.0)
+    ticker_info = AsyncMock(return_value={"currentPrice": 999.0})  # must never be seen
+    fake_time = [0.0]
+    monkeypatch.setattr(cache, "_now", lambda: fake_time[0])
+
+    with patch("landing.cache.fetch_ticker_info", new=ticker_info, create=True):
+        with _patched(run=run, inputs_fetch=inputs_fetch, quote=quote):
+            await cache.get_analysis("AAA")
+            fake_time[0] += cache.FAST_TTL + 1
+            result = await cache.get_analysis("AAA")
+
+    assert quote.await_count == 1
+    assert ticker_info.await_count == 0
+    assert result["current_price"] == 140.0
+
+
+# --- 11 (fix round 1). Nothing memoizes the fast-layer quote between refreshes:
+# two TTL-boundary refreshes with a changed underlying quote return two different
+# prices. ---
+async def test_successive_fast_refreshes_are_not_memoized():
+    run = AsyncMock(side_effect=lambda t: _ok_run(t, price=100.0))
+    inputs_fetch = AsyncMock(side_effect=lambda t: _inputs(t, price=100.0))
+    prices = iter([111.0, 222.0])
+    quote = AsyncMock(side_effect=lambda t: next(prices))
+    fake_time = [0.0]
+
+    with patch("landing.cache._now", lambda: fake_time[0]):
+        with _patched(run=run, inputs_fetch=inputs_fetch, quote=quote):
+            await cache.get_analysis("AAA")  # cold-fill: seeds fast from the run's own price
+            fake_time[0] += cache.FAST_TTL + 1
+            first_refresh = await cache.get_analysis("AAA")
+            fake_time[0] += cache.FAST_TTL + 1
+            second_refresh = await cache.get_analysis("AAA")
+
+    assert first_refresh["current_price"] == 111.0
+    assert second_refresh["current_price"] == 222.0
+    assert first_refresh["current_price"] != second_refresh["current_price"]

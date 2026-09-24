@@ -58,6 +58,50 @@ def _fetch_sync(ticker: str) -> dict:
     raise RuntimeError(f"Failed to fetch {ticker} after {_RATE_LIMIT_RETRIES} attempts")
 
 
+async def fetch_quote(ticker: str) -> float | None:
+    """A fresh current price, for callers that need one to actually change between
+    calls within a process's lifetime -- unlike fetch_ticker_info above.
+
+    Deliberately NOT memoized (contrast _fetch_sync's @lru_cache, "cached per ticker
+    per process"): this exists specifically so the landing cache's 15-minute
+    fast-layer refresh (backend/landing/cache.py) gets a genuinely fresh price on
+    every call, instead of the same frozen dict _fetch_sync's cache would otherwise
+    hand back for the rest of the process's life -- do not add an lru_cache here, that
+    would silently turn the fast layer back into a no-op in any warm instance.
+
+    yfinance's Ticker.fast_info was evaluated as the cheap-quote path first, but in
+    this yfinance version (1.3.0) fast_info.last_price internally triggers a full
+    1-year price-history fetch (yfinance.scrapers.quote.FastInfo._get_1y_prices)
+    before it will return anything -- that is not cheap, so this falls back to the
+    same single Ticker.info call fetch_ticker_info already uses, just unmemoized.
+    Never raises -- returns None when a price isn't available, which is the signal
+    the landing cache's degradation rule already treats as "keep serving the stale
+    entry".
+    """
+    return await run_yf(_fetch_quote_sync, ticker.upper())
+
+
+def _fetch_quote_sync(ticker: str) -> float | None:
+    for attempt in range(_RATE_LIMIT_RETRIES):
+        try:
+            info = yf.Ticker(ticker).info or {}
+            price = info.get("currentPrice") or info.get("regularMarketPrice")
+            return float(price) if price is not None else None
+        except Exception as e:
+            is_rate_limit = (
+                (_YFRateLimitError and isinstance(e, _YFRateLimitError))
+                or "rate" in str(e).lower()
+                or "too many" in str(e).lower()
+            )
+            if is_rate_limit:
+                note_rate_limit()  # let the batch orchestrator slow its pacing
+            if is_rate_limit and attempt < _RATE_LIMIT_RETRIES - 1:
+                time.sleep(_RATE_LIMIT_BACKOFF * (attempt + 1))
+                continue
+            return None
+    return None
+
+
 @lru_cache(maxsize=256)
 def _fetch_cashflow_sync(ticker: str) -> dict | None:
     """Fetch the cashflow statement and extract the rows we need. Cached per ticker.
