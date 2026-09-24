@@ -1,16 +1,30 @@
 from __future__ import annotations
 
-from risk_reward.config import CONFIG, REWARD_SLOTS, RISK_SLOTS
+import math
+import re
+
+from risk_reward.config import REWARD_SLOTS, RISK_SLOTS
 from landing.labels import (
-    CATEGORY_LABELS, EXCLUSION_LABELS, METHOD_LABELS, MOAT_FACTOR_LABELS,
-    RR_FACTOR_LABELS, humanize,
+    CATEGORY_LABELS, ERROR_LABELS, EXCLUSION_LABELS, GENERIC_ERROR_LABEL,
+    METHOD_LABELS, MOAT_FACTOR_LABELS, RR_FACTOR_LABELS, humanize,
 )
 
 # Fallback category weights when the engine did not report renormalized ones.
 _DEFAULT_CATEGORY_WEIGHTS = {"I": 0.35, "II": 0.30, "III": 0.15, "IV": 0.20}
 
 
+def _finite(v):
+    """NaN/Inf never reach the boundary (fix round 1, item 5): these are
+    pandas-derived ratios and raw yfinance values, and FastAPI would otherwise emit a
+    bare `NaN`/`Infinity` literal that `JSON.parse` rejects outright — killing the
+    whole page instead of blanking one cell."""
+    if isinstance(v, float) and not math.isfinite(v):
+        return None
+    return v
+
+
 def _round(v, n=2):
+    v = _finite(v)
     return None if v is None else round(v, n)
 
 
@@ -23,11 +37,36 @@ def _exclusion_label(reason: str | None) -> str | None:
     return EXCLUSION_LABELS.get(reason, reason)
 
 
+_ERROR_PREFIX_RE = re.compile(r"^([a-z_]+):\s")
+
+
+def _public_error(raw: str) -> str:
+    """orchestrator.batch._run_one tags a subsystem failure as "prefix: <exception
+    text>" — the exception text must never reach a public page. A message with no
+    such prefix (the engines' own plain-English decline reasons, e.g. "yfinance data
+    unavailable") is already reader-safe and passes through unchanged; a prefixed one
+    is replaced outright (never just have its prefix swapped, since the exception text
+    after the colon is the leak)."""
+    m = _ERROR_PREFIX_RE.match(raw)
+    if not m:
+        return raw
+    return ERROR_LABELS.get(m.group(1), GENERIC_ERROR_LABEL)
+
+
+def _public_errors(errors: list[str]) -> list[str]:
+    out: list[str] = []
+    for e in errors or []:
+        label = _public_error(e)
+        if label not in out:
+            out.append(label)
+    return out
+
+
 def _quality(sc: dict | None) -> dict | None:
     if not sc or sc.get("quality_score") is None:
         return None
-    weights = (sc.get("score_breakdown") or {}).get("section_weights") \
-        or _DEFAULT_CATEGORY_WEIGHTS
+    bd = sc.get("score_breakdown") or {}
+    weights = bd.get("section_weights") or _DEFAULT_CATEGORY_WEIGHTS
     details = sc.get("metric_details") or {}
     categories = []
     for key in ("I", "II", "III", "IV"):
@@ -47,7 +86,7 @@ def _quality(sc: dict | None) -> dict | None:
             "score": _round((sc.get("section_scores") or {}).get(key)),
             "metrics": [{
                 "label": m.get("label"),
-                "raw": m.get("raw"),
+                "raw": _finite(m.get("raw")),
                 "score": _round(m.get("score")),
                 "weight_pct": 0.0 if (m.get("excluded") or m.get("score") is None) else share,
                 "excluded": bool(m.get("excluded")),
@@ -56,9 +95,27 @@ def _quality(sc: dict | None) -> dict | None:
         })
     return {
         "score": _round(sc.get("quality_score"), 1),
+        # The section-weighted composite before any pre-profit blend / unprofitable
+        # cap (screener/scoring.py's `breakdown["fundamentals_composite"]`) — nullable,
+        # since a name that never reaches `score()`'s composite step has none. This is
+        # what `categories` actually rolls up to; `score` above is the published
+        # headline (`final`), which can legitimately diverge from it for an
+        # operationally-unprofitable name. Exposed so Task 10 can show that gap
+        # instead of hiding it.
+        "fundamentals_composite": _round(bd.get("fundamentals_composite"), 2),
         "profile_label": humanize(sc.get("sector_profile")),
         "categories": categories,
     }
+
+
+def _humanize_excluded_pillar(entry: str) -> str:
+    """moat/scoring.py's `excluded` list holds entries like "B3 margin durability" —
+    the leading token is the same pillar code MOAT_FACTOR_LABELS maps in `factors`.
+    Swap it for the label (dropping the redundant trailing description) so the code
+    never survives; an entry that doesn't start with a known code passes through as
+    already-human text rather than a classifier."""
+    code = entry.split(" ", 1)[0] if entry else entry
+    return MOAT_FACTOR_LABELS.get(code, entry)
 
 
 def _moat(sc: dict | None) -> dict | None:
@@ -80,15 +137,16 @@ def _moat(sc: dict | None) -> dict | None:
             "label": MOAT_FACTOR_LABELS.get(code, humanize(code)),
             "points": _round(points),
             "max_points": max_points,
-            # Left unrounded: a factor's weight is its exact share of the available
-            # points (e.g. 20/65), and rounding to 2dp here would drift the sum of a
-            # moat's factor weights away from 100%.
-            "weight_pct": max_points / available * 100,
+            "weight_pct": round(max_points / available * 100, 2),
         })
     return {
         "score": _round(sc.get("moat_score"), 1),
         "gated": bool(bd.get("gated")),
-        "excluded": bd.get("excluded") or [],
+        # moat/scoring.py's `excluded` entries are raw pillar codes with a trailing
+        # description ("B3 margin durability") — map the code through
+        # MOAT_FACTOR_LABELS so the same pillar isn't shown humanized in `factors`
+        # but raw here (fix round 1, item 3).
+        "excluded": [_humanize_excluded_pillar(x) for x in (bd.get("excluded") or [])],
         "factors": factors,
     }
 
@@ -118,16 +176,30 @@ def _reward_risk(rr: dict | None) -> dict | None:
     scores = rr.get("metric_scores") or {}
 
     def factors(slots):
+        # MetricScore.weight is the pre-renormalization slot weight: a dropped slot
+        # still carries its full non-zero weight (risk_reward/scoring.py's
+        # build_metric_scores), and renormalization happens only at aggregation
+        # (_axis_average) — never written back onto the metric. Publishing that
+        # nominal weight directly would render a dropped, zero-contribution factor
+        # with a live-looking weight, and the axis wouldn't sum to 100 even with no
+        # drops (analyst_upside's weight floats in [0.08, 0.18]). Mirror `_quality`
+        # instead: total only the active (non-dropped, scored) slots' weights and
+        # give each of THOSE its true share; every dropped/unscored slot gets 0.0.
+        present = [(slot, scores[slot]) for slot in slots if scores.get(slot)]
+        active_total = sum(
+            float(ms.get("weight", 0.0)) for _, ms in present
+            if not ms.get("dropped") and ms.get("score") is not None
+        )
         out = []
-        for slot in slots:
-            ms = scores.get(slot)
-            if not ms:
-                continue
+        for slot, ms in present:
+            is_active = not ms.get("dropped") and ms.get("score") is not None
+            weight_pct = (round(float(ms.get("weight", 0.0)) / active_total * 100, 2)
+                         if is_active and active_total > 0 else 0.0)
             out.append({
                 "label": RR_FACTOR_LABELS.get(slot, humanize(slot)),
-                "raw": ms.get("raw"),
+                "raw": _finite(ms.get("raw")),
                 "score": _round(ms.get("score")),
-                "weight_pct": round(float(ms.get("weight", CONFIG.weights.get(slot, 0.0))) * 100, 2),
+                "weight_pct": weight_pct,
                 "dropped": bool(ms.get("dropped")),
             })
         return out
@@ -162,6 +234,17 @@ def _calibrations(res: dict, sc: dict | None) -> list[str]:
             name = m.get("excluded_by")
             if name:
                 _add(name)
+    # The two most consequential recalibrations otherwise fire invisibly: an
+    # acquisition-distorted ROIC re-basing (no excluded_by anywhere — it substitutes
+    # the metric rather than dropping it) and the pre-profit growth blend / cap that
+    # can pull `quality.score` away from `quality.fundamentals_composite`.
+    if bd.get("roic_adjustment"):
+        _add("ROIC on tangible capital")
+    pre_profit = bd.get("pre_profit") or {}
+    if pre_profit.get("applied"):
+        _add("Pre-profit growth blend")
+    if pre_profit.get("capped"):
+        _add("Unprofitable cap")
     if ((sc or {}).get("moat_breakdown") or {}).get("gated"):
         fired.append("Economic-profit gate")
     return fired
@@ -187,5 +270,5 @@ def build_ticker_payload(result: dict) -> dict:
         "fair_value": _fair_value(result),
         "reward_risk": _reward_risk(rr),
         "calibrations": _calibrations(result, sc),
-        "errors": result.get("errors") or [],
+        "errors": _public_errors(result.get("errors")),
     }

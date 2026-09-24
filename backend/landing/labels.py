@@ -64,6 +64,23 @@ EXCLUSION_LABELS = {
     "Not meaningful at negative FCF": "Not meaningful (negative FCF)",
 }
 
+# orchestrator.batch._run_one tags a subsystem failure with a bare prefix
+# ("fair_value: ...", "sheets_write: ...", "screener: ...", "screener_write: ...",
+# "risk_reward: ...", "risk_reward_write: ...") followed by the raw exception text.
+# That exception text must never reach a public page (fix round 1, item 6) — only the
+# prefix is meaningful to a reader, and even that gets rewritten to plain copy. A
+# prefix not listed here (a future subsystem) falls back to GENERIC_ERROR_LABEL rather
+# than leaking whatever followed its colon.
+ERROR_LABELS = {
+    "fair_value": "Fair value could not be calculated for this ticker.",
+    "screener": "Quality Score could not be calculated for this ticker.",
+    "risk_reward": "Reward/Risk could not be calculated for this ticker.",
+    "sheets_write": "A result failed to save.",
+    "screener_write": "A result failed to save.",
+    "risk_reward_write": "A result failed to save.",
+}
+GENERIC_ERROR_LABEL = "Something went wrong calculating this ticker."
+
 _ALL = {**PROFILE_LABELS, **STOCK_TYPE_LABELS}
 
 
