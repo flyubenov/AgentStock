@@ -55,7 +55,10 @@ async def record_event(ev: AnalyticsEvent) -> None:
 
 
 async def flush_events() -> int:
-    """Append everything queued. Returns the number of rows written."""
+    """Append everything queued. Returns the number of rows written, or 0 if the
+    sink is unavailable — the failure is swallowed, never propagated, so a dead
+    Sheets backend can't turn into a broken request for whoever triggered the
+    flush (e.g. record_event's own auto-flush)."""
     async with _lock:
         rows, _queue[:] = list(_queue), []
     if not rows:
@@ -66,5 +69,5 @@ async def flush_events() -> int:
         # Never lose the funnel to a Sheets outage — put them back for the next flush.
         async with _lock:
             _queue[:0] = rows
-        raise
+        return 0
     return len(rows)
