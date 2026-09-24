@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from routers.analysis import router as analysis_router
 from routers.database import router as database_router
 from routers.watchlists import router as watchlists_router
+from routers.events import router as events_router
 
 load_dotenv()
 
@@ -27,6 +28,7 @@ app.add_middleware(
 app.include_router(analysis_router, prefix="/api")
 app.include_router(database_router, prefix="/api")
 app.include_router(watchlists_router, prefix="/api")
+app.include_router(events_router, prefix="/api")
 
 
 @app.get("/api/health")
