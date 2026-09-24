@@ -6,11 +6,22 @@ describe('visitorId', () => {
     expect(visitorId()).toBe(visitorId())
   })
 
-  it('survives a localStorage that throws', () => {
-    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+  it('survives a localStorage that throws', async () => {
+    // visitorId() memoizes in a module-level variable, so reusing the
+    // top-level import here would short-circuit before ever touching
+    // localStorage. Reset the module registry and re-import so this test
+    // exercises a fresh instance with nothing cached yet.
+    vi.resetModules()
+    const getItemSpy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
       throw new Error('blocked')
     })
-    expect(visitorId()).toMatch(/^v-/)
+
+    const fresh = await import('./analytics')
+    const id = fresh.visitorId()
+
+    expect(getItemSpy).toHaveBeenCalled()
+    expect(id).toMatch(/^v-/)
+    expect(id.length).toBeGreaterThan(2)
   })
 })
 
