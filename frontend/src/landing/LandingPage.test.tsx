@@ -47,6 +47,11 @@ describe('LandingPage shell', () => {
     const inputs = Array.from(container.querySelectorAll('input'))
     expect(inputs.some(i => /card|cvc|cvv|payment|expiry/i.test(i.outerHTML))).toBe(false)
   })
+
+  it('never renders the analyst app nav — the landing page renders outside Layout', () => {
+    renderPage()
+    expect(screen.queryByText('Database')).not.toBeInTheDocument()
+  })
 })
 
 describe('Layout nav (controller addition)', () => {

@@ -43,4 +43,12 @@
 .intrinsica .links a { color: var(--dim); text-decoration: none; font-size: 14px; cursor: pointer; }
 .intrinsica .links a:hover { color: var(--text); }
 .intrinsica .links a.cta { background: var(--accent); color: #fff; border-radius: 8px; padding: 7px 14px; }
-@media (max-width: 700px) { .intrinsica .links { gap: 12px; } .intrinsica .section { padding: 36px 0; } }
+.intrinsica .logo { font-family: var(--fh); font-weight: 700; font-size: 18px;
+  color: var(--text); letter-spacing: -0.01em; }
+.intrinsica .footer { border-top: 1px solid var(--line); background: var(--stage);
+  padding: 40px 0; }
+.intrinsica .footer .legal, .intrinsica .footer .sec { max-width: 640px; margin: 0 auto 12px;
+  font-size: 13px; line-height: 1.6; color: var(--mute); }
+.intrinsica .footer .legal:last-child, .intrinsica .footer .sec:last-child { margin-bottom: 0; }
+@media (max-width: 700px) { .intrinsica .links { gap: 12px; } .intrinsica .section { padding: 36px 0; }
+  .intrinsica .footer { padding: 28px 0; } }
