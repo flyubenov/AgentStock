@@ -1,11 +1,35 @@
 import asyncio
 from unittest.mock import patch, AsyncMock
+import pytest
 from fastapi.testclient import TestClient
 from main import app
+import landing.cache as cache_mod
 
 client = TestClient(app)
 
 MAX = 3
+
+
+@pytest.fixture(autouse=True)
+def _isolated_landing_cache():
+    """The router now serves through landing.cache (a module-level, process-lifetime
+    cache), so each test needs its own clean slate — otherwise a ticker cached by an
+    earlier test (e.g. AAPL, reused across several tests below) would short-circuit
+    the very _run_one_guarded patch these tests assert against. Also stands in for
+    the fast-layer's quote/risk-reward-input fetches so a cold ticker's cache fill
+    never reaches the real network in this router-level test file (that refresh path
+    is covered on its own in test_landing_cache.py)."""
+    cache_mod._slow.clear()
+    cache_mod._fast.clear()
+    cache_mod._locks.clear()
+    with patch("landing.cache.fetch_risk_reward_inputs",
+               new=AsyncMock(side_effect=RuntimeError("no network in tests"))), \
+         patch("landing.cache.fetch_ticker_info",
+               new=AsyncMock(side_effect=RuntimeError("no network in tests"))):
+        yield
+    cache_mod._slow.clear()
+    cache_mod._fast.clear()
+    cache_mod._locks.clear()
 
 
 def _ok(ticker: str) -> dict:
@@ -19,7 +43,7 @@ def _ok(ticker: str) -> dict:
 
 def test_a_single_ticker_comes_back_mapped():
     with patch("routers.landing.validate_ticker", new=AsyncMock(return_value=True)), \
-         patch("routers.landing._run_one_guarded", new=AsyncMock(side_effect=lambda t: _ok(t))):
+         patch("landing.cache._run_one_guarded", new=AsyncMock(side_effect=lambda t: _ok(t))):
         resp = client.post("/api/landing/analyze", json={"tickers": ["aapl"]})
     body = resp.json()
     assert [r["ticker"] for r in body["results"]] == ["AAPL"]
@@ -30,7 +54,7 @@ def test_a_single_ticker_comes_back_mapped():
 def test_more_than_three_tickers_are_rejected_before_any_engine_runs():
     run = AsyncMock(side_effect=lambda t: _ok(t))
     validate = AsyncMock(return_value=True)
-    with patch("routers.landing._run_one_guarded", new=run), \
+    with patch("landing.cache._run_one_guarded", new=run), \
          patch("routers.landing.validate_ticker", new=validate):
         resp = client.post("/api/landing/analyze",
                            json={"tickers": ["A", "B", "C", "D"]})
@@ -47,7 +71,7 @@ def test_an_empty_request_is_rejected():
 def test_an_unresolvable_ticker_is_reported_not_run():
     run = AsyncMock(side_effect=lambda t: _ok(t))
     with patch("routers.landing.validate_ticker", new=AsyncMock(return_value=False)), \
-         patch("routers.landing._run_one_guarded", new=run):
+         patch("landing.cache._run_one_guarded", new=run):
         resp = client.post("/api/landing/analyze", json={"tickers": ["ZZZZ"]})
     body = resp.json()
     assert body["invalid"] == ["ZZZZ"]
@@ -58,7 +82,7 @@ def test_an_unresolvable_ticker_is_reported_not_run():
 def test_duplicates_are_collapsed():
     run = AsyncMock(side_effect=lambda t: _ok(t))
     with patch("routers.landing.validate_ticker", new=AsyncMock(return_value=True)), \
-         patch("routers.landing._run_one_guarded", new=run):
+         patch("landing.cache._run_one_guarded", new=run):
         resp = client.post("/api/landing/analyze", json={"tickers": ["AAPL", "aapl"]})
     assert len(resp.json()["results"]) == 1
     assert run.await_count == 1
@@ -71,7 +95,7 @@ def test_one_failing_ticker_does_not_sink_the_others():
         return _ok(t)
 
     with patch("routers.landing.validate_ticker", new=AsyncMock(return_value=True)), \
-         patch("routers.landing._run_one_guarded", new=AsyncMock(side_effect=flaky)):
+         patch("landing.cache._run_one_guarded", new=AsyncMock(side_effect=flaky)):
         resp = client.post("/api/landing/analyze", json={"tickers": ["AAPL", "BAD"]})
     body = resp.json()
     tickers = {r["ticker"]: r for r in body["results"]}
@@ -91,7 +115,7 @@ def test_a_timed_out_ticker_does_not_sink_the_others():
         return _ok(t)
 
     with patch("routers.landing.validate_ticker", new=AsyncMock(return_value=True)), \
-         patch("routers.landing._run_one_guarded", new=AsyncMock(side_effect=guarded)):
+         patch("landing.cache._run_one_guarded", new=AsyncMock(side_effect=guarded)):
         resp = client.post("/api/landing/analyze", json={"tickers": ["AAPL", "SLOW"]})
     body = resp.json()
     tickers = {r["ticker"]: r for r in body["results"]}

@@ -4,7 +4,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from services.yahoo import validate_ticker
-from orchestrator.batch import _run_one_guarded
+from landing.cache import get_analysis
 from landing.contract import build_ticker_payload
 
 router = APIRouter()
@@ -38,11 +38,14 @@ async def analyze(req: LandingAnalyzeRequest):
     if not valid:
         return {"results": [], "invalid": invalid, "error": None}
 
-    # _run_one_guarded (not _run_one) so a hung yfinance call on this public,
-    # unauthenticated endpoint can't hold a worker open indefinitely — it times out
-    # via asyncio.wait_for and raises, which the exception branch below degrades to
-    # a per-ticker error instead of wedging the whole request.
-    runs = await asyncio.gather(*[_run_one_guarded(t) for t in valid], return_exceptions=True)
+    # get_analysis (backend/landing/cache.py) serves fundamentals from a 3-day cache
+    # and price/Reward-Risk from a 15-minute one, falling back to a live
+    # _run_one_guarded run on a miss/expiry. That run is still wrapped in
+    # asyncio.wait_for on this public, unauthenticated endpoint, so a hung yfinance
+    # call can't hold a worker open indefinitely — it times out and raises, which the
+    # exception branch below degrades to a per-ticker error instead of wedging the
+    # whole request.
+    runs = await asyncio.gather(*[get_analysis(t) for t in valid], return_exceptions=True)
 
     results = []
     for ticker, run in zip(valid, runs):
@@ -54,6 +57,6 @@ async def analyze(req: LandingAnalyzeRequest):
             results.append(build_ticker_payload(
                 {"ticker": ticker, "errors": [f"landing: {run}"], "status": "failed"}))
         else:
-            results.append(build_ticker_payload(run["result"]))
+            results.append(build_ticker_payload(run))
 
     return {"results": results, "invalid": invalid, "error": None}
