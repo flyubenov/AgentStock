@@ -4,7 +4,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from services.yahoo import validate_ticker
-from orchestrator.batch import _run_one
+from orchestrator.batch import _run_one_guarded
 from landing.contract import build_ticker_payload
 
 router = APIRouter()
@@ -28,8 +28,7 @@ async def analyze(req: LandingAnalyzeRequest):
     if not seen:
         return {"results": [], "invalid": [], "error": "Enter at least one ticker."}
     if len(seen) > MAX_TICKERS:
-        # Checked before validation so an oversized request never costs a Yahoo
-        # round-trip or an engine run.
+        # Checked before validation and before any engine run.
         return {"results": [], "invalid": [],
                 "error": f"Up to {MAX_TICKERS} tickers per analysis run."}
 
@@ -39,7 +38,11 @@ async def analyze(req: LandingAnalyzeRequest):
     if not valid:
         return {"results": [], "invalid": invalid, "error": None}
 
-    runs = await asyncio.gather(*[_run_one(t) for t in valid], return_exceptions=True)
+    # _run_one_guarded (not _run_one) so a hung yfinance call on this public,
+    # unauthenticated endpoint can't hold a worker open indefinitely — it times out
+    # via asyncio.wait_for and raises, which the exception branch below degrades to
+    # a per-ticker error instead of wedging the whole request.
+    runs = await asyncio.gather(*[_run_one_guarded(t) for t in valid], return_exceptions=True)
 
     results = []
     for ticker, run in zip(valid, runs):
