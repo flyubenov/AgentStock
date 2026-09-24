@@ -7,7 +7,10 @@ import pytest
 import landing.cache as cache
 from risk_reward.models import RiskRewardInputs
 
-pytestmark = pytest.mark.asyncio
+# No module-level `pytestmark = pytest.mark.asyncio` here: pytest.ini's
+# asyncio_mode = auto already collects the async def tests below without it, and this
+# file also has two plain (non-async) unit tests -- a module-wide asyncio mark warns
+# on those ("marked with @pytest.mark.asyncio but it is not an async function").
 
 
 @pytest.fixture(autouse=True)
@@ -15,10 +18,12 @@ def _isolated_cache():
     cache._slow.clear()
     cache._fast.clear()
     cache._locks.clear()
+    cache._lock_refs.clear()
     yield
     cache._slow.clear()
     cache._fast.clear()
     cache._locks.clear()
+    cache._lock_refs.clear()
 
 
 def _ok_run(ticker: str, price: float = 100.0, fair_value: float = 110.0) -> dict:
@@ -35,6 +40,20 @@ def _ok_run(ticker: str, price: float = 100.0, fair_value: float = 110.0) -> dic
                              "metric_scores": {}, "status": "completed", "errors": []},
         },
         "fv_failed": False,
+    }
+
+
+def _failed_run(ticker: str) -> dict:
+    """What _run_one_guarded actually returns for a dead ticker or a Yahoo outage --
+    it does not raise, it completes with a status="failed" dump and fv_failed=True."""
+    return {
+        "result": {
+            "ticker": ticker, "company_name": None, "current_price": None,
+            "stock_type": None, "fair_value": None, "price_vs_fair_value_pct": None,
+            "fair_value_breakdown": {}, "status": "failed",
+            "errors": ["yfinance data unavailable"], "screener": None, "risk_reward": None,
+        },
+        "fv_failed": True,
     }
 
 
@@ -215,8 +234,14 @@ async def test_fast_refresh_rescales_price_derived_info_only():
     cached_price = 100.0
     fresh_price = 150.0
     ratio = fresh_price / cached_price
+    # trailingPegRatio, not forwardPE, drives "valuation" here: yfinance commonly
+    # ships trailingPegRatio without pegRatio, and "peg" is the *first* source in the
+    # valuation fallback chain (config.py: ["peg", "earnings_yield", "ps_yield"]), so
+    # a fixture that omits both peg keys (as this one once did) never actually
+    # exercises the key production most often reads.
     inp = _inputs("AAA", price=cached_price, forward_pe=20.0, high_52w=120.0,
-                  ma_200=90.0, rsi_val=55.0, volatility=0.3, beta=1.0)
+                  ma_200=90.0, rsi_val=55.0, volatility=0.3, beta=1.0,
+                  extra_info={"trailingPegRatio": 1.2})
 
     run = AsyncMock(side_effect=lambda t: _ok_run(t, price=cached_price))
     inputs_fetch = AsyncMock(return_value=inp)
@@ -231,10 +256,10 @@ async def test_fast_refresh_rescales_price_derived_info_only():
 
     scores = result["risk_reward"]["metric_scores"]
 
-    # valuation resolves via earnings_yield here (no pegRatio present): raw = 1/forwardPE.
-    # forwardPE rescales by `ratio`, so the raw halves-and-a-bit (1/(20*1.5)).
-    assert scores["valuation"]["source"] == "earnings_yield"
-    assert scores["valuation"]["raw"] == pytest.approx(1.0 / (20.0 * ratio))
+    # valuation resolves via "peg" (trailingPegRatio): raw = trailingPegRatio, and it
+    # rescales by `ratio` same as forwardPE would.
+    assert scores["valuation"]["source"] == "peg"
+    assert scores["valuation"]["raw"] == pytest.approx(1.2 * ratio)
 
     # discount and trend are recomputed from the fresh price against the still-cached
     # 52-week high / 200-day MA.
@@ -245,6 +270,35 @@ async def test_fast_refresh_rescales_price_derived_info_only():
     assert scores["rsi"]["raw"] == pytest.approx(55.0)
     assert scores["volatility"]["raw"] == pytest.approx(0.3)
     assert scores["beta"]["raw"] == pytest.approx(1.0)
+
+
+# --- 9b (extra). _rescale_inputs itself: all four price-derived keys, non-mutating ---
+def test_rescale_inputs_covers_all_four_price_derived_keys_and_does_not_mutate():
+    inp = RiskRewardInputs(
+        ticker="AAA", info={
+            "forwardPE": 20.0, "priceToSalesTrailing12Months": 5.0,
+            "pegRatio": 1.5, "trailingPegRatio": 1.8, "beta": 1.0,
+        },
+        company_name="AAA Co", price=100.0, high_52w=120.0, ma_200=90.0,
+        ma_50=None, rsi=55.0, volatility=0.3,
+    )
+
+    refreshed = cache._rescale_inputs(inp, 150.0)
+    ratio = 1.5
+
+    assert refreshed.info["forwardPE"] == pytest.approx(20.0 * ratio)
+    assert refreshed.info["priceToSalesTrailing12Months"] == pytest.approx(5.0 * ratio)
+    assert refreshed.info["pegRatio"] == pytest.approx(1.5 * ratio)
+    assert refreshed.info["trailingPegRatio"] == pytest.approx(1.8 * ratio)
+    assert refreshed.info["beta"] == pytest.approx(1.0)  # not price-derived: untouched
+    assert refreshed.price == 150.0
+
+    # The original snapshot must be untouched -- a fast refresh must not mutate the
+    # slow layer's cached RiskRewardInputs out from under it.
+    assert inp.price == 100.0
+    assert inp.info["forwardPE"] == 20.0
+    assert inp.info["pegRatio"] == 1.5
+    assert inp.info["trailingPegRatio"] == 1.8
 
 
 # --- 10 (fix round 1). The fast layer's quote comes from fetch_quote, never the
@@ -290,3 +344,59 @@ async def test_successive_fast_refreshes_are_not_memoized():
     assert first_refresh["current_price"] == 111.0
     assert second_refresh["current_price"] == 222.0
     assert first_refresh["current_price"] != second_refresh["current_price"]
+
+
+# --- 12 (fix round 2, finding 1). A failed run is not pinned for the slow TTL ---
+async def test_a_failed_run_is_retried_after_the_fast_ttl_not_pinned_for_three_days(monkeypatch):
+    run = AsyncMock(side_effect=lambda t: _failed_run(t))
+    fake_time = [0.0]
+    monkeypatch.setattr(cache, "_now", lambda: fake_time[0])
+
+    with _patched(run=run):
+        first = await cache.get_analysis("DEAD")
+        # Still inside the negative-cache window (the fast TTL) -- must not retry yet.
+        fake_time[0] += cache.FAST_TTL - 1
+        await cache.get_analysis("DEAD")
+        assert run.await_count == 1
+
+        # Past the fast TTL, nowhere near the full 3-day slow TTL -- a failed result
+        # must be retried here, not left pinned as truth until SLOW_TTL elapses.
+        fake_time[0] += 2
+        second = await cache.get_analysis("DEAD")
+
+    assert run.await_count == 2
+    assert first["status"] == "failed"
+    assert second["status"] == "failed"
+
+
+# --- 13 (fix round 2, finding 3). A fast-refresh failure serves stale even if its own
+# cache entry vanished mid-await (e.g. LRU-evicted by a concurrent request for a
+# different ticker) -- the KeyError-on-move_to_end regression. ---
+async def test_failed_fast_refresh_survives_its_own_entry_vanishing_mid_await():
+    run = AsyncMock(side_effect=lambda t: _ok_run(t, price=100.0))
+    inputs_fetch = AsyncMock(side_effect=lambda t: _inputs(t, price=100.0))
+    fake_time = [0.0]
+
+    with patch("landing.cache._now", lambda: fake_time[0]):
+        with _patched(run=run, inputs_fetch=inputs_fetch, quote=AsyncMock(return_value=130.0)):
+            await cache.get_analysis("AAA")
+            fake_time[0] += cache.FAST_TTL + 1
+            first = await cache.get_analysis("AAA")  # establishes a known fast entry
+
+        assert first["current_price"] == 130.0
+
+        async def vanish_then_fail(t):
+            # Simulate a *different* ticker's concurrent get_analysis LRU-evicting
+            # this entry (a different per-ticker lock, so nothing prevents this race)
+            # while our own refresh is still in flight.
+            cache._fast.pop("AAA", None)
+            raise RuntimeError("yahoo down")
+
+        fake_time[0] += cache.FAST_TTL + 1
+        with _patched(run=run, inputs_fetch=inputs_fetch,
+                      quote=AsyncMock(side_effect=vanish_then_fail)):
+            second = await cache.get_analysis("AAA")  # must not raise KeyError
+
+    assert second["current_price"] == first["current_price"] == 130.0
+    assert second["risk_reward"] == first["risk_reward"]
+    assert "AAA" in cache._fast  # correctly re-established, not left missing

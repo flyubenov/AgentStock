@@ -39,12 +39,13 @@ async def analyze(req: LandingAnalyzeRequest):
         return {"results": [], "invalid": invalid, "error": None}
 
     # get_analysis (backend/landing/cache.py) serves fundamentals from a 3-day cache
-    # and price/Reward-Risk from a 15-minute one, falling back to a live
-    # _run_one_guarded run on a miss/expiry. That run is still wrapped in
-    # asyncio.wait_for on this public, unauthenticated endpoint, so a hung yfinance
-    # call can't hold a worker open indefinitely — it times out and raises, which the
-    # exception branch below degrades to a per-ticker error instead of wedging the
-    # whole request.
+    # and price/Reward-Risk from a shorter one (LANDING_FAST_TTL). On this public,
+    # unauthenticated endpoint a hung yfinance call must never hold a worker open
+    # indefinitely, on either path: a cold/expired slow fill still goes through
+    # _run_one_guarded's own asyncio.wait_for, and cache.py wraps its own fast-layer
+    # quote refresh in a short asyncio.wait_for of its own. Either one timing out
+    # raises, which the exception branch below degrades to a per-ticker error instead
+    # of wedging the whole request.
     runs = await asyncio.gather(*[get_analysis(t) for t in valid], return_exceptions=True)
 
     results = []

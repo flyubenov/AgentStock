@@ -22,6 +22,7 @@ def _isolated_landing_cache():
     cache_mod._slow.clear()
     cache_mod._fast.clear()
     cache_mod._locks.clear()
+    cache_mod._lock_refs.clear()
     with patch("landing.cache.fetch_risk_reward_inputs",
                new=AsyncMock(side_effect=RuntimeError("no network in tests"))), \
          patch("landing.cache.fetch_quote",
@@ -30,6 +31,7 @@ def _isolated_landing_cache():
     cache_mod._slow.clear()
     cache_mod._fast.clear()
     cache_mod._locks.clear()
+    cache_mod._lock_refs.clear()
 
 
 def _ok(ticker: str) -> dict:
