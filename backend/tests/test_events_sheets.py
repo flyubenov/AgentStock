@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -12,8 +14,12 @@ def _reset_queue():
     """The queue is module-level state shared across every test in the process —
     clear it before and after so tests can't leak events into each other."""
     events_sheets._queue.clear()
+    events_sheets._oldest = None
+    events_sheets._dropped = 0
     yield
     events_sheets._queue.clear()
+    events_sheets._oldest = None
+    events_sheets._dropped = 0
 
 
 def _fake_service():
@@ -84,3 +90,119 @@ async def test_flush_events_requeues_and_swallows_a_sink_failure(monkeypatch):
 
     assert written_after_recovery == 2
     assert events_sheets._queue == []
+
+
+class _Clock:
+    def __init__(self):
+        self.t = 1000.0
+
+    def __call__(self):
+        return self.t
+
+
+@pytest.mark.asyncio
+async def test_a_small_batch_is_written_once_its_oldest_row_is_old_enough(monkeypatch):
+    # The smoke test's real traffic: a handful of events, never a full batch. Before,
+    # they waited in memory for a tenth event that might never come.
+    clock = _Clock()
+    monkeypatch.setattr(events_sheets, "_now", clock)
+    monkeypatch.setattr(events_sheets, "_BATCH_SIZE", 10)
+    monkeypatch.setattr(events_sheets, "_MAX_AGE_SECONDS", 30)
+    svc = _fake_service()
+    with patch.object(events_sheets, "_get_service", return_value=svc),          patch.object(events_sheets, "_sheet_id", return_value="sid"):
+        await record_event(_ev(1))
+        clock.t += 29
+        await record_event(_ev(2))
+        assert len(events_sheets._queue) == 2          # not yet old enough
+        clock.t += 1
+        await record_event(_ev(3))                     # the oldest is now 30s old
+    assert events_sheets._queue == []
+    rows = svc.spreadsheets.return_value.values.return_value.append.call_args.kwargs["body"]["values"]
+    assert [r[1] for r in rows] == ["event-1", "event-2", "event-3"]
+
+
+@pytest.mark.asyncio
+async def test_the_age_clock_starts_at_the_first_row_after_a_flush(monkeypatch):
+    clock = _Clock()
+    monkeypatch.setattr(events_sheets, "_now", clock)
+    monkeypatch.setattr(events_sheets, "_BATCH_SIZE", 2)
+    monkeypatch.setattr(events_sheets, "_MAX_AGE_SECONDS", 30)
+    with patch.object(events_sheets, "_get_service", return_value=_fake_service()),          patch.object(events_sheets, "_sheet_id", return_value="sid"):
+        await record_event(_ev(1))
+        await record_event(_ev(2))                     # batch-size flush
+        assert events_sheets._queue == []
+        clock.t += 100                                 # long idle gap
+        await record_event(_ev(3))                     # a fresh row, not an old one
+    assert len(events_sheets._queue) == 1
+
+
+@pytest.mark.asyncio
+async def test_the_periodic_loop_writes_what_is_queued(monkeypatch):
+    monkeypatch.setattr(events_sheets, "_BATCH_SIZE", 100)
+    svc = _fake_service()
+    with patch.object(events_sheets, "_get_service", return_value=svc),          patch.object(events_sheets, "_sheet_id", return_value="sid"):
+        await record_event(_ev(1))
+        task = asyncio.create_task(events_sheets.flush_loop(0.01))
+        for _ in range(100):
+            if not events_sheets._queue:
+                break
+            await asyncio.sleep(0.01)
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+    assert events_sheets._queue == []
+
+
+@pytest.mark.asyncio
+async def test_the_periodic_loop_survives_a_failing_sink(monkeypatch):
+    monkeypatch.setattr(events_sheets, "_BATCH_SIZE", 100)
+    await record_event(_ev(1))
+    with patch.object(events_sheets, "_get_service", side_effect=RuntimeError("down")):
+        task = asyncio.create_task(events_sheets.flush_loop(0.01))
+        await asyncio.sleep(0.08)                      # several failing ticks
+        assert not task.done()                         # still running
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+    assert len(events_sheets._queue) == 1              # kept for a later flush
+
+
+@pytest.mark.asyncio
+async def test_the_queue_is_bounded_and_drops_the_oldest_first(monkeypatch):
+    monkeypatch.setattr(events_sheets, "_BATCH_SIZE", 1000)
+    monkeypatch.setattr(events_sheets, "_MAX_QUEUE", 3)
+    for n in range(5):
+        await record_event(_ev(n))
+    assert [r[1] for r in events_sheets._queue] == ["event-2", "event-3", "event-4"]
+    assert events_sheets.queue_stats() == {"queued": 3, "dropped": 2}
+
+
+@pytest.mark.asyncio
+async def test_a_failed_flush_requeues_within_the_bound(monkeypatch):
+    monkeypatch.setattr(events_sheets, "_BATCH_SIZE", 1000)
+    monkeypatch.setattr(events_sheets, "_MAX_QUEUE", 2)
+    for n in range(2):
+        await record_event(_ev(n))
+    with patch.object(events_sheets, "_get_service", side_effect=RuntimeError("down")):
+        assert await flush_events() == 0
+    assert len(events_sheets._queue) == 2
+    await record_event(_ev(9))
+    assert [r[1] for r in events_sheets._queue] == ["event-1", "event-9"]
+
+
+def test_shutdown_writes_whatever_is_still_queued(monkeypatch):
+    # main.py's lifespan: the last flush runs as the app stops.
+    from fastapi.testclient import TestClient
+    import main
+    monkeypatch.setattr(main, "seed", lambda tickers: asyncio.sleep(0))
+    monkeypatch.setattr(events_sheets, "_BATCH_SIZE", 100)
+    svc = _fake_service()
+    with patch.object(events_sheets, "_get_service", return_value=svc),          patch.object(events_sheets, "_sheet_id", return_value="sid"):
+        with TestClient(main.app) as client:
+            client.post("/api/events", json={"event": "payment_button_clicked",
+                                             "visitor_id": "v-1", "props": {"plan": "Pro"}})
+            assert len(events_sheets._queue) == 1
+        # leaving the block runs the lifespan shutdown
+    assert events_sheets._queue == []
+    rows = svc.spreadsheets.return_value.values.return_value.append.call_args.kwargs["body"]["values"]
+    assert rows[0][1] == "payment_button_clicked"

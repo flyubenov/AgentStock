@@ -1,5 +1,5 @@
 from __future__ import annotations
-import asyncio, json, os
+import asyncio, json, os, time
 
 from models import AnalyticsEvent
 from services.sheets import _get_service, _sheet_id, _execute, _run_sheets
@@ -8,11 +8,38 @@ _EVENTS_TAB = "Events"
 _EVENTS_HEADERS = ["Timestamp", "Event", "VisitorId", "Props"]
 
 # Sheets rate-limits writes, so events are queued and appended in batches rather
-# than one API call per click. The queue is flushed when it reaches the batch size
-# or when flush_events() is called explicitly.
+# than one API call per click. The queue is flushed when ANY of these happens:
+#   - it reaches the batch size (record_event);
+#   - the oldest queued row has waited longer than _MAX_AGE_SECONDS — checked on every
+#     record_event, because on Cloud Run's request-based CPU a background timer may not
+#     run between requests, but a request always has CPU;
+#   - the periodic flush_loop ticks (started by main.py's lifespan);
+#   - the app shuts down (main.py's lifespan awaits a final flush_events()).
+# Before this, only the batch size triggered a write: at smoke-test traffic up to nine
+# events — payment clicks among them — could sit in memory indefinitely and were lost
+# whenever an idle instance was scaled to zero.
 _BATCH_SIZE = int(os.getenv("EVENTS_BATCH_SIZE", "10"))
+_MAX_AGE_SECONDS = float(os.getenv("EVENTS_MAX_AGE_SECONDS", "30"))
+_FLUSH_INTERVAL_SECONDS = float(os.getenv("EVENTS_FLUSH_INTERVAL_SECONDS", "15"))
+# A hard ceiling on memory: during a long Sheets outage the queue keeps every row for a
+# later flush, but never more than this many. Beyond it the OLDEST rows are dropped —
+# a bounded loss is better than an instance that runs out of memory and loses all of
+# them — and the drop is counted in _dropped.
+_MAX_QUEUE = int(os.getenv("EVENTS_MAX_QUEUE", "5000"))
 _queue: list[list[str]] = []
+_oldest: float | None = None       # time.monotonic() of the oldest queued row
+_dropped = 0
 _lock = asyncio.Lock()
+_now = time.monotonic              # indirection so tests can move the clock
+
+
+def _trim_locked() -> None:
+    """Drop the oldest rows beyond _MAX_QUEUE. Caller holds _lock."""
+    global _dropped
+    excess = len(_queue) - _MAX_QUEUE
+    if excess > 0:
+        del _queue[:excess]
+        _dropped += excess
 
 
 def _to_row(ev: AnalyticsEvent) -> list[str]:
@@ -52,9 +79,14 @@ async def record_event(ev: AnalyticsEvent) -> None:
     was confirmed written to Sheets. flush_events() swallows sink failures and
     requeues, so a queued row survives an outage and goes out on a later flush.
     """
+    global _oldest
     async with _lock:
         _queue.append(_to_row(ev))
-        ready = len(_queue) >= _BATCH_SIZE
+        _trim_locked()
+        now = _now()
+        if _oldest is None:
+            _oldest = now
+        ready = len(_queue) >= _BATCH_SIZE or (now - _oldest) >= _MAX_AGE_SECONDS
     if ready:
         await flush_events()
 
@@ -64,15 +96,35 @@ async def flush_events() -> int:
     sink is unavailable — the failure is swallowed, never propagated, so a dead
     Sheets backend can't turn into a broken request for whoever triggered the
     flush (e.g. record_event's own auto-flush)."""
+    global _oldest
     async with _lock:
         rows, _queue[:] = list(_queue), []
+        taken_oldest, _oldest = _oldest, None
     if not rows:
         return 0
     try:
         await _run_sheets(_append_sync, rows)
     except Exception:
-        # Never lose the funnel to a Sheets outage — put them back for the next flush.
+        # Never lose the funnel to a Sheets outage — put them back for the next flush,
+        # still bounded by _MAX_QUEUE. The age clock restarts rather than resuming:
+        # keeping the original age would make every following request retry a Sheets
+        # outage immediately; the periodic loop still retries on its own interval.
         async with _lock:
             _queue[:0] = rows
+            _trim_locked()
+            _oldest = _now() if _queue else None
         return 0
     return len(rows)
+
+
+async def flush_loop(interval: float | None = None) -> None:
+    """Flush on a fixed interval until cancelled. Started from main.py's lifespan.
+    flush_events() never raises, so one bad flush cannot end the loop."""
+    period = _FLUSH_INTERVAL_SECONDS if interval is None else interval
+    while True:
+        await asyncio.sleep(period)
+        await flush_events()
+
+
+def queue_stats() -> dict:
+    return {"queued": len(_queue), "dropped": _dropped}
