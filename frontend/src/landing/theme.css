@@ -1,552 +1,397 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
-/* Scoped to .intrinsica so the existing dark analyst app is untouched. */
+/* The approved design, ported from the brainstorm mock full-page-v21.html (spec:
+ * "the normative source for layout, copy and interaction"). Rules are the mock's own,
+ * value for value, scoped under .intrinsica so the dark analyst app is untouched.
+ * Where the React markup needs a class the mock never had (the demo-limit wall, the
+ * error notice, the row's keyboard button, the no-plan checkout state) it is added
+ * in the mock's vocabulary and marked as such. */
 .intrinsica {
-  --bg: #ffffff;
-  --stage: #f7f8fb;
-  --text: #0f1222;
-  --dim: #454b63;
-  --mute: #7b819a;
-  --line: #e6e8f0;
-  --accent: #4f46e5;
-  --accent-soft: #eef0fe;
-  --q: #22c55e;
-  --mo: #3b82f6;
-  --fv: #4f46e5;
-  --rr: #f59e0b;
-  --pos: #16a34a;
-  --warn: #d97706;
-  --neg: #dc2626;
-  --fh: 'Space Grotesk', system-ui, sans-serif;
-  --fb: 'Inter', system-ui, sans-serif;
-  --fm: 'JetBrains Mono', monospace;
+  --bg: #ffffff; --bg2: #f7f8fa; --bg3: #f1f2f6; --border: #e9ebef; --border2: #e0e2e8;
+  --text: #0b0b0f; --dim: #54545f; --mute: #8b8b97;
+  --accent: #4f46e5; --accent-d: #4338ca; --accent-soft: #eef0ff;
+  --pos: #16a34a; --neg: #dc2626; --warn: #d97706; --blue: #2563eb;
+  --q: #22c55e; --mo: #3b82f6; --fv: #4f46e5; --rr: #f59e0b;
+  --fh: 'Space Grotesk', sans-serif; --fb: 'Inter', sans-serif; --fm: 'JetBrains Mono', monospace;
+  --r: 16px; --sh: 0 1px 2px rgba(11,11,15,.05), 0 12px 30px rgba(11,11,15,.06);
 
-  /* Do not rely on inheriting anything from body/:root — index.css sets both to a
-   * global dark theme, and this page is the one exception that must render light,
-   * including native controls (inputs, carets, scrollbars, focus rings). */
+  /* index.css sets a global dark theme on :root and body; this page must render
+   * light, including native controls (inputs, carets, scrollbars, focus rings). */
   color-scheme: light;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--fb);
+  background: var(--bg); color: var(--text); font-family: var(--fb); line-height: 1.6;
   min-height: 100vh;
 }
+.intrinsica *, .intrinsica *::before, .intrinsica *::after { box-sizing: border-box; margin: 0; padding: 0; }
+.intrinsica section, .intrinsica #analyze { scroll-margin-top: 64px; }
+.intrinsica .container { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+.intrinsica .pos { color: var(--pos); } .intrinsica .neg { color: var(--neg); } .intrinsica .mute { color: var(--mute); }
+.intrinsica .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+.intrinsica a { color: inherit; text-decoration: none; }
+.intrinsica button { font-family: inherit; }
+.intrinsica button:focus-visible, .intrinsica a:focus-visible, .intrinsica .tagwrap:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px; }
 
-.intrinsica h1, .intrinsica h2, .intrinsica h3, .intrinsica h4 { font-family: var(--fh); }
-.intrinsica .section { padding: 56px 0; }
-.intrinsica .section.stage { background: var(--stage); }
-.intrinsica .container { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
-.intrinsica .nav { position: sticky; top: 0; z-index: 20; background: rgba(255,255,255,.92);
-  backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
-.intrinsica .nav-in { max-width: 1120px; margin: 0 auto; padding: 12px 16px;
-  display: flex; align-items: center; justify-content: space-between; }
-.intrinsica .links { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
-.intrinsica .links a { color: var(--dim); text-decoration: none; font-size: 14px; cursor: pointer; }
+/* nav */
+.intrinsica .nav { position: sticky; top: 0; z-index: 50; background: rgba(255,255,255,.86);
+  backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
+.intrinsica .nav-in { max-width: 1120px; margin: 0 auto; padding: 14px 28px; display: flex; align-items: center; gap: 10px; }
+.intrinsica .logo { display: flex; align-items: center; gap: 9px; font: 700 20px var(--fh); letter-spacing: -.02em; }
+.intrinsica .logo .mk { width: 26px; height: 26px; border-radius: 7px; background: linear-gradient(135deg, var(--accent), #7c74f2);
+  display: grid; place-items: center; color: #fff; font: 700 14px var(--fh); }
+.intrinsica .links { margin-left: auto; display: flex; align-items: center; gap: 24px; }
+.intrinsica .links a { font-size: 14px; color: var(--dim); cursor: pointer; }
 .intrinsica .links a:hover { color: var(--text); }
-.intrinsica .links a.cta { background: var(--accent); color: #fff; border-radius: 8px; padding: 7px 14px; }
-.intrinsica .logo { font-family: var(--fh); font-weight: 700; font-size: 18px;
-  color: var(--text); letter-spacing: -0.01em; }
-.intrinsica .footer { border-top: 1px solid var(--line); background: var(--stage);
-  padding: 40px 0; }
-.intrinsica .footer .legal, .intrinsica .footer .sec { max-width: 640px; margin: 0 auto 12px;
-  font-size: 13px; line-height: 1.6; color: var(--mute); }
-.intrinsica .footer .legal:last-child, .intrinsica .footer .sec:last-child { margin-bottom: 0; }
-@media (max-width: 700px) { .intrinsica .links { gap: 12px; } .intrinsica .section { padding: 36px 0; }
-  .intrinsica .footer { padding: 28px 0; } }
+.intrinsica .links .cta { font: 600 14px var(--fb); color: #fff; background: var(--accent); padding: 9px 18px; border-radius: 10px; }
+.intrinsica .links .cta:hover { color: #fff; background: var(--accent-d); }
+@media (max-width: 720px) { .intrinsica .links a:not(.cta):not(.back) { display: none; } .intrinsica .nav-in { padding: 12px 16px; } }
 
-/* Hero: brand, the four assessments and the analyzer input. */
-.intrinsica .hero { padding: 64px 0 48px; text-align: center; }
-.intrinsica .hero .brand { font-family: var(--fh); font-weight: 700; font-size: 15px;
-  color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; }
-.intrinsica .hero .h3 { font-family: var(--fh); font-weight: 700; font-size: 40px;
-  line-height: 1.15; margin: 10px 0 8px; color: var(--text); }
-.intrinsica .hero .sub { color: var(--dim); font-size: 16px; max-width: 620px;
-  margin: 18px auto 32px; }
-
-.intrinsica .assess4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
-  margin: 32px 0; text-align: left; }
-.intrinsica .assess4 .it { display: flex; flex-direction: column; gap: 8px;
-  background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 16px;
-  cursor: pointer; font-family: inherit; text-align: left; }
-.intrinsica .assess4 .it:hover { border-color: var(--accent); }
-.intrinsica .assess4 .nm { display: flex; align-items: center; gap: 8px;
-  font-family: var(--fh); font-weight: 600; font-size: 14px; color: var(--text); }
-.intrinsica .assess4 .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
-.intrinsica .assess4 .go { margin-left: auto; color: var(--mute); }
-.intrinsica .assess4 .q { font-size: 13px; color: var(--mute); line-height: 1.45; }
-
-.intrinsica .analyzer { max-width: 640px; margin: 0 auto; }
-.intrinsica .an-row { display: flex; gap: 10px; }
-.intrinsica .an-field { flex: 1; }
-.intrinsica .an-field input { width: 100%; box-sizing: border-box; padding: 12px 14px;
-  border: 1px solid var(--line); border-radius: 8px; font-size: 15px; font-family: var(--fb);
-  color: var(--text); background: #fff; }
-.intrinsica .an-field input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-.intrinsica .an-btn { background: var(--accent); color: #fff; border: none; border-radius: 8px;
-  padding: 12px 20px; font-size: 15px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-.intrinsica .an-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+/* hero */
+.intrinsica .hero { text-align: center; padding: 58px 0 22px; }
+.intrinsica .brand { font: 700 58px var(--fh); letter-spacing: -.03em; line-height: 1.6; }
+.intrinsica .h3 { font: 600 22px var(--fh); color: var(--dim); margin-top: 6px; }
+.intrinsica .sub { color: var(--dim); font-size: 16px; margin-top: 13px; }
+.intrinsica .analyzer { max-width: 560px; margin: 24px auto 0; }
+.intrinsica .an-row { display: flex; gap: 10px; background: var(--bg); border: 1.5px solid var(--border2); border-radius: 16px;
+  padding: 8px; box-shadow: var(--sh); transition: .15s; }
+.intrinsica .an-row:focus-within { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft), var(--sh); }
+.intrinsica .an-field { flex: 1; display: flex; align-items: center; padding: 0 16px; }
+.intrinsica .an-field input { width: 100%; border: none; outline: none; background: transparent; font: 500 16px var(--fb);
+  color: var(--text); padding: 14px 0; }
+.intrinsica .an-field input::placeholder { color: #a7a7b2; font-family: var(--fm); font-size: 14px; }
+.intrinsica .an-btn { border: none; border-radius: 11px; background: var(--accent); color: #fff; font: 700 15px var(--fb);
+  padding: 0 26px; cursor: pointer; white-space: nowrap; }
+.intrinsica .an-btn:hover { background: var(--accent-d); }
+.intrinsica .an-btn:disabled { opacity: .6; cursor: not-allowed; }
+.intrinsica .chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 15px; }
+.intrinsica .chips .lbl { font-size: 13px; color: var(--mute); }
+.intrinsica .chip { font: 600 13px var(--fm); color: var(--dim); background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 999px; padding: 6px 13px; cursor: pointer; }
+.intrinsica .chip:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.intrinsica .chip:disabled { opacity: .6; cursor: not-allowed; }
+/* Implementation-only: validation text, the used-up demo wall, a server notice. */
 .intrinsica .an-error { color: var(--neg); font-size: 13px; margin-top: 10px; }
-.intrinsica .an-wall { color: var(--dim); font-size: 15px; line-height: 1.5;
-  background: var(--accent-soft); border: 1px solid var(--line); border-radius: 8px;
-  padding: 16px 18px; }
-.intrinsica .an-wall a { color: var(--accent); font-weight: 600; text-decoration: none; }
+.intrinsica .an-wall { color: var(--dim); font-size: 15px; background: var(--accent-soft); border: 1px solid var(--border2);
+  border-radius: 16px; padding: 16px 18px; }
+.intrinsica .an-wall a { color: var(--accent); font-weight: 600; }
 .intrinsica .an-wall a:hover { text-decoration: underline; }
-.intrinsica .notice { color: var(--dim); font-size: 14px; text-align: center; margin: 0 0 24px; }
+.intrinsica .notice { color: var(--dim); font-size: 14px; text-align: center; margin: 0 auto 14px; }
+@media (max-width: 720px) { .intrinsica .brand { font-size: 44px; } .intrinsica .h3 { font-size: 19px; } }
 
-/* Compare chip: a prefill shortcut beside the analyzer input, not a mode toggle.
- * Lives outside Hero's exhausted-wall branch so it keeps working after the demo
- * allowance runs out (Task 8d/9 handoff). */
-.intrinsica .an-chips { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  margin-top: 14px; font-size: 13px; color: var(--mute); }
-.intrinsica .chip { background: var(--bg); border: 1px solid var(--line); border-radius: 999px;
-  padding: 6px 14px; font-size: 13px; font-family: var(--fb); color: var(--dim);
-  cursor: pointer; }
-.intrinsica .chip:hover { border-color: var(--accent); color: var(--text); }
-.intrinsica .chip:disabled { opacity: 0.6; cursor: not-allowed; border-color: var(--line);
-  color: var(--dim); }
+/* four assessments — inline under headline (V2) */
+.intrinsica .assess4 { display: flex; justify-content: center; gap: 28px; flex-wrap: wrap; max-width: 940px; margin: 16px auto 0; }
+.intrinsica .assess4 .it { max-width: 206px; text-align: center; display: block; padding: 8px 10px; border-radius: 12px;
+  border: 1px solid transparent; transition: .12s; cursor: pointer; }
+.intrinsica .assess4 .it:hover { border-color: var(--border); background: var(--bg2); }
+.intrinsica .assess4 .it:hover .go { opacity: 1; transform: translateX(0); }
+.intrinsica .assess4 .go { color: var(--accent); opacity: 0; transform: translateX(-3px); transition: .12s; }
+.intrinsica .assess4 .nm { font: 700 13.5px var(--fh); display: inline-flex; align-items: center; gap: 6px; }
+.intrinsica .assess4 .q { font-size: 12px; color: var(--mute); margin-top: 3px; line-height: 1.42; }
+@media (max-width: 720px) { .intrinsica .assess4 { gap: 16px 20px; } .intrinsica .assess4 .it { max-width: 45%; } }
 
-/* Results grid (style B / Institutional): values only, units in the header. */
+.intrinsica .section { padding: 58px 0; border-top: 1px solid var(--border); }
+.intrinsica #result { padding-top: 20px; border-top: none; background: var(--bg); }
+.intrinsica .stage { background: var(--bg2); }
+.intrinsica .kicker { font: 600 12px var(--fb); letter-spacing: .16em; text-transform: uppercase; color: var(--accent); margin-bottom: 12px; }
+.intrinsica .stitle { font: 700 30px var(--fh); letter-spacing: -.02em; margin-bottom: 12px; }
+.intrinsica .ssub { color: var(--dim); max-width: 700px; font-size: 16px; }
+.intrinsica .ssub + .ssub { margin-top: 10px; }
+
+/* results: parallel-run bar, grid style B · Institutional */
+.intrinsica .runbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 12px; padding: 11px 15px; margin-bottom: 14px; font-size: 12.5px; color: var(--dim); box-shadow: var(--sh); }
+.intrinsica .runbar .rp { display: flex; align-items: center; gap: 7px; }
+.intrinsica .runbar .mini { width: 70px; height: 5px; border-radius: 999px; background: var(--bg3); overflow: hidden; }
+.intrinsica .runbar .mini > span { display: block; height: 100%; width: 100%; background: var(--pos); }
+.intrinsica .runbar .mini.fail > span { background: var(--neg); }
+.intrinsica .runbar .done { color: var(--pos); } .intrinsica .runbar .fail { color: var(--neg); }
+.intrinsica .runbar .total { margin-left: auto; color: var(--mute); }
+
+.intrinsica .gap-pos { color: var(--pos); } .intrinsica .gap-near { color: var(--blue); }
+.intrinsica .gap-warn { color: var(--warn); } .intrinsica .gap-neg { color: var(--neg); } .intrinsica .gap-none { color: var(--mute); }
 .intrinsica .tB { overflow-x: auto; }
-.intrinsica .g { width: 100%; border-collapse: collapse; font-family: var(--fb);
-  font-size: 14px; }
-.intrinsica .g th { text-align: left; font-family: var(--fh); font-weight: 600;
-  font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--mute);
-  border-bottom: 1px solid var(--line); padding: 10px 12px; white-space: nowrap; }
-.intrinsica .g th u { font-weight: 400; text-decoration: none; color: var(--mute);
-  text-transform: none; }
-.intrinsica .g td { padding: 14px 12px; border-bottom: 1px solid var(--line);
-  vertical-align: top; color: var(--text); }
-.intrinsica .g tr.row { cursor: pointer; }
-.intrinsica .g tr.row:hover { background: var(--stage); }
-.intrinsica .g tr.row.open { background: var(--accent-soft); }
-.intrinsica .g td.co b, .intrinsica .g td.co .cn { display: block; }
-.intrinsica .g td.co .cn { font-size: 12px; color: var(--mute); margin-top: 2px; }
-/* The row's keyboard affordance: a real button that looks like the plain ticker
-   text it replaced (Fix round 1). */
-.intrinsica .g td.co .rowx { display: block; background: none; border: 0; padding: 0;
-  margin: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
-.intrinsica .g td.co .rowx:focus-visible { outline: 2px solid var(--accent);
-  outline-offset: 2px; border-radius: 3px; }
-.intrinsica .g td.ex { color: var(--mute); text-align: right; }
-.intrinsica .g tr.exp td { background: var(--stage); cursor: default; padding: 0; }
-/* Best-in-column highlight (blue), compare mode only — no stars. */
-.intrinsica .g td.best { background: var(--accent-soft); font-weight: 600; color: var(--accent); }
-.intrinsica .g td.gap-pos { color: var(--pos); }
-.intrinsica .g td.gap-near { color: var(--accent); }
-.intrinsica .g td.gap-warn { color: var(--warn); }
-.intrinsica .g td.gap-neg { color: var(--neg); }
-.intrinsica .g td.gap-none { color: var(--mute); }
+.intrinsica .tB table.g { width: 100%; border-collapse: collapse; background: var(--bg); border: 1px solid var(--border2);
+  border-radius: 8px; overflow: hidden; font-variant-numeric: tabular-nums; }
+.intrinsica .tB table.g > thead th { padding: 8px 12px; font: 600 10px var(--fb); letter-spacing: .07em; text-transform: uppercase;
+  color: var(--mute); background: var(--bg2); border-bottom: 1px solid var(--border2); text-align: right; white-space: nowrap; }
+.intrinsica .tB table.g > thead th u { text-decoration: none; text-transform: none; letter-spacing: 0; font-weight: 500; color: #a3a3ad; }
+.intrinsica .tB table.g > thead th:first-child, .intrinsica .tB tr.row td:first-child { text-align: left; }
+.intrinsica .tB tr.row td { padding: 9px 12px; border-bottom: 1px solid var(--border); font: 500 13px var(--fb); text-align: right;
+  white-space: nowrap; vertical-align: top; }
+.intrinsica .tB .tk { font: 700 13px var(--fb); }
+.intrinsica .tB .nm { font-size: 12px; color: var(--mute); margin-left: 8px; }
+/* Implementation-only: the row's keyboard affordance is a real button that reads as
+   the plain ticker text the mock shows. */
+.intrinsica .tB .rowx { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+.intrinsica .tB tr.row { cursor: pointer; }
+.intrinsica .tB tr.row:hover td { background: #fafbfc; }
+.intrinsica .tB tr.row.open td { background: var(--accent-soft); }
+.intrinsica .tB tr.row td.best { color: var(--accent); font-weight: 700; }
+.intrinsica .tB tr.exp > td { background: var(--bg); padding: 6px 16px 18px; border-bottom: 1px solid var(--border2); cursor: default; }
+.intrinsica .tB .chev { display: inline-block; color: var(--mute); transition: transform .15s; }
+.intrinsica .tB tr.row.open .chev { transform: rotate(180deg); color: var(--accent); }
+.intrinsica .free-note { margin-top: 14px; font-size: 12.5px; color: var(--mute); background: var(--bg); border: 1px dashed var(--border2);
+  border-radius: 12px; padding: 13px 15px; }
+.intrinsica .free-note b { color: var(--dim); }
+@media (max-width: 760px) { .intrinsica table.cmp { display: block; overflow-x: auto; } }
 
-.intrinsica .free-note { max-width: 720px; margin: 24px auto 0; font-size: 13px;
-  line-height: 1.6; color: var(--mute); text-align: center; }
-
-@media (max-width: 700px) { .intrinsica .assess4 { grid-template-columns: repeat(2, 1fr); }
-  .intrinsica .an-row { flex-direction: column; } }
-
-/* Breakdown panel (spec 5.3): a full-width slim tab strip over one table per
- * assessment, rendered inside the grid's expanded row. Every selector is scoped
- * under .bd so the grid's own `.g td` / `.g th` rules — which reach these nested
- * tables as descendants — lose on specificity rather than on source order. */
-.intrinsica .bd { padding: 18px 14px 20px; font-family: var(--fb); }
-.intrinsica .bd-tabs { display: grid; grid-template-columns: repeat(4, 1fr);
-  gap: 6px; margin-bottom: 18px; }
-.intrinsica .bd-tabs button { background: var(--bg); border: 1px solid var(--line);
-  border-radius: 8px; padding: 8px 10px; font-family: var(--fh); font-weight: 600;
-  font-size: 13px; color: var(--dim); cursor: pointer; }
-.intrinsica .bd-tabs button:hover { border-color: var(--accent); color: var(--text); }
-.intrinsica .bd-tabs button.on { background: var(--accent-soft); border-color: var(--accent);
-  color: var(--accent); }
-.intrinsica .bd-tabs button:focus-visible { outline: 2px solid var(--accent);
-  outline-offset: 2px; }
-
-.intrinsica .bd .bd-sum { font-size: 14px; color: var(--dim); margin: 0 0 14px;
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.intrinsica .bd .bd-sum b { color: var(--text); }
-.intrinsica .bd .rr-pill { background: var(--accent-soft); border: 1px solid var(--line);
-  border-radius: 999px; padding: 8px 14px; }
-.intrinsica .bd .rr-pill .tier { font-family: var(--fh); font-weight: 600;
-  font-size: 12px; color: var(--accent); }
-.intrinsica .bd .bd-missing, .intrinsica .bd .bd-note { font-size: 13px;
-  color: var(--mute); line-height: 1.55; margin: 12px 0 0; }
+/* breakdown · slim tabs, full width */
+.intrinsica .bd .tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border-bottom: 1px solid var(--border2); margin-bottom: 4px; }
+.intrinsica .bd .tab { min-width: 0; background: none; border: none; border-radius: 0; padding: 10px 4px 9px; cursor: pointer;
+  font: 600 12.5px var(--fb); color: var(--mute); border-bottom: 2px solid transparent; margin-bottom: -1px; display: flex;
+  align-items: baseline; gap: 7px; white-space: nowrap; overflow: hidden; text-align: left; }
+.intrinsica .bd .tab b { font: 600 13px var(--fm); color: var(--dim); }
+.intrinsica .bd .tab.on { color: var(--text); border-bottom-color: var(--accent); }
+.intrinsica .bd .tab.on b { color: var(--accent); }
+.intrinsica .bd .sum { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; padding: 10px 2px 6px; font-size: 12.5px; color: var(--dim); }
+.intrinsica .bd .sum .big { font: 700 16px var(--fm); color: var(--text); }
+.intrinsica .bd .sum .pill { font: 600 11px var(--fb); padding: 2px 9px; border-radius: 999px; background: var(--bg3); color: var(--dim); }
+.intrinsica .bd .sum .pill.good { background: #ecfdf3; color: var(--pos); }
+.intrinsica .bd .sum .pill.warn { background: #fff7ed; color: var(--warn); }
+.intrinsica .bd .sum .hint { margin-left: auto; color: var(--mute); font-size: 11.5px; }
+.intrinsica .bd .help { border-bottom: 1px dotted var(--mute); cursor: help; }
+.intrinsica .bd .bd-missing, .intrinsica .bd .bd-note { font-size: 12.5px; color: var(--mute); padding: 10px 2px 0; }
 .intrinsica .bd .bd-note b { color: var(--text); }
-.intrinsica .bd .bd-missing { margin: 0; }
-
-.intrinsica .bd .cat { margin-bottom: 18px; }
-.intrinsica .bd .cat-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  font-family: var(--fh); font-weight: 600; font-size: 13px; color: var(--text);
-  margin-bottom: 6px; }
-.intrinsica .bd .cat-h .wt { background: var(--accent-soft); color: var(--accent);
-  border-radius: 999px; padding: 2px 9px; font-size: 11px; font-weight: 600; }
-.intrinsica .bd .cat-h .cs { margin-left: auto; font-family: var(--fm);
-  font-size: 12px; color: var(--mute); }
-.intrinsica .bd .cat-h .an { font-family: var(--fb); font-weight: 400;
-  font-size: 12px; color: var(--mute); }
-
-.intrinsica .bd .bt { width: 100%; border-collapse: collapse; font-size: 13px; }
-.intrinsica .bd .bt th { text-align: left; font-family: var(--fh); font-weight: 600;
-  font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em;
-  color: var(--mute); border-bottom: 1px solid var(--line); padding: 6px 10px;
-  white-space: nowrap; }
-.intrinsica .bd .bt td { padding: 7px 10px; border-bottom: 1px solid var(--line);
-  color: var(--text); vertical-align: top; }
-.intrinsica .bd .bt td:not(:first-child) { font-family: var(--fm); white-space: nowrap; }
-.intrinsica .bd .bt tr.excluded td { color: var(--mute); text-decoration: line-through; }
-/* The reason a metric was dropped is the one part of a struck row that still
-   has to read normally — it explains the strike rather than being struck by it. */
-.intrinsica .bd .bt tr.excluded .xn { text-decoration: none; }
-.intrinsica .bd .xn { display: block; font-family: var(--fb); font-size: 11px;
-  color: var(--warn); margin-top: 2px; }
-.intrinsica .bd .bd-sum .xn { display: inline; margin: 0; }
-
-.intrinsica .bd .cals { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
-.intrinsica .bd .cals-h { font-size: 12px; color: var(--mute); }
-/* A span, not the hero's `.chip` button style: these are statements of what the
-   engine did, not controls, and must not offer a pointer cursor. */
-.intrinsica .bd .cal { background: var(--stage); border: 1px solid var(--line);
-  border-radius: 999px; padding: 4px 11px; font-size: 12px; color: var(--dim); }
-
+.intrinsica table.bt { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.intrinsica table.bt th { font: 600 9.5px var(--fb); letter-spacing: .08em; text-transform: uppercase; color: var(--mute); text-align: right;
+  padding: 8px 10px 6px; border-bottom: 1px solid var(--border2); }
+.intrinsica table.bt th:first-child { text-align: left; }
+.intrinsica table.bt td { padding: 5px 10px; border-bottom: 1px solid #f2f3f6; text-align: right; white-space: nowrap; }
+.intrinsica table.bt td:first-child { text-align: left; white-space: normal; color: var(--dim); padding-left: 22px; }
+.intrinsica table.bt td.d { font: 500 12px var(--fm); color: var(--text); }
+.intrinsica table.bt td.w { font: 500 11.5px var(--fm); color: var(--mute); width: 78px; }
+.intrinsica table.bt td.s { width: 130px; }
+.intrinsica table.bt td.mono { font: 600 12px var(--fm); }
+.intrinsica table.bt tr.sec td { background: var(--bg2); border-bottom: 1px solid var(--border); padding-top: 7px; padding-bottom: 7px; }
+.intrinsica table.bt tr.sec td:first-child { padding-left: 10px; color: var(--text); font: 700 12px var(--fb); }
+.intrinsica table.bt tr.sec td.s { font: 700 12.5px var(--fm); color: var(--accent); }
+.intrinsica table.bt tr.sec td.w { font: 700 11.5px var(--fm); color: var(--text); }
+.intrinsica table.bt tr.off td { color: var(--mute); }
+.intrinsica table.bt tr.off td.d { text-decoration: line-through; }
+.intrinsica table.bt tr.tot td { border-top: 2px solid var(--border2); border-bottom: none; padding-top: 8px; font-weight: 700; color: var(--text); }
+.intrinsica table.bt tr.tot td:first-child { padding-left: 10px; }
+.intrinsica table.bt tr.tot td.s { font: 700 13px var(--fm); color: var(--accent); }
+.intrinsica .sc { display: inline-flex; align-items: center; gap: 8px; justify-content: flex-end; }
+.intrinsica .sc span { font: 600 12px var(--fm); min-width: 40px; text-align: right; }
+.intrinsica .sc .bar { width: 46px; height: 4px; border-radius: 999px; background: var(--bg3); overflow: hidden; flex: none; }
+.intrinsica .sc .bar i { display: block; height: 100%; background: var(--accent); }
+.intrinsica .sc .bar.lo i { background: var(--warn); }
+.intrinsica .sc .bar.risk i { background: #94a3b8; }
+.intrinsica .sc .bar.risk.hi i { background: var(--warn); }
+.intrinsica .xn { font: 600 10px var(--fb); color: var(--warn); background: #fff7ed; border: 1px solid #f5d9a8; border-radius: 999px;
+  padding: 1px 7px; cursor: help; text-decoration: none; display: inline-block; margin-left: 4px; }
+.intrinsica .ladder { display: flex; gap: 4px; margin-top: 12px; }
+.intrinsica .ladder .step { flex: 1; text-align: center; font: 600 10px var(--fb); padding: 6px 2px; border-radius: 6px;
+  background: var(--bg2); border: 1px solid var(--border); color: var(--mute); }
+.intrinsica .ladder .step.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.intrinsica .applied { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border2); }
+.intrinsica .applied .al { font: 600 10.5px var(--fb); letter-spacing: .06em; text-transform: uppercase; color: var(--mute);
+  margin-bottom: 7px; display: flex; align-items: center; gap: 6px; }
+.intrinsica .applied .al .ci { color: var(--warn); }
+.intrinsica .cal-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.intrinsica .cal { font-size: 12px; color: var(--dim); background: var(--bg); border: 1px solid var(--border); border-radius: 999px; padding: 5px 11px; }
+.intrinsica .cal.trig { color: var(--warn); background: #fff7ed; border-color: #f5d9a8; cursor: help; }
 @media (max-width: 700px) {
-  .intrinsica .bd-tabs { grid-template-columns: repeat(2, 1fr); }
-  .intrinsica .bd { padding: 14px 10px 16px; }
-  .intrinsica .bd .bt { font-size: 12px; }
+  .intrinsica .bd .tabs { grid-template-columns: repeat(2, 1fr); }
+  .intrinsica table.bt td.s { width: auto; }
+  .intrinsica .sc .bar { display: none; }
+  .intrinsica .bd .sum .hint { margin-left: 0; }
 }
 
-/* "How Intrinsica works" (spec 5.4): overview card -> four assessment cards ->
- * one detail panel. Every colour below is a token declared at the top of this
- * file; the four assessment dots take their own token inline from
- * content/framework.ts, which is the single place those four are named. */
-.intrinsica .ovcard { background: var(--bg); border: 1px solid var(--line);
-  border-radius: 14px; padding: 28px 26px; }
-.intrinsica .kicker { font-family: var(--fh); font-weight: 600; font-size: 12px;
-  text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); }
-.intrinsica .stitle { font-size: 28px; font-weight: 700; margin: 8px 0 12px;
-  color: var(--text); letter-spacing: -0.01em; }
-.intrinsica .ssub { font-size: 15px; line-height: 1.65; color: var(--dim); margin: 0; }
-.intrinsica .ovpts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px 24px;
-  margin: 22px 0 18px; }
-.intrinsica .ovpts > div { font-size: 13.5px; line-height: 1.6; color: var(--mute); }
-.intrinsica .ovpts b { font-family: var(--fh); font-size: 13px; color: var(--text); }
-.intrinsica .ovtail { font-size: 13px; color: var(--mute); margin: 0;
-  padding-top: 16px; border-top: 1px solid var(--line); }
+/* tooltips: hover in the mock; here also keyboard focus, since the wrapper is
+   focusable, so a tip is never mouse-only. */
+.intrinsica .tagwrap { position: relative; display: inline-flex; }
+.intrinsica .tagwrap .tip { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: #0b0b0f;
+  color: #fff; font: 500 11.5px var(--fb); line-height: 1.45; padding: 8px 11px; border-radius: 8px; width: 220px; text-align: center;
+  opacity: 0; pointer-events: none; transition: opacity .12s; z-index: 40; box-shadow: 0 8px 22px rgba(0,0,0,.28);
+  white-space: normal; text-transform: none; letter-spacing: 0; }
+.intrinsica .tagwrap:hover .tip, .intrinsica .tagwrap:focus .tip, .intrinsica .tagwrap:focus-within .tip { opacity: 1; }
+.intrinsica .tagwrap .tip::after { content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+  border: 5px solid transparent; border-top-color: #0b0b0f; }
+.intrinsica .cal-chips .tagwrap .tip { width: 270px; text-align: left; }
+.intrinsica table.bt .tagwrap .tip, .intrinsica .bd .sum .tagwrap .tip, .intrinsica .cal-chips .tagwrap .tip {
+  left: 0; transform: none; text-align: left; width: 270px; }
+.intrinsica table.bt .tagwrap .tip::after, .intrinsica .bd .sum .tagwrap .tip::after, .intrinsica .cal-chips .tagwrap .tip::after {
+  left: 16px; transform: none; }
 
-.intrinsica .mcards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
-  margin: 20px 0; }
-.intrinsica .mcards .mcard { display: flex; flex-direction: column; gap: 8px;
-  background: var(--bg); border: 1px solid var(--line); border-radius: 12px;
-  padding: 16px; text-align: left; font-family: inherit; cursor: pointer; }
-.intrinsica .mcards .mcard:hover { border-color: var(--accent); }
-.intrinsica .mcards .mcard.on { border-color: var(--accent); background: var(--accent-soft); }
-.intrinsica .mcards .mcard:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.intrinsica .mcards .cn { display: flex; align-items: center; gap: 8px;
-  font-family: var(--fh); font-weight: 600; font-size: 14px; color: var(--text); }
-.intrinsica .mcards .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
-.intrinsica .mcards .cq { font-size: 13px; line-height: 1.45; color: var(--mute); }
-.intrinsica .mcards .cs { margin-top: auto; font-family: var(--fm); font-size: 11px;
-  color: var(--accent); }
+/* how it works (Option A) */
+.intrinsica .ovcard { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); padding: 26px 28px; box-shadow: var(--sh); }
+.intrinsica .ovpts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px 26px; margin-top: 18px; }
+.intrinsica .ovpts div { font-size: 13.5px; color: var(--dim); line-height: 1.55; padding-left: 14px; border-left: 2px solid var(--accent-soft); }
+.intrinsica .ovpts b { color: var(--text); }
+.intrinsica .ovtail { margin-top: 16px; font-size: 13px; color: var(--mute); }
+@media (max-width: 760px) { .intrinsica .ovpts { grid-template-columns: 1fr; } }
+.intrinsica .mcards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 18px 0 14px; }
+.intrinsica .mcard { background: var(--bg); border: 1px solid var(--border); border-radius: 14px; padding: 16px; cursor: pointer;
+  box-shadow: var(--sh); border-top: 3px solid transparent; transition: .12s; text-align: left; display: block; width: 100%; }
+.intrinsica .mcard:hover { transform: translateY(-2px); }
+.intrinsica .mcard.on { border-top-color: var(--accent); background: var(--accent-soft); }
+.intrinsica .mcard .cn { font: 700 15px var(--fh); display: flex; align-items: center; gap: 7px; }
+.intrinsica .mcard .cn .dot { width: 9px; height: 9px; }
+.intrinsica .mcard .cq { display: block; font-size: 12.5px; color: var(--dim); margin-top: 3px; }
+.intrinsica .mcard .cs { display: block; font: 600 10.5px var(--fm); color: var(--accent); margin-top: 8px; }
+@media (max-width: 820px) { .intrinsica .mcards { grid-template-columns: repeat(2, 1fr); } }
+.intrinsica .mdetail { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); padding: 24px 26px; box-shadow: var(--sh); }
+.intrinsica .mdetail .dh { font: 700 21px var(--fh); margin-bottom: 4px; display: flex; align-items: center; gap: 9px; }
+.intrinsica .mdetail .dh .dot { width: 11px; height: 11px; }
+.intrinsica .mdetail .scale { font: 600 11px var(--fm); color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 3px 9px; }
+.intrinsica .mdetail .d-what { font-size: 15px; color: var(--dim); margin-bottom: 6px; }
+.intrinsica .grp { display: flex; align-items: center; gap: 10px; background: var(--bg2); border: 1px solid var(--border);
+  border-left: 3px solid var(--accent); border-radius: 9px; padding: 7px 12px; margin: 14px 0 10px;
+  font: 700 11.5px var(--fh); letter-spacing: .03em; text-transform: uppercase; color: var(--text); }
+.intrinsica .grp .wt2 { margin-left: auto; font: 600 10.5px var(--fm); text-transform: none; letter-spacing: 0; color: var(--accent);
+  background: var(--accent-soft); border-radius: 999px; padding: 2px 9px; }
+.intrinsica .gwhen { font-size: 12.5px; color: var(--dim); padding: 0 4px 4px; display: flex; gap: 7px; line-height: 1.45; }
+.intrinsica .gwhen b { font-weight: 600; white-space: nowrap; }
+.intrinsica .gwhen b.up { color: var(--pos); } .intrinsica .gwhen b.dn { color: var(--warn); }
+.intrinsica .gmetrics { font-size: 13.5px; color: var(--dim); padding: 8px 4px 6px; }
+.intrinsica .note { margin-top: 12px; font-size: 13px; color: var(--mute); font-style: italic; }
+.intrinsica .cal-wrap { margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--border2); }
+.intrinsica .cal-title { font: 600 11px var(--fb); letter-spacing: .06em; text-transform: uppercase; color: var(--warn); margin-bottom: 10px; }
+.intrinsica .arow { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; position: relative; }
+.intrinsica .arow .ah { border-radius: 9px; display: flex; align-items: center; gap: 10px; padding: 12px 14px; cursor: pointer;
+  width: 100%; background: none; border: 0; text-align: left; }
+.intrinsica .arow .ah:hover { background: var(--bg3); }
+.intrinsica .arow .ah .nm { display: block; font: 700 14px var(--fh); }
+.intrinsica .arow .ah .sm { display: block; font-size: 12.5px; color: var(--dim); }
+.intrinsica .arow .ah .chev { margin-left: auto; color: var(--mute); transition: transform .15s; }
+.intrinsica .arow.open .chev { transform: rotate(180deg); color: var(--accent); }
+.intrinsica .arow.open .ah { border-radius: 9px 9px 0 0; }
+.intrinsica .arow .ab { border-radius: 0 0 9px 9px; padding: 0 14px 14px; border-top: 1px solid var(--border); }
+.intrinsica .arow .kv { margin-top: 12px; }
+.intrinsica .arow .kv .k { font: 600 10px var(--fb); letter-spacing: .06em; text-transform: uppercase; color: var(--mute); margin-bottom: 3px; }
+.intrinsica .arow .kv .k.when { color: var(--accent); }
+.intrinsica .arow .kv p { font-size: 13.5px; color: var(--dim); }
+.intrinsica .arow .ex { margin-top: 10px; font-size: 12px; color: var(--mute); background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 7px 11px; }
+.intrinsica .arow .ex b { color: var(--dim); }
+.intrinsica .arow .tags { margin-top: 11px; display: flex; gap: 6px; flex-wrap: wrap; }
+.intrinsica .arow .tags .tagwrap .tip { left: 0; transform: none; text-align: left; }
+.intrinsica .arow .tags .tagwrap .tip::after { left: 16px; transform: none; }
+.intrinsica .arow .tags .tagwrap:nth-child(n+3) .tip { left: auto; right: 0; }
+.intrinsica .arow .tags .tagwrap:nth-child(n+3) .tip::after { left: auto; right: 16px; }
+.intrinsica .tg { font: 600 10px var(--fb); border-radius: 999px; padding: 3px 9px; cursor: help; border: 1px solid transparent; }
+.intrinsica .tg.cond { color: var(--accent); background: var(--accent-soft); }
+.intrinsica .tg.guard { color: var(--pos); background: #ecfdf3; }
+.intrinsica .tg.live { color: var(--dim); background: var(--bg3); }
 
-.intrinsica .mdetail { background: var(--bg); border: 1px solid var(--line);
-  border-radius: 14px; padding: 24px 26px; }
-.intrinsica .mdetail .dh { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  font-family: var(--fh); font-weight: 700; font-size: 18px; color: var(--text); }
-.intrinsica .mdetail .dh .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
-.intrinsica .mdetail .scale { background: var(--accent-soft); color: var(--accent);
-  border-radius: 999px; padding: 3px 10px; font-family: var(--fm); font-size: 11px;
-  font-weight: 500; }
-.intrinsica .mdetail .dq { font-size: 14px; color: var(--mute); margin: 8px 0 0; }
-.intrinsica .mdetail .d-what { font-size: 14.5px; line-height: 1.65; color: var(--dim);
-  margin: 10px 0 20px; }
+/* why + workflow */
+.intrinsica .diff-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 8px; }
+.intrinsica .diff { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); padding: 20px; box-shadow: var(--sh); }
+.intrinsica .diff .ic { font-size: 20px; margin-bottom: 10px; }
+.intrinsica .diff h4 { font: 700 15px var(--fh); margin-bottom: 6px; }
+.intrinsica .diff p { font-size: 13px; color: var(--dim); }
+.intrinsica .diff.scale { border-top: 3px solid var(--accent); }
+.intrinsica .why-row { margin-top: 22px; }
+.intrinsica .why-lbl { font: 600 11px var(--fb); letter-spacing: .1em; text-transform: uppercase; color: var(--mute); margin-bottom: 10px;
+  display: flex; align-items: center; gap: 8px; }
+.intrinsica .workflow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 8px; }
+.intrinsica .wf { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); padding: 18px; box-shadow: var(--sh);
+  display: flex; flex-direction: column; }
+.intrinsica .wf .step { font: 600 11px var(--fb); color: var(--mute); }
+.intrinsica .wf h4 { font: 700 16px var(--fh); margin: 6px 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.intrinsica .wf p { font-size: 13px; color: var(--dim); }
+@media (max-width: 980px) { .intrinsica .workflow { grid-template-columns: repeat(2, 1fr); } }
 
-.intrinsica .grpblock { border-top: 1px solid var(--line); padding: 14px 0; }
-.intrinsica .grp { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  font-family: var(--fh); font-weight: 600; font-size: 14px; color: var(--text); }
-.intrinsica .grp .wt2 { background: var(--stage); border: 1px solid var(--line);
-  border-radius: 999px; padding: 2px 10px; font-family: var(--fb); font-weight: 600;
-  font-size: 11px; color: var(--dim); }
-.intrinsica .gmetrics { font-size: 12.5px; line-height: 1.55; color: var(--mute);
-  margin-top: 6px; }
-.intrinsica .gwhen { font-size: 13px; line-height: 1.55; color: var(--dim); margin-top: 6px; }
-/* Green for the good direction, amber for the poor one — the same two tokens the
- * results grid bands its fair-value gap with, so one page-wide vocabulary. */
-.intrinsica .gwhen .up { color: var(--pos); }
-.intrinsica .gwhen .dn { color: var(--warn); }
-.intrinsica .mdetail .note { border-top: 1px solid var(--line); margin: 6px 0 0;
-  padding-top: 14px; font-size: 12.5px; line-height: 1.6; color: var(--mute); }
+/* pricing */
+.intrinsica .billing-toggle { display: inline-flex; gap: 4px; background: var(--bg); border: 1px solid var(--border2); border-radius: 999px;
+  padding: 4px; margin-top: 16px; box-shadow: var(--sh); }
+.intrinsica .billing-toggle button { font: 600 13px var(--fb); border: none; background: transparent; color: var(--dim); padding: 8px 18px;
+  border-radius: 999px; cursor: pointer; }
+.intrinsica .billing-toggle button.on { background: var(--accent); color: #fff; }
+.intrinsica .save { font-size: 11px; opacity: .85; margin-left: 4px; }
+.intrinsica .price-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 24px; align-items: stretch; }
+.intrinsica .price-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); padding: 24px; box-shadow: var(--sh);
+  display: flex; flex-direction: column; }
+.intrinsica .price-card.featured { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft), var(--sh); }
+.intrinsica .pc-badge { font: 700 10px var(--fb); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+.intrinsica .pc-badge.free { color: var(--pos); }
+.intrinsica .price-card h3 { font: 700 18px var(--fh); }
+.intrinsica .pc-for { color: var(--mute); font-size: 13px; margin-bottom: 16px; }
+.intrinsica .price { font: 700 34px var(--fm); letter-spacing: -.02em; }
+.intrinsica .price .amt { font: inherit; }
+.intrinsica .price .per { font-size: 14px; color: var(--mute); font-weight: 500; }
+.intrinsica .price-alt { font-size: 13px; color: var(--mute); margin-top: 4px; }
+.intrinsica .feature-list { list-style: none; margin: 18px 0; display: flex; flex-direction: column; gap: 9px; }
+.intrinsica .feature-list li { font-size: 14px; color: var(--dim); display: flex; gap: 9px; }
+.intrinsica .feature-list li::before { content: "✓"; color: var(--accent); font-weight: 700; }
+.intrinsica .btn-plan { width: 100%; height: 48px; margin-top: auto; border-radius: 11px; border: 1px solid var(--accent); background: transparent;
+  color: var(--accent); font: 700 15px var(--fb); cursor: pointer; }
+.intrinsica .btn-plan:hover { background: var(--accent-soft); }
+.intrinsica .price-card.featured .btn-plan { background: var(--accent); color: #fff; border: none; }
+.intrinsica .price-card.featured .btn-plan:hover { background: var(--accent-d); }
+.intrinsica .compare { margin-top: 44px; border-top: 1px solid var(--border); padding-top: 36px; }
+.intrinsica .compare-h { font: 700 22px var(--fh); text-align: center; margin-bottom: 6px; }
+.intrinsica .compare-sub { text-align: center; color: var(--dim); font-size: 14px; margin-bottom: 24px; }
+.intrinsica .who { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 26px; }
+.intrinsica .who-card { background: var(--bg); border: 1px solid var(--border); border-radius: 14px; padding: 18px; box-shadow: var(--sh);
+  border-top: 3px solid var(--accent); }
+.intrinsica .who-card .wtag { font: 600 10.5px var(--fb); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+.intrinsica .who-card .wt { font: 700 15px var(--fh); }
+.intrinsica .who-card .wfor { font-size: 13px; color: var(--dim); margin-top: 6px; }
+.intrinsica .who-card .wfocus { font-size: 12.5px; color: var(--mute); margin-top: 10px; }
+.intrinsica .who-card .wfocus b { color: var(--dim); }
+.intrinsica table.cmp-plans { width: 100%; border-collapse: collapse; background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--r); overflow: hidden; box-shadow: var(--sh); font-size: 13.5px; }
+.intrinsica table.cmp-plans th, .intrinsica table.cmp-plans td { padding: 12px 14px; border-bottom: 1px solid var(--border); text-align: center; vertical-align: middle; }
+.intrinsica table.cmp-plans thead th { font: 700 13px var(--fh); background: var(--bg2); color: var(--text); }
+.intrinsica table.cmp-plans thead th.u { color: var(--accent); }
+/* The feature name is a `th scope="row"` for screen readers, and keeps the mock's
+   plain first-column look. */
+.intrinsica table.cmp-plans th:first-child, .intrinsica table.cmp-plans td:first-child { text-align: left; color: var(--dim); }
+.intrinsica table.cmp-plans tbody th { font-weight: 400; }
+.intrinsica table.cmp-plans tbody tr:last-child td, .intrinsica table.cmp-plans tbody tr:last-child th { border-bottom: none; }
+.intrinsica table.cmp-plans td.no { color: var(--mute); }
+.intrinsica table.cmp-plans td.on { color: var(--pos); font-weight: 600; }
+.intrinsica table.cmp-plans .sub { display: block; font-size: 11.5px; color: var(--mute); font-weight: 400; margin-top: 2px; }
+.intrinsica .compare-note { text-align: center; font-size: 13px; color: var(--mute); margin-top: 18px; }
+@media (max-width: 760px) { .intrinsica .who { grid-template-columns: 1fr; } .intrinsica .cmp-wrap { overflow-x: auto; }
+  .intrinsica table.cmp-plans { min-width: 580px; } }
 
-.intrinsica .cal-wrap { margin-top: 20px; }
-.intrinsica .cal-title { font-family: var(--fh); font-weight: 600; font-size: 13px;
-  color: var(--accent); margin-bottom: 10px; }
-.intrinsica .arow { border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px;
-  background: var(--stage); overflow: hidden; }
-.intrinsica .arow.open { border-color: var(--accent); background: var(--bg); }
-.intrinsica .arow .ah { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
-  width: 100%; background: none; border: 0; padding: 11px 14px; font-family: inherit;
-  text-align: left; cursor: pointer; }
-.intrinsica .arow .ah:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.intrinsica .arow .nm { font-family: var(--fh); font-weight: 600; font-size: 13px;
-  color: var(--text); }
-.intrinsica .arow .sm { font-size: 12.5px; color: var(--mute); }
-.intrinsica .arow .ab { padding: 0 14px 14px; }
-.intrinsica .arow .kv { margin-bottom: 10px; }
-.intrinsica .arow .k { font-family: var(--fh); font-weight: 600; font-size: 11px;
-  text-transform: uppercase; letter-spacing: 0.04em; color: var(--mute); }
-.intrinsica .arow .k.when { color: var(--accent); }
-.intrinsica .arow .kv p { margin: 3px 0 0; font-size: 13px; line-height: 1.55;
-  color: var(--dim); }
-.intrinsica .arow .ex { font-size: 12.5px; color: var(--mute); margin-bottom: 10px; }
-.intrinsica .arow .ex b { color: var(--text); }
-.intrinsica .tags { display: flex; gap: 6px; flex-wrap: wrap; }
-.intrinsica .tg { border-radius: 999px; padding: 2px 10px; font-size: 11px; font-weight: 600;
-  border: 1px solid var(--line); background: var(--bg); color: var(--dim); }
-.intrinsica .tg.cond { color: var(--accent); background: var(--accent-soft);
-  border-color: var(--accent-soft); }
-.intrinsica .tg.guard { color: var(--pos); }
-.intrinsica .tg.live { color: var(--warn); }
-/* The tag meanings are shown, not hung off `title`: a hover tooltip is invisible
- * on the phones a marketing page is mostly read on, and unreachable by keyboard. */
-.intrinsica .tagnote { margin: 8px 0 0; font-size: 11.5px; line-height: 1.55;
-  color: var(--mute); }
+/* checkout */
+.intrinsica .links a.back { cursor: pointer; }
+.intrinsica .checkout { max-width: 520px; margin: 0 auto; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r);
+  padding: 28px; box-shadow: var(--sh); }
+.intrinsica .co-line { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px dashed var(--border); font-size: 15px; }
+.intrinsica .co-line .lab { color: var(--dim); }
+.intrinsica .co-line .val { font-weight: 600; }
+.intrinsica .co-total { display: flex; justify-content: space-between; padding-top: 14px; font-size: 18px; font-weight: 700; }
+.intrinsica .co-total .val { color: var(--accent); font-family: var(--fm); }
+.intrinsica .btn-buy { display: block; width: 100%; height: 54px; line-height: 54px; margin-top: 18px; border: none; border-radius: 12px;
+  background: var(--accent); color: #fff; font: 700 16px var(--fb); cursor: pointer; text-align: center;
+  box-shadow: 0 6px 16px rgba(79,70,229,.28); }
+.intrinsica .btn-buy:hover { background: var(--accent-d); }
+.intrinsica .co-fine { margin-top: 12px; font-size: 12px; color: var(--mute); text-align: center; }
+.intrinsica .disclosure { margin-top: 20px; padding: 22px; border-radius: 12px; border: 1px solid #bbf7d0; background: #f0fdf4; }
+.intrinsica .disclosure h2 { font: 700 17px var(--fh); color: var(--pos); margin-bottom: 8px; }
+.intrinsica .disclosure p { font-size: 14px; color: var(--dim); }
+.intrinsica .disclosure a { color: var(--accent); font-weight: 600; }
+.intrinsica .disclosure .email { margin-top: 14px; display: flex; gap: 8px; }
+.intrinsica .disclosure .email input { flex: 1; min-width: 0; height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--border2);
+  background: var(--bg); font-size: 14px; font-family: var(--fb); color: var(--text); }
+.intrinsica .disclosure .email input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.intrinsica .disclosure .email button { height: 44px; padding: 0 18px; border: none; border-radius: 10px; background: var(--accent); color: #fff;
+  font-weight: 700; cursor: pointer; }
+.intrinsica .opt { display: block; font-size: 12px; color: var(--mute); margin-top: 8px; }
+.intrinsica .opt.ok { color: var(--pos); }
+/* Implementation-only: the state for a link that names no real plan. */
+.intrinsica .co-none { font-size: 14px; color: var(--dim); }
+
+/* footer */
+.intrinsica .footer { border-top: 1px solid var(--border); padding: 40px 0 64px; }
+.intrinsica .footer .legal { font-size: 12px; color: var(--mute); max-width: 720px; }
+.intrinsica .footer .legal b { color: var(--dim); }
+.intrinsica .footer .sec { margin-top: 12px; font-size: 13px; color: var(--dim); }
 
 @media (max-width: 860px) {
-  .intrinsica .mcards { grid-template-columns: repeat(2, 1fr); }
+  .intrinsica .diff-grid, .intrinsica .price-grid { grid-template-columns: 1fr; }
+  .intrinsica .workflow { grid-template-columns: repeat(2, 1fr); }
+  .intrinsica .stitle { font-size: 24px; }
 }
-@media (max-width: 700px) {
-  .intrinsica .ovpts { grid-template-columns: 1fr; }
-  .intrinsica .ovcard, .intrinsica .mdetail { padding: 20px 16px; }
-  .intrinsica .stitle { font-size: 23px; }
-}
-
-/* "Why Intrinsica" (spec 5.5) and the workflow (spec 5.6). Both reuse the card
- * vocabulary the framework section already established — token border, 12px
- * radius, --bg fill — so the page reads as one system rather than three card
- * designs in a row. Every colour is a token declared at the top of this file;
- * nothing below introduces a literal. */
-.intrinsica .why-lead { max-width: 860px; }
-.intrinsica .why-lead + .why-lead { margin-top: 14px; }
-.intrinsica .why-row { margin-top: 30px; }
-.intrinsica .why-lbl { font-family: var(--fh); font-weight: 600; font-size: 12px;
-  text-transform: uppercase; letter-spacing: 0.08em; color: var(--mute);
-  padding-bottom: 10px; border-bottom: 1px solid var(--line); }
-.intrinsica .diff-grid { display: grid; grid-template-columns: repeat(3, 1fr);
-  gap: 12px; margin-top: 14px; }
-.intrinsica .diff { background: var(--bg); border: 1px solid var(--line);
-  border-radius: 12px; padding: 18px 16px; }
-.intrinsica .diff h4 { margin: 0 0 7px; font-size: 14px; font-weight: 600;
-  color: var(--text); }
-.intrinsica .diff p { margin: 0; font-size: 13px; line-height: 1.6; color: var(--mute); }
-
-.intrinsica .workflow { display: grid; grid-template-columns: repeat(4, 1fr);
-  gap: 12px; margin-top: 22px; }
-.intrinsica .wf { background: var(--bg); border: 1px solid var(--line);
-  border-radius: 12px; padding: 18px 16px; }
-/* The mono face is the same one the framework cards use for their scale pills:
-   a small machine-set label, not a heading. */
-.intrinsica .wf .step { font-family: var(--fm); font-size: 11px; font-weight: 500;
-  letter-spacing: 0.06em; color: var(--accent); }
-.intrinsica .wf h4 { margin: 8px 0 7px; font-size: 14px; font-weight: 600;
-  color: var(--text); }
-.intrinsica .wf p { margin: 0; font-size: 13px; line-height: 1.6; color: var(--mute); }
-
-@media (max-width: 860px) {
-  .intrinsica .diff-grid, .intrinsica .workflow { grid-template-columns: repeat(2, 1fr); }
-}
-@media (max-width: 700px) {
-  .intrinsica .diff-grid, .intrinsica .workflow { grid-template-columns: 1fr; }
-}
-
-/* Pricing (spec 5.7): the billing toggle, three plan cards, the who-it-is-for
- * cards and the canonical plan matrix. Same card vocabulary as the framework
- * and why sections — token border, --bg fill, 12–14px radius — so the page
- * still reads as one system. Every colour below is a token declared at the top
- * of this file; nothing here introduces a literal, and the breakpoints are the
- * page's usual two tiers at 860px and 700px. */
-.intrinsica .billing-toggle { display: inline-flex; gap: 4px; margin: 22px 0 6px;
-  padding: 4px; background: var(--stage); border: 1px solid var(--line);
-  border-radius: 999px; }
-.intrinsica .billing-toggle button { display: inline-flex; align-items: center; gap: 8px;
-  background: none; border: 0; border-radius: 999px; padding: 8px 18px;
-  font-family: var(--fh); font-weight: 600; font-size: 13px; color: var(--dim);
-  cursor: pointer; }
-.intrinsica .billing-toggle button:hover { color: var(--text); }
-.intrinsica .billing-toggle button.on { background: var(--bg); color: var(--accent);
-  box-shadow: 0 0 0 1px var(--line); }
-.intrinsica .billing-toggle button:focus-visible { outline: 2px solid var(--accent);
-  outline-offset: 2px; }
-.intrinsica .billing-toggle .save { font-family: var(--fb); font-weight: 600;
-  font-size: 11px; color: var(--pos); }
-
-.intrinsica .price-grid { display: grid; grid-template-columns: repeat(3, 1fr);
-  gap: 14px; margin: 18px 0 8px; align-items: stretch; }
-/* Equal height with the CTA pinned to the bottom (spec 5.7): the card is a
-   column and the button takes the leftover space above it. */
-.intrinsica .price-card { display: flex; flex-direction: column;
-  background: var(--bg); border: 1px solid var(--line); border-radius: 14px;
-  padding: 22px 20px; }
-.intrinsica .price-card.featured { border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent-soft); }
-.intrinsica .pc-badge { align-self: flex-start; background: var(--accent-soft);
-  color: var(--accent); border-radius: 999px; padding: 3px 11px;
-  font-family: var(--fh); font-weight: 600; font-size: 11px;
-  text-transform: uppercase; letter-spacing: 0.06em; }
-.intrinsica .pc-badge.free { background: var(--stage); color: var(--mute); }
-.intrinsica .price-card h3 { margin: 12px 0 6px; font-size: 18px; font-weight: 700;
-  color: var(--text); }
-.intrinsica .pc-for { font-size: 13px; line-height: 1.55; color: var(--mute); }
-.intrinsica .price { display: flex; align-items: baseline; gap: 4px; margin-top: 16px; }
-.intrinsica .price .amt { font-family: var(--fh); font-weight: 700; font-size: 34px;
-  letter-spacing: -0.02em; color: var(--text); }
-.intrinsica .price .per { font-size: 14px; color: var(--mute); }
-.intrinsica .price-alt { margin-top: 4px; font-size: 12px; color: var(--mute); }
-.intrinsica .feature-list { list-style: none; margin: 18px 0 20px; padding: 0;
-  border-top: 1px solid var(--line); }
-.intrinsica .feature-list li { position: relative; padding: 9px 0 0 18px;
-  font-size: 13px; line-height: 1.55; color: var(--dim); }
-.intrinsica .feature-list li::before { content: '·'; position: absolute; left: 4px;
-  color: var(--accent); font-weight: 700; }
-.intrinsica .btn-plan { margin-top: auto; width: 100%; background: var(--bg);
-  border: 1px solid var(--line); border-radius: 8px; padding: 11px 16px;
-  font-family: var(--fh); font-weight: 600; font-size: 14px; color: var(--text);
-  cursor: pointer; }
-.intrinsica .btn-plan:hover { border-color: var(--accent); color: var(--accent); }
-.intrinsica .btn-plan:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.intrinsica .price-card.featured .btn-plan { background: var(--accent); color: #fff;
-  border-color: var(--accent); }
-.intrinsica .price-card.featured .btn-plan:hover { opacity: .92; color: #fff; }
-
-.intrinsica .compare { margin-top: 40px; padding-top: 28px;
-  border-top: 1px solid var(--line); }
-.intrinsica .compare-h { margin: 0; font-size: 20px; font-weight: 700; color: var(--text); }
-.intrinsica .compare-sub { margin: 8px 0 0; font-size: 14px; line-height: 1.6;
-  color: var(--dim); }
-.intrinsica .compare-sub b { color: var(--text); }
-.intrinsica .who { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
-  margin: 20px 0 22px; }
-.intrinsica .who-card { background: var(--bg); border: 1px solid var(--line);
-  border-radius: 12px; padding: 16px; }
-.intrinsica .who-tag { font-family: var(--fm); font-size: 11px; font-weight: 500;
-  letter-spacing: 0.05em; color: var(--accent); }
-.intrinsica .who-title { margin-top: 6px; font-family: var(--fh); font-weight: 600;
-  font-size: 14px; color: var(--text); }
-.intrinsica .who-for { margin-top: 6px; font-size: 13px; line-height: 1.55;
-  color: var(--mute); }
-.intrinsica .who-focus { margin-top: 8px; padding-top: 8px;
-  border-top: 1px solid var(--line); font-size: 12.5px; line-height: 1.55;
-  color: var(--mute); }
-.intrinsica .who-focus b { color: var(--dim); }
-
-.intrinsica .cmp-wrap { overflow-x: auto; }
-.intrinsica .cmp-plans { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-.intrinsica .cmp-plans thead th { text-align: left; font-family: var(--fh); font-weight: 600;
-  font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em;
-  color: var(--mute); border-bottom: 1px solid var(--line); padding: 9px 12px;
-  white-space: nowrap; }
-.intrinsica .cmp-plans thead th.cmp-u { color: var(--accent); }
-.intrinsica .cmp-plans td { padding: 10px 12px; border-bottom: 1px solid var(--line);
-  color: var(--text); vertical-align: top; }
-/* The feature name is a `th scope="row"` for the screen reader, and has to keep
-   reading as the body text it looks like — so it takes the row styling, not
-   the uppercase column-header styling above. */
-.intrinsica .cmp-plans tbody th { text-align: left; font-family: inherit; font-weight: 400;
-  font-size: inherit; letter-spacing: normal; text-transform: none;
-  padding: 10px 12px; border-bottom: 1px solid var(--line);
-  color: var(--dim); vertical-align: top; width: 42%; }
-.intrinsica .cmp-plans td.cmp-no { color: var(--mute); }
-/* The row's explanation, shown inline rather than hung off `title` — see
-   Pricing.tsx: this page carries no hover-only affordance. */
-.intrinsica .cmp-plans .cmp-note { display: block; margin-top: 3px; font-size: 11.5px;
-  line-height: 1.5; color: var(--mute); }
-.intrinsica .compare-note { margin: 18px 0 0; font-size: 13px; line-height: 1.6;
-  color: var(--mute); }
-
-@media (max-width: 860px) {
-  .intrinsica .price-grid, .intrinsica .who { grid-template-columns: 1fr; }
-  .intrinsica .cmp-plans tbody th { width: auto; }
-}
-@media (max-width: 700px) {
-  .intrinsica .price-card { padding: 18px 16px; }
-  .intrinsica .price .amt { font-size: 29px; }
-  .intrinsica .billing-toggle { display: flex; }
-  .intrinsica .billing-toggle button { flex: 1; justify-content: center; padding: 8px 12px; }
-  .intrinsica .cmp-plans { font-size: 12.5px; }
-  /* Named through `thead th` and `tbody th` rather than a bare `th`. A media
-     query adds no specificity, so the bare form (0,2,1) lost to the base
-     `.intrinsica .cmp-plans thead th` / `tbody th` rules (0,2,2) that Task 13's
-     `<th scope="row">` fix introduced — and on a phone the header row and the
-     whole first column kept desktop padding while only the value cells shrank.
-     The 860px block above is already specific enough (`tbody th` vs `tbody th`,
-     later in source wins), so it has no equivalent problem. */
-  .intrinsica .cmp-plans thead th, .intrinsica .cmp-plans tbody th,
-  .intrinsica .cmp-plans td { padding: 8px 8px; }
-}
-
-/* Checkout (spec 6) — the fake door's last step. Nothing here styles a payment
- * field, because there is no payment field to style: the one input this page
- * renders is the optional email inside the disclosure, and it only exists after
- * the click. Tokens only, the same two breakpoints as the rest of the file. */
-.intrinsica .checkout { max-width: 520px; margin: 22px auto 0; background: var(--bg);
-  border: 1px solid var(--line); border-radius: 14px; padding: 24px 22px; }
-
-/* A description list rather than rows of spans: Plan / Billing / Total is
-   exactly a term-and-value table, and the grid pins the values to one column. */
-.intrinsica .co-lines { display: grid; grid-template-columns: auto 1fr;
-  gap: 0; margin: 0 0 20px; }
-.intrinsica .co-lines dt { padding: 11px 0; font-size: 14px; color: var(--mute);
-  border-bottom: 1px solid var(--line); }
-.intrinsica .co-lines dd { margin: 0; padding: 11px 0; font-size: 14px;
-  font-weight: 600; color: var(--text); text-align: right;
-  border-bottom: 1px solid var(--line); }
-.intrinsica .co-lines dt.co-total, .intrinsica .co-lines dd.co-total {
-  border-bottom: 0; padding-top: 14px; font-family: var(--fh); font-weight: 700;
-  font-size: 16px; color: var(--text); }
-
-/* Shared by the button and by the "See the plans" link the no-plan state shows
-   instead of one, so both read as the same affordance. */
-.intrinsica .btn-buy { display: block; box-sizing: border-box; width: 100%;
-  background: var(--accent); color: var(--bg); border: 1px solid var(--accent);
-  border-radius: 8px; padding: 13px 16px; font-family: var(--fh); font-weight: 600;
-  font-size: 15px; text-align: center; text-decoration: none; cursor: pointer; }
-.intrinsica .btn-buy:hover { opacity: .92; }
-.intrinsica .btn-buy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-
-.intrinsica .co-none { margin: 0 0 20px; font-size: 14px; line-height: 1.6;
-  color: var(--dim); }
-
-/* Revealed in place on the click, never before it. */
-.intrinsica .disclosure { margin-top: 20px; background: var(--accent-soft);
-  border: 1px solid var(--line); border-radius: 12px; padding: 18px 18px 16px; }
-/* h2, not h4: the checkout is a standalone route and opens at h1, so the
-   disclosure heading is the next level down. Every value here is explicit, so the
-   tag change leaves the rendering identical. */
-.intrinsica .disclosure h2 { margin: 0 0 8px; font-size: 15px; font-weight: 700;
-  color: var(--text); }
-.intrinsica .disclosure p { margin: 0 0 14px; font-size: 13.5px; line-height: 1.6;
-  color: var(--dim); }
-.intrinsica .disclosure p b { color: var(--text); }
-/* Matches the in-copy link in the hero's demo wall — accent, no underline. */
-.intrinsica .disclosure a { color: var(--accent); font-weight: 600;
-  text-decoration: none; }
-
-/* Optional means optional: a plain label above the field, no required marker,
-   nothing gated behind it. */
-.intrinsica .co-opt { display: block; margin: 0 0 7px; font-size: 12.5px;
-  line-height: 1.5; color: var(--mute); }
-.intrinsica .disclosure .co-opt:last-child { margin: 9px 0 0; color: var(--pos); }
-.intrinsica .co-email { display: flex; gap: 8px; }
-.intrinsica .co-email input { flex: 1; min-width: 0; box-sizing: border-box;
-  padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
-  font-size: 14px; font-family: var(--fb); color: var(--text); background: var(--bg); }
-.intrinsica .co-email input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-.intrinsica .co-email button { background: var(--bg); border: 1px solid var(--line);
-  border-radius: 8px; padding: 10px 16px; font-family: var(--fh); font-weight: 600;
-  font-size: 13px; color: var(--text); cursor: pointer; white-space: nowrap; }
-.intrinsica .co-email button:hover { border-color: var(--accent); color: var(--accent); }
-.intrinsica .co-email button:focus-visible { outline: 2px solid var(--accent);
-  outline-offset: 2px; }
-
-.intrinsica .co-fine { margin: 14px 0 0; font-size: 12.5px; line-height: 1.6;
-  color: var(--mute); text-align: center; }
-
-@media (max-width: 700px) {
-  .intrinsica .checkout { padding: 18px 16px; }
-  .intrinsica .co-email { flex-direction: column; }
-  .intrinsica .co-email button { width: 100%; }
+@media (max-width: 560px) {
+  .intrinsica .container { padding: 0 16px; }
+  .intrinsica .an-row { flex-direction: column; }
+  .intrinsica .an-btn { height: 46px; }
+  .intrinsica .workflow { grid-template-columns: 1fr; }
+  .intrinsica .disclosure .email { flex-direction: column; }
+  .intrinsica .checkout { padding: 20px 16px; }
 }

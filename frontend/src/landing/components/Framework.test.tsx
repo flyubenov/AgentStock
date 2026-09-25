@@ -199,10 +199,15 @@ describe('Framework — page rules', () => {
   // Controller ruling: no hover-only affordance on this page. It is public
   // marketing with heavy mobile traffic, where `title` never appears at all, so
   // the tag explanations are rendered inline instead.
-  it('explains its tags inline rather than on hover', async () => {
+  // The mock explains each tag in a hover tooltip. Here the tooltip is also
+  // reachable by keyboard focus (and by tap on a phone), its text is always in
+  // the DOM for a screen reader, and nothing hangs off a `title` attribute.
+  it('explains its tags in a focusable tooltip, never a title attribute', async () => {
     const { container } = show(1)
     await userEvent.click(screen.getByText('Tangible-ROIC (ex-goodwill)'))
-    expect(screen.getByText(/only when the company's data matches/i)).toBeInTheDocument()
+    const tip = screen.getByText(/only when the company's data matches/i)
+    expect(tip).toHaveAttribute('role', 'tooltip')
+    expect(tip.closest('.tagwrap')).toHaveAttribute('tabindex', '0')
     expect(container.querySelector('[title]')).toBeNull()
   })
 

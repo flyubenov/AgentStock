@@ -2,6 +2,9 @@
 export interface MetricRow {
   label: string
   raw: number | null
+  /** `raw` in its own unit, ready to print ("32%", "0.4×", "Net cash") —
+   *  backend/landing/figures.py. Null when there is no figure. */
+  display: string | null
   score: number | null
   weight_pct: number
   excluded: boolean
@@ -27,11 +30,22 @@ export interface QualityBlock {
   categories: QualityCategory[]
 }
 
+export interface MoatFactor {
+  label: string
+  /** Magnitude, Durability or Cash-backing — the three pillar groups. */
+  group: string
+  /** The input the pillar was scored from, formatted ("55%", "9 of 10 yrs"). */
+  display: string | null
+  points: number | null
+  max_points: number
+  weight_pct: number
+}
+
 export interface MoatBlock {
   score: number | null
   gated: boolean
   excluded: string[]
-  factors: { label: string; points: number | null; max_points: number; weight_pct: number }[]
+  factors: MoatFactor[]
 }
 
 export interface FairValueBlock {
@@ -44,6 +58,8 @@ export interface FairValueBlock {
 export interface RewardRiskFactor {
   label: string
   raw: number | null
+  /** Formatted by the source that scored the slot ("ROE 149%", "β 1.08"). */
+  display: string | null
   score: number | null
   weight_pct: number
   dropped: boolean

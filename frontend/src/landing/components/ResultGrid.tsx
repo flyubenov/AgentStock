@@ -1,6 +1,6 @@
 import { Fragment, type ReactNode } from 'react'
 import type { TickerPayload } from '../types'
-import { gapClass, money, num, pct } from '../format'
+import { dollars, gapClass, gapPct, money, num } from '../format'
 
 interface Props {
   rows: TickerPayload[]
@@ -38,8 +38,7 @@ export default function ResultGrid({ rows, open, onToggle, renderBreakdown }: Pr
   if (rows.length === 0) return null
 
   // Best-in-column highlight (spec 5.2) applies only in compare mode — more than
-  // one ticker in the run, whether that came from a typed multi-ticker analysis
-  // or the compare chip. A single row never highlights anything.
+  // one ticker in the run. A single row never highlights anything.
   const compare = rows.length > 1
   const bestQuality = compare ? bestOf(rows.map(r => r.quality?.score ?? null)) : null
   const bestMoat = compare ? bestOf(rows.map(r => r.moat?.score ?? null)) : null
@@ -73,24 +72,22 @@ export default function ResultGrid({ rows, open, onToggle, renderBreakdown }: Pr
               <Fragment key={r.ticker}>
                 <tr className={isOpen ? 'row open' : 'row'}
                     onClick={() => onToggle(r.ticker)}>
-                  <td className="co">
-                    {/* The whole row stays clickable for a mouse, but the
-                        keyboard and screen-reader affordance is a real <button>
-                        in the first cell rather than a role on the <tr>: a row
-                        carrying role="button" stops being a row for assistive
-                        technology and takes the cells with it. The button gets
-                        Enter/Space and a focus ring for free, and its own click
-                        is stopped from bubbling so a mouse click on the ticker
-                        toggles once, not twice. */}
+                  <td>
+                    {/* The whole row stays clickable for a mouse, but the keyboard
+                        and screen-reader affordance is a real <button> in the first
+                        cell rather than a role on the <tr>: a row carrying
+                        role="button" stops being a row for assistive technology.
+                        Its own click is stopped from bubbling so a mouse click on
+                        the ticker toggles once, not twice. */}
                     <button
                       type="button"
                       className="rowx"
                       aria-expanded={isOpen}
                       onClick={e => { e.stopPropagation(); onToggle(r.ticker) }}
                     >
-                      <b>{r.ticker}</b>
+                      <span className="tk">{r.ticker}</span>
                     </button>
-                    <span className="cn">{r.company_name ?? ''}</span>
+                    <span className="nm">{r.company_name ?? ''}</span>
                   </td>
                   <td className={isBest(quality, bestQuality) ? 'best' : undefined}>
                     {num(quality, 1)}
@@ -98,20 +95,19 @@ export default function ResultGrid({ rows, open, onToggle, renderBreakdown }: Pr
                   <td className={isBest(moat, bestMoat) ? 'best' : undefined}>
                     {num(moat, 0)}
                   </td>
-                  <td>{money(r.fair_value?.value ?? null)}</td>
+                  <td>{dollars(r.fair_value?.value ?? null)}</td>
                   <td className={
                     [gapClass(gap), isBest(gap, bestGap) ? 'best' : ''].filter(Boolean).join(' ')
                   }>
-                    {pct(gap)}
+                    {gapPct(gap)}
                   </td>
                   <td>{money(r.price)}</td>
                   <td className={isBest(rr, bestRR) ? 'best' : undefined}>
-                    {num(rr, 1)}
+                    {rr === null || !Number.isFinite(rr) ? num(rr, 1) : `${num(rr, 1)}×`}
                   </td>
-                  {/* Decoration only: the expanded/collapsed state is already
-                      announced by the row button's aria-expanded, so the caret
-                      would just add an unnamed glyph to the accessibility tree. */}
-                  <td className="ex"><span aria-hidden="true">{isOpen ? '▴' : '▾'}</span></td>
+                  {/* Decoration only: the expanded state is already announced by
+                      the row button's aria-expanded. */}
+                  <td><span className="chev" aria-hidden="true">▾</span></td>
                 </tr>
                 {isOpen && (
                   <tr className="exp">
@@ -123,6 +119,31 @@ export default function ResultGrid({ rows, open, onToggle, renderBreakdown }: Pr
           })}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+/** "Computed in parallel: AAPL ✓ MSFT ✓ NVDA ✓ · 3 tickers · 2.1s" — shown above the
+ *  grid whenever more than one ticker ran (spec 5.2). A ticker whose engines all
+ *  declined is marked ✗ rather than ✓: the bar reports what happened. */
+export function RunBar({ rows, ms }: { rows: TickerPayload[]; ms: number | null }) {
+  if (rows.length < 2) return null
+  return (
+    <div className="runbar">
+      <span className="rp">Computed in parallel:</span>
+      {rows.map(r => {
+        const ok = !!(r.quality || r.moat || r.fair_value || r.reward_risk)
+        return (
+          <span key={r.ticker} className="rp">
+            {r.ticker}{' '}
+            <span className={ok ? 'mini' : 'mini fail'} aria-hidden="true"><span /></span>{' '}
+            <span className={ok ? 'done' : 'fail'} aria-label={ok ? 'done' : 'failed'}>{ok ? '✓' : '✗'}</span>
+          </span>
+        )
+      })}
+      <span className="rp total">
+        {rows.length} tickers{ms !== null ? ` · ${(ms / 1000).toFixed(1)}s` : ''}
+      </span>
     </div>
   )
 }

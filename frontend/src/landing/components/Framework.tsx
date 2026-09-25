@@ -1,6 +1,15 @@
 import { useState } from 'react'
 import { CALIBRATIONS, FRAMEWORK, OVERVIEW } from '../content/framework'
+import Tip from './Tip'
 import type { AssessmentId } from '../types'
+
+/** What each calibration tag means, shown as the mock's hover tooltip (also on
+ *  keyboard focus — see Tip). */
+const TAG_TIPS = {
+  cond: "Not always on — this calibration fires only when the company's data matches a specific pattern.",
+  guard: 'Guarded: it can only ever correct a distortion — never inflate a score.',
+  live: "Whether it fired for a given stock is shown on that stock's result.",
+}
 
 /** Spec 5.4: overview card -> four clickable assessment cards -> one detail
  *  panel, identical in shape for all four.
@@ -85,8 +94,7 @@ export default function Framework({ tab, onTab }: {
             <span className="dot" style={{ background: a.color }} />
             {a.name} <span className="scale">{a.scale}</span>
           </div>
-          <p className="dq">{a.question}</p>
-          <p className="d-what">{a.what}</p>
+          <div className="d-what">{a.what}</div>
 
           {a.groups.map(g => (
             <div key={g.title} className="grpblock">
@@ -109,8 +117,11 @@ export default function Framework({ tab, onTab }: {
                 <div key={c.name} className={open ? 'arow open' : 'arow'}>
                   <button type="button" className="ah" aria-expanded={open}
                           onClick={() => setOpenCal(open ? null : c.name)}>
-                    <span className="nm">{c.name}</span>
-                    <span className="sm">{c.summary}</span>
+                    <span>
+                      <span className="nm">{c.name}</span>
+                      <span className="sm">{c.summary}</span>
+                    </span>
+                    <span className="chev" aria-hidden="true">▾</span>
                   </button>
                   {open && (
                     <div className="ab">
@@ -120,23 +131,10 @@ export default function Framework({ tab, onTab }: {
                         <p>{c.effect}</p></div>
                       {c.example && <div className="ex"><b>Example:</b> {c.example}</div>}
                       <div className="tags">
-                        <span className="tg cond">Conditional</span>
-                        {c.guarded && <span className="tg guard">Guarded</span>}
-                        <span className="tg live">Shown live</span>
+                        <Tip label="Conditional" tip={TAG_TIPS.cond} className="tg cond" />
+                        {c.guarded && <Tip label="Guarded" tip={TAG_TIPS.guard} className="tg guard" />}
+                        <Tip label="Shown live" tip={TAG_TIPS.live} className="tg live" />
                       </div>
-                      {/* The tag meanings are rendered, not hung off `title`.
-                          This is a public marketing page with heavy mobile
-                          traffic, where a hover tooltip never appears at all —
-                          and a keyboard user cannot reach one either. The tag
-                          names are left unemphasised here so each stays a single
-                          unambiguous element for a test (and a reader) to find. */}
-                      <p className="tagnote">
-                        Conditional — not always on: this calibration fires only when
-                        the company's data matches a specific pattern.
-                        {c.guarded && ' Guarded — it can only ever correct a distortion, never inflate a score.'}
-                        {' '}Shown live — whether it fired for a given stock is named on
-                        that stock's result.
-                      </p>
                     </div>
                   )}
                 </div>

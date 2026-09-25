@@ -14,7 +14,7 @@ import { MAX_TICKERS } from '../components/Hero'
  *  charges something else. */
 
 const ALL_LABELS = [
-  'Full-depth analysis (Quality · Moat · Fair Value · Reward / Risk)',
+  'Full-depth analysis (Quality · Moat · Fair Value · Reward/Risk)',
   'Breakdown, methodology & calibrations',
   'Analyses per month',
   'Tickers per analysis run',
@@ -25,7 +25,7 @@ const ALL_LABELS = [
   'Score history',
   'Score-history charts',
   'Bulk / parallel analysis',
-  'Discovery — screen on the four assessments',
+  'Discovery — screen on Quality/Moat/FV/Reward/Risk',
   'Full stock universe',
   'Score-change alerts',
   'Automated monitoring',
@@ -94,24 +94,24 @@ describe('plans', () => {
   // same words and says something different.
   it('lists each plan’s features in order', () => {
     expect(PLANS[0].features).toEqual([
-      '~5 full-depth analyses a month',
-      'Every analysis complete — Quality, Moat, Fair Value & Reward / Risk, with the whole breakdown and nothing blurred',
+      '~5 full-depth analyses / month',
+      'Every analysis complete — Quality, Moat, Fair Value & Reward/Risk with the full breakdown, nothing blurred',
       'Up to 3 tickers per analysis run',
       '1 watchlist, up to 5 stocks',
-      '6 months of score history',
-      'Discovery: the filters are visible, running them is locked',
+      '6 months of score history (2 quarters)',
+      'Discovery: see the filters, results locked',
     ])
     expect(PLANS[1].features).toEqual([
-      'Everything in Free, at the same full depth, plus:',
+      'Everything in Free (same full depth), plus:',
       'Unlimited analyses — no monthly cap',
       'Up to 10 tickers per analysis run · side-by-side breakdown of 3',
       '5–10 watchlists of 50 stocks · ~2 years of score history & charts',
-      'Score-change alerts · CSV / PDF export · basic portfolio analysis',
+      'Score-change alerts (10–20) · CSV / PDF export · basic portfolio analysis',
     ])
     expect(PLANS[2].features).toEqual([
       'Everything in Pro, plus:',
       'Bulk / parallel analysis — 25, 50, 100+ tickers in one run',
-      'Screen hundreds of stocks on the four assessments',
+      'Screen on Quality/Moat/FV/Reward/Risk across hundreds of stocks',
       'Unlimited watchlists · advanced portfolio analysis',
       'Full score-history evolution & “What Changed?”',
       'Automated monitoring · unlimited alerts · bulk exports',
@@ -250,7 +250,7 @@ describe('plans', () => {
     }
     const uniform = COMPARE_ROWS.filter(r => new Set(r.values).size === 1)
     expect(uniform.map(r => r.label)).toEqual([
-      'Full-depth analysis (Quality · Moat · Fair Value · Reward / Risk)',
+      'Full-depth analysis (Quality · Moat · Fair Value · Reward/Risk)',
       'Breakdown, methodology & calibrations',
     ])
   })
@@ -333,18 +333,17 @@ describe('plans', () => {
     expect(JSON.stringify(free)).toMatch(/nothing blurred/i)
   })
 
-  // Spec section 8, rules 1 and 2. `FRAMEWORK[3].name` is "Reward / Risk" and
-  // this module must spell it the same way — anchored on a string that is
-  // really there, so an empty module could not satisfy it.
-  it('says assessment rather than signal, and Reward / Risk rather than Risk/Reward', () => {
+  // Spec section 8, rules 1 and 2 — anchored on a string that is really there, so
+  // an empty module could not satisfy it. The approved mock writes the label
+  // "Reward/Risk" in running copy (and "Reward / Risk" as a heading); either is the
+  // right direction. What is banned is the reversed ratio, the hyphenated compound
+  // and the R/R abbreviation.
+  it('says assessment rather than signal, and Reward/Risk rather than Risk/Reward', () => {
     const text = JSON.stringify([PLANS, COMPARE_ROWS, WHO, PERIODS])
-    expect(text).toContain('Reward / Risk')
-    expect(text).toContain('four assessments')
+    expect(text).toMatch(/Reward\s?\/\s?Risk/)
     expect(text).not.toMatch(/signal/i)
     expect(text).not.toMatch(/Risk\s*[/-]\s*Reward/)
-    // The un-spaced forms, which `FRAMEWORK[3].name` does not use: the label is
-    // "Reward / Risk" everywhere on this page, including in "R/R" and "R-R".
-    expect(text).not.toMatch(/Reward[/-]Risk/)
+    expect(text).not.toMatch(/Reward\s*-\s*Risk\b/)
     expect(text).not.toMatch(/\bR\s*[/-]\s*R\b/)
   })
 

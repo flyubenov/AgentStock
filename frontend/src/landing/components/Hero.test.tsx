@@ -15,11 +15,18 @@ describe('Hero', () => {
     }
   })
 
-  it('selects that assessment when one is clicked', async () => {
+  // Spec 5.1: "clicking jumps to the methodology section and selects that
+  // assessment's tab". Both halves: the link targets #how, and the click selects.
+  it('jumps to the methodology section and selects that assessment when one is clicked', async () => {
     const onSelect = vi.fn()
     render(<Hero onAnalyze={noop} onSelectAssessment={onSelect} busy={false} exhausted={false} />)
-    await userEvent.click(screen.getByRole('button', { name: /Moat/ }))
+    const moat = screen.getByRole('link', { name: /Moat/ })
+    expect(moat).toHaveAttribute('href', '#how')
+    await userEvent.click(moat)
     expect(onSelect).toHaveBeenCalledWith(1)
+    for (const a of ASSESSMENTS) {
+      expect(screen.getByRole('link', { name: new RegExp(a.name) })).toHaveAttribute('href', '#how')
+    }
   })
 
   it('splits a comma-separated list, upper-cases it and drops blanks', async () => {

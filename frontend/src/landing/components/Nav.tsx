@@ -6,11 +6,16 @@ const SECTIONS = [
   { href: '#pricing', label: 'Pricing' },
 ]
 
+/** The logo block, shared with the checkout's mini-nav. */
+export function Logo() {
+  return <div className="logo"><span className="mk" aria-hidden="true">I</span>Intrinsica</div>
+}
+
 export default function Nav() {
   return (
     <nav className="nav">
       <div className="nav-in">
-        <div className="logo">Intrinsica</div>
+        <Logo />
         <div className="links">
           {SECTIONS.map(s => (
             <a key={s.href} href={s.href}>{s.label}</a>

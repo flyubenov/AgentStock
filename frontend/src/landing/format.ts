@@ -64,3 +64,39 @@ export function gapClass(v: number | null): string {
   if (v >= -10) return 'gap-warn'
   return 'gap-neg'
 }
+
+/** Whole dollars — the mock's headline form for fair value ("$193"). The exact
+ *  blended figure still appears, to the cent, on the breakdown's total row. */
+export function dollars(v: number | null): string {
+  return finite(v) ? `$${Math.round(v)}` : DASH
+}
+
+/** The fair-value gap as the grid shows it: signed, whole percent ("+5%", "−44%"). */
+export function gapPct(v: number | null): string {
+  if (!finite(v)) return DASH
+  const r = Math.round(v)
+  if (r === 0) return '0%'
+  return `${r > 0 ? '+' : '−'}${Math.abs(r)}%`
+}
+
+/** The outcome bands the framework section publishes (spec 5.4 item 4), read back
+ *  onto one score. These are the public bands, never a metric's scoring cut-off. */
+export function qualityTier(v: number | null): string | null {
+  if (!finite(v)) return null
+  if (v >= 9) return 'Top-decile'
+  if (v >= 8) return 'Excellent'
+  if (v >= 7) return 'Strong'
+  if (v >= 5) return 'Moderate'
+  return 'Weak'
+}
+
+export function moatTier(v: number | null): string | null {
+  if (!finite(v)) return null
+  if (v >= 80) return 'Wide'
+  if (v >= 60) return 'Established'
+  if (v >= 40) return 'Narrow'
+  return 'Little or none'
+}
+
+/** Reward/Risk tiers, highest first — risk_reward/config.py's tier ladder. */
+export const RR_TIERS = ['Asymmetric Upside', 'Reward-Favored', 'Balanced', 'Risk-Favored', 'Value Trap'] as const

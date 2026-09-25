@@ -1,18 +1,11 @@
 /** The workflow (spec 5.6): Analyze → Compare → Watch → Monitor, as four equal
- *  steps.
+ *  steps, word for word from the approved mock full-page-v21.html.
  *
- *  Three things the spec asks for by omission, and they are the easy ones to
- *  put back by accident: Discover is folded into step 1 and is *not* a fifth
- *  step; there is no per-tier limit strip under the cards; and there is no
- *  "feeds back into Analyze" line closing the loop. WhyWorkflow.test.tsx pins
- *  the step list by equality, so a fifth card fails rather than ships.
- *
- *  Content-only and prop-less, like Why — nothing here selects an assessment or
- *  reads a result.
- *
- *  The only numbers in this section are the step ordinals. No scoring cut-off,
- *  no per-plan allowance: the one nod to plans is qualitative, and the actual
- *  numbers live in Task 13's pricing section. */
+ *  Three things the spec asks for by omission, and they are the easy ones to put
+ *  back by accident: Discover is folded into step 1 and is *not* a fifth step; there
+ *  is no per-tier limit strip under the cards; and there is no "feeds back into
+ *  Analyze" line closing the loop. WhyWorkflow.test.tsx pins the step list by
+ *  equality, so a fifth card fails rather than ships. */
 
 interface Step {
   title: string
@@ -20,22 +13,11 @@ interface Step {
 }
 
 const STEPS: Step[] = [
-  {
-    title: 'Analyze or discover',
-    body: 'Start from the tickers you already follow — or find new ones by screening the market on the four assessments. Either route ends at the same full breakdown.',
-  },
-  {
-    title: 'Compare',
-    body: 'Rank a shortlist side by side, every name computed in parallel from the same fundamentals on the same day.',
-  },
-  {
-    title: 'Watch & re-evaluate',
-    body: 'Save watchlists and re-score them in one bulk, parallel run, as often as the filings behind them change.',
-  },
-  {
-    title: 'Monitor & automate',
-    body: 'Scheduled re-checks, alerts, and “What changed?” when a score moves — the loop keeps running whether or not you open the page.',
-  },
+  { title: 'Analyze or discover',
+    body: 'Start from tickers you already follow — or find new ones by screening the universe on the four assessments. Either way you get the full breakdown.' },
+  { title: 'Compare', body: 'Rank stocks side by side, computed in parallel.' },
+  { title: 'Watch & re-evaluate', body: 'Save watchlists and re-score them in one bulk, parallel run.' },
+  { title: 'Monitor & automate', body: 'Scheduled re-checks, alerts and “What changed?” when scores move.' },
 ]
 
 export default function Workflow() {
@@ -45,9 +27,9 @@ export default function Workflow() {
         <div className="kicker">The workflow</div>
         <h2 className="stitle">Analyze → Compare → Watch → Monitor</h2>
         <p className="ssub">
-          A recurring research loop, not a one-off “what is it worth?” lookup. Every step
-          runs the same full-depth analysis you have just seen; plans differ in how much
-          you can put through it and how much of it runs without you.
+          A recurring research loop, not a one-off “what's it worth?” lookup. Every step
+          uses the same full-depth analysis; plans differ in how much you can do and how
+          much runs automatically.
         </p>
         <div className="workflow">
           {STEPS.map((s, i) => (

@@ -47,7 +47,7 @@ describe('Why Intrinsica', () => {
   it('names all four assessments and says they must be read together', () => {
     const { container } = render(<Why />)
     const text = container.textContent ?? ''
-    for (const name of ['Quality', 'Moat', 'Fair Value', 'Reward / Risk']) {
+    for (const name of ['Quality', 'Moat', 'Fair Value', 'Reward/Risk']) {
       expect(text).toContain(name)
     }
     expect(text).toMatch(/read together/i)
@@ -132,7 +132,9 @@ describe('Workflow', () => {
     const { container } = render(<Workflow />)
     const bodies = Array.from(container.querySelectorAll('.wf p'))
     expect(bodies).toHaveLength(4)
-    for (const p of bodies) expect((p.textContent ?? '').length).toBeGreaterThan(50)
+    // A real sentence, not a stub. The approved mock's bodies are one short
+    // sentence each, the shortest 47 characters.
+    for (const p of bodies) expect((p.textContent ?? '').length).toBeGreaterThan(30)
   })
 
   // Spec 5.6: "Discover is folded in here; it is not its own step." The title

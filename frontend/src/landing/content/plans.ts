@@ -60,6 +60,10 @@ export interface CompareRow {
    *  hover tooltip is invisible on a phone and unreachable from a keyboard. */
   note?: string
   values: [string, string, string]
+  /** Which cells the mock highlights green, per plan. Explicit rather than
+   *  inferred from the value: the mock lights Unlimited's "Yes" for monitoring
+   *  but not Pro's "Yes" for charts. */
+  on?: [boolean, boolean, boolean]
 }
 
 export const PLANS: Plan[] = [
@@ -69,12 +73,12 @@ export const PLANS: Plan[] = [
     forLine: 'Full-depth analysis, small volume.',
     cta: 'Start free',
     features: [
-      '~5 full-depth analyses a month',
-      'Every analysis complete — Quality, Moat, Fair Value & Reward / Risk, with the whole breakdown and nothing blurred',
+      '~5 full-depth analyses / month',
+      'Every analysis complete — Quality, Moat, Fair Value & Reward/Risk with the full breakdown, nothing blurred',
       'Up to 3 tickers per analysis run',
       '1 watchlist, up to 5 stocks',
-      '6 months of score history',
-      'Discovery: the filters are visible, running them is locked',
+      '6 months of score history (2 quarters)',
+      'Discovery: see the filters, results locked',
     ],
   },
   {
@@ -87,11 +91,11 @@ export const PLANS: Plan[] = [
               sub: 'billed annually · $216/yr · save 18%' },
     monthly: { effective: '$21.99', sub: 'billed monthly · $21.99/mo' },
     features: [
-      'Everything in Free, at the same full depth, plus:',
+      'Everything in Free (same full depth), plus:',
       'Unlimited analyses — no monthly cap',
       'Up to 10 tickers per analysis run · side-by-side breakdown of 3',
       '5–10 watchlists of 50 stocks · ~2 years of score history & charts',
-      'Score-change alerts · CSV / PDF export · basic portfolio analysis',
+      'Score-change alerts (10–20) · CSV / PDF export · basic portfolio analysis',
     ],
   },
   {
@@ -105,7 +109,7 @@ export const PLANS: Plan[] = [
     features: [
       'Everything in Pro, plus:',
       'Bulk / parallel analysis — 25, 50, 100+ tickers in one run',
-      'Screen hundreds of stocks on the four assessments',
+      'Screen on Quality/Moat/FV/Reward/Risk across hundreds of stocks',
       'Unlimited watchlists · advanced portfolio analysis',
       'Full score-history evolution & “What Changed?”',
       'Automated monitoring · unlimited alerts · bulk exports',
@@ -198,36 +202,36 @@ export const WHO: Audience[] = [
  *    the automation — so a matrix where they differed would be selling something
  *    else. plans.test.ts pins those two as the only uniform rows. */
 export const COMPARE_ROWS: CompareRow[] = [
-  { label: 'Full-depth analysis (Quality · Moat · Fair Value · Reward / Risk)',
-    values: ['Full', 'Full', 'Full'] },
+  { label: 'Full-depth analysis (Quality · Moat · Fair Value · Reward/Risk)',
+    values: ['Full', 'Full', 'Full'], on: [true, true, true] },
   { label: 'Breakdown, methodology & calibrations',
-    values: ['Full', 'Full', 'Full'] },
+    values: ['Full', 'Full', 'Full'], on: [true, true, true] },
   { label: 'Analyses per month',
     values: ['~5', 'Unlimited', 'Unlimited'] },
   { label: 'Tickers per analysis run',
     note: 'They come back in one results grid, ranked side by side',
-    values: ['3', '10', '100+ (bulk)'] },
+    values: ['3', '10', '100+ (bulk)'], on: [false, false, true] },
   { label: 'Side-by-side breakdown',
     note: 'Full factor tables of 3 companies in one view',
-    values: ['—', 'Up to 3', 'Up to 3'] },
+    values: ['—', 'Up to 3', 'Up to 3'], on: [false, true, true] },
   { label: 'Watchlists', values: ['1', '5–10', 'Unlimited'] },
   { label: 'Stocks per watchlist', values: ['5', '50', 'Unlimited'] },
   { label: 'Portfolio analysis', values: ['—', 'Basic', 'Advanced'] },
   { label: 'Score history', values: ['6 months', '~2 years', 'Full history'] },
   { label: 'Score-history charts', values: ['6 months', 'Yes', 'Advanced'] },
-  { label: 'Bulk / parallel analysis', values: ['—', '—', 'Yes'] },
-  { label: 'Discovery — screen on the four assessments',
+  { label: 'Bulk / parallel analysis', values: ['—', '—', 'Yes'], on: [false, false, true] },
+  { label: 'Discovery — screen on Quality/Moat/FV/Reward/Risk',
     note: 'Preview = the filters are visible, running them is locked',
-    values: ['Preview', 'Preview', 'Full'] },
-  { label: 'Full stock universe', values: ['Preview', 'Preview', 'Yes'] },
+    values: ['Preview', 'Preview', 'Full'], on: [false, false, true] },
+  { label: 'Full stock universe', values: ['Preview', 'Preview', 'Yes'], on: [false, false, true] },
   { label: 'Score-change alerts',
-    note: 'You are told when a score crosses a level you choose',
+    note: 'You are told when a score crosses a threshold you set',
     values: ['—', '10–20', 'Unlimited'] },
   { label: 'Automated monitoring',
     note: 'Intrinsica re-runs your watchlists on a schedule, unprompted',
-    values: ['—', '—', 'Yes'] },
+    values: ['—', '—', 'Yes'], on: [false, false, true] },
   { label: '“What Changed?”',
     note: 'Which factor moved a score, this run versus the last',
-    values: ['—', '—', 'Yes'] },
+    values: ['—', '—', 'Yes'], on: [false, false, true] },
   { label: 'Exports', values: ['—', 'CSV / PDF', 'Bulk'] },
 ]

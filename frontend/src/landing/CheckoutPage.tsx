@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import './theme.css'
 import { PERIODS, PLANS, totalFor, type Billing } from './content/plans'
 import { MAX_TICKERS } from './components/Hero'
+import { Logo } from './components/Nav'
 import { track, EVENTS } from '../lib/analytics'
 import type { FreeClickSource } from './types'
 
@@ -38,19 +39,21 @@ import type { FreeClickSource } from './types'
  *  own components: the nav here offers one link back to the plans instead of the
  *  page-section anchors, which lead nowhere from this route, and spec 5.8 asks
  *  for a *short form* of the footer — the modeling-tool disclaimer alone. */
-function Shell({ title, children }: { title: string; children: ReactNode }) {
+function Shell({ title, kicker = 'Checkout', children }: {
+  title: string; kicker?: string; children: ReactNode
+}) {
   return (
     <div className="intrinsica">
       <nav className="nav">
         <div className="nav-in">
-          <div className="logo">Intrinsica</div>
-          <div className="links"><a href="/#pricing">← Back to pricing</a></div>
+          <Logo />
+          <div className="links"><a className="back" href="/#pricing">← Back to pricing</a></div>
         </div>
       </nav>
 
       <section className="section stage" id="checkout">
         <div className="container">
-          <div className="kicker">Checkout</div>
+          <div className="kicker">{kicker}</div>
           <h1 className="stitle">{title}</h1>
           <div className="checkout">{children}</div>
         </div>
@@ -183,15 +186,13 @@ export default function CheckoutPage() {
   const periodLabel = PERIODS.find(p => p.id === billing)!.label
 
   return (
-    <Shell title={free ? 'Create your free account' : 'Confirm your plan'}>
-      <dl className="co-lines">
-        <dt>Plan</dt>
-        <dd>{plan.name}</dd>
-        <dt>Billing</dt>
-        <dd>{free ? 'No billing' : periodLabel}</dd>
-        <dt className="co-total">Total</dt>
-        <dd className="co-total">{totalFor(plan.name, billing)}</dd>
-      </dl>
+    <Shell title={free ? 'Create your free account' : 'Confirm your plan'}
+           kicker={free ? 'Free account' : 'Checkout'}>
+      <div className="co-line"><span className="lab">Plan</span><span className="val">{plan.name}</span></div>
+      <div className="co-line">
+        <span className="lab">Billing</span><span className="val">{free ? 'No billing' : periodLabel}</span>
+      </div>
+      <div className="co-total"><span>Total</span><span className="val">{totalFor(plan.name, billing)}</span></div>
 
       <button type="button" className="btn-buy" onClick={proceed}>
         {free ? 'Create free account' : 'Proceed to payment'}
@@ -229,9 +230,6 @@ export default function CheckoutPage() {
               )}
             </p>
 
-            <label className="co-opt" htmlFor="co-email">
-              Optional — add your email for an early-access invite.
-            </label>
             {/* Deliberately not a <form>: a form element on this page is one edit
                 away from being a checkout. That leaves nothing to supply the
                 submit gesture, so Enter is wired by hand — a visitor who types an
@@ -239,15 +237,20 @@ export default function CheckoutPage() {
                 just promised them dropped silently, and the email leg of the
                 funnel must not undercount because of it. Blank + Enter still
                 posts nothing: `notify` already returns on an empty field. */}
-            <div className="co-email">
+            <div className="email">
               <input id="co-email" type="email" value={email}
-                     placeholder="you@email.com"
+                     placeholder="you@email.com (optional)"
                      onChange={e => { setEmail(e.target.value); setSent(false) }}
                      onKeyDown={e => { if (e.key === 'Enter') notify() }} />
               <button type="button" onClick={notify}>Notify me</button>
             </div>
+            {/* The mock sets this line beneath the field; it stays a real <label>
+                so the field's accessible name says it is optional. */}
+            <label className="opt" htmlFor="co-email">
+              Optional — add your email for an early-access invite.
+            </label>
             {sent && (
-              <p className="co-opt">Thanks — we'll email you when early access opens.</p>
+              <p className="opt ok">Thanks — we'll email you when early access opens.</p>
             )}
           </div>
 

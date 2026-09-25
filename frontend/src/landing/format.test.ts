@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { money, num, pct, gapClass, figure, weight } from './format'
+import { money, num, pct, gapClass, figure, weight, dollars, gapPct, qualityTier, moatTier } from './format'
 
 describe('formatters', () => {
   it('renders an em dash for every absent value', () => {
@@ -124,5 +124,29 @@ describe('weight', () => {
   it('never signs a weight — a share of a category has no direction', () => {
     expect(weight(35)).not.toContain('+')
     expect(weight(-0)).toBe('0%')
+  })
+})
+
+describe('mock headline forms', () => {
+  it('rounds fair value to whole dollars and the gap to a signed whole percent', () => {
+    expect(dollars(192.71)).toBe('$193')
+    expect(dollars(null)).toBe('—')
+    expect(gapPct(-43.5)).toBe('−43%')
+    expect(gapPct(5.2)).toBe('+5%')
+    expect(gapPct(0.4)).toBe('0%')
+    expect(gapPct(NaN)).toBe('—')
+  })
+
+  it('reads the published outcome bands back onto a score, edges included', () => {
+    expect(qualityTier(9)).toBe('Top-decile')
+    expect(qualityTier(8.99)).toBe('Excellent')
+    expect(qualityTier(7)).toBe('Strong')
+    expect(qualityTier(6.9)).toBe('Moderate')
+    expect(qualityTier(4.9)).toBe('Weak')
+    expect(moatTier(80)).toBe('Wide')
+    expect(moatTier(79)).toBe('Established')
+    expect(moatTier(40)).toBe('Narrow')
+    expect(moatTier(39)).toBe('Little or none')
+    expect(moatTier(null)).toBeNull()
   })
 })

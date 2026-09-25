@@ -75,26 +75,30 @@ export default function Hero({ onAnalyze, onSelectAssessment, busy, exhausted }:
         <div className="brand">Intrinsica</div>
         <div className="h3">Fundamental Stock Analysis</div>
 
+        {/* Each assessment is a link to the methodology section that also selects
+            that assessment's tab there (spec 5.1: "clicking jumps to the
+            methodology section and selects that assessment's tab"). */}
         <div className="assess4">
           {ASSESSMENTS.map((a, i) => (
-            <button
+            <a
               key={a.name}
-              type="button"
               className="it"
+              href="#how"
+              title={`How ${a.name} is assessed`}
               onClick={() => onSelectAssessment(i as AssessmentId)}
             >
-              <span className="nm">
+              <div className="nm">
                 <span className="dot" style={{ background: a.color }} />
-                {a.name} <span className="go">→</span>
-              </span>
-              <span className="q">{a.question}</span>
-            </button>
+                {a.name} <span className="go" aria-hidden="true">→</span>
+              </div>
+              <div className="q">{a.question}</div>
+            </a>
           ))}
         </div>
 
-        <p className="sub">
+        <div className="sub">
           Evaluate stocks using a consistent, transparent fundamental framework.
-        </p>
+        </div>
 
         <div className="analyzer" id="analyze">
           {exhausted ? (
@@ -109,6 +113,7 @@ export default function Hero({ onAnalyze, onSelectAssessment, busy, exhausted }:
                 <div className="an-field">
                   <input
                     value={value}
+                    aria-label="Tickers"
                     onChange={e => setValue(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') submit() }}
                     placeholder="Enter one or more tickers — e.g. NVDA, AMD, AVGO"
@@ -124,9 +129,11 @@ export default function Hero({ onAnalyze, onSelectAssessment, busy, exhausted }:
 
           {/* Outside the exhausted branch on purpose: chip runs are served from
               the server cache at zero cost to the visitor's typed allowance, so
-              this must keep working after the wall above appears. */}
-          <div className="an-chips">
-            <span>Or try:</span>
+              this must keep working after the wall above appears. Styled with the
+              mock's own `.chips` / `.chip` rules, which v21 defines under the
+              analyzer. */}
+          <div className="chips">
+            <span className="lbl">Or try:</span>
             <button type="button" className="chip" onClick={runCompare} disabled={busy}>
               Compare {COMPARE_TICKERS.join(' · ')}
             </button>

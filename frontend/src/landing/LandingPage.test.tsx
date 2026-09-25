@@ -333,6 +333,10 @@ const COMPARE_RESULTS = () => ({
   invalid: [], error: null,
 })
 
+// The results grid by its own class: a single-row result auto-expands into a
+// breakdown table, and the pricing matrix is a table too.
+const gridOf = () => document.querySelector<HTMLElement>('table.g')!
+
 describe('LandingPage compare chip (controller addition 2)', () => {
   it('fills the input, analyzes the fixed trio as a sample run, and renders all three rows with the best-in-column highlight', async () => {
     const { track } = await import('../lib/analytics')
@@ -345,22 +349,24 @@ describe('LandingPage compare chip (controller addition 2)', () => {
     await userEvent.click(screen.getByRole('button', { name: /Compare/ }))
 
     await waitFor(() => {
-      expect(screen.getByText('MSFT')).toBeInTheDocument()
+      expect(within(gridOf()).getByText('MSFT')).toBeInTheDocument()
     })
-    expect(screen.getByText('AAPL')).toBeInTheDocument()
-    expect(screen.getByText('NVDA')).toBeInTheDocument()
+    expect(within(gridOf()).getByText('AAPL')).toBeInTheDocument()
+    expect(within(gridOf()).getByText('NVDA')).toBeInTheDocument()
     expect(screen.getByRole('textbox')).toHaveValue('AAPL, MSFT, NVDA')
     expect(track).toHaveBeenCalledWith('analysis_started',
       { tickers: ['AAPL', 'MSFT', 'NVDA'], count: 3, source: 'sample' })
+    // Three tickers ran at once, so the parallel-run bar appears (spec 5.2).
+    expect(screen.getByText(/Computed in parallel/)).toBeInTheDocument()
 
     // A different row wins quality, moat and the fair-value gap, so a
     // highlight stuck on one row — or on all of them — fails here.
-    const grid = screen.getByText('MSFT').closest('table')!
+    const grid = gridOf()
     const rowOf = (t: string) => within(grid).getByText(t).closest('tr')!
     expect(within(rowOf('MSFT')).getByText('9.5')).toHaveClass('best')
     expect(within(rowOf('AAPL')).getByText('81')).toHaveClass('best')
-    expect(within(rowOf('NVDA')).getByText('+12.0%')).toHaveClass('best')
-    expect(within(rowOf('AAPL')).getByText('2.4')).toHaveClass('best')
+    expect(within(rowOf('NVDA')).getByText('+12%')).toHaveClass('best')
+    expect(within(rowOf('AAPL')).getByText('2.4×')).toHaveClass('best')
     expect(within(rowOf('AAPL')).getByText('8.0')).not.toHaveClass('best')
     expect(within(rowOf('NVDA')).getByText('45')).not.toHaveClass('best')
     expect(grid.querySelectorAll('.best')).toHaveLength(4)
@@ -397,11 +403,11 @@ describe('LandingPage compare chip (controller addition 2)', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /Compare/ }))
     await waitFor(() => {
-      expect(screen.getByText('MSFT')).toBeInTheDocument()
+      expect(within(gridOf()).getByText('MSFT')).toBeInTheDocument()
     })
     // The chip's own run replaced the mount's single row with its three.
     expect(screen.queryByText('Mount Sample Only Inc.')).not.toBeInTheDocument()
-    expect(screen.getByText('NVDA')).toBeInTheDocument()
+    expect(within(gridOf()).getByText('NVDA')).toBeInTheDocument()
     expect(track).toHaveBeenCalledWith('analysis_started',
       { tickers: ['AAPL', 'MSFT', 'NVDA'], count: 3, source: 'sample' })
     expect(screen.getByText(/see the plans/i)).toBeInTheDocument()
@@ -496,6 +502,22 @@ describe('LandingPage breakdown analytics under StrictMode (fix round 1)', () =>
     vi.mocked(track as (...a: unknown[]) => void).mock.calls
       .filter(c => c[0] === 'breakdown_opened')
 
+  // Spec 5.2: a single-ticker result opens by itself. That is presentation, not
+  // a visitor action, so it must record nothing — otherwise every page load
+  // (the mount sample is one ticker) would post a breakdown_opened nobody chose.
+  it('auto-expands a single row without recording an open', async () => {
+    const { track } = await import('../lib/analytics')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      json: async () => ({ results: [compareRow('AAPL')], invalid: [], error: null }),
+    }))
+    render(<StrictMode><MemoryRouter><LandingPage /></MemoryRouter></StrictMode>)
+    await waitFor(() => {
+      expect(screen.getByText('AAPL Inc.')).toBeInTheDocument()
+    })
+    expect(screen.getByRole('button', { name: 'AAPL' })).toHaveAttribute('aria-expanded', 'true')
+    expect(opens(track)).toEqual([])
+  })
+
   it('fires breakdown_opened exactly once per expand', async () => {
     const { track } = await import('../lib/analytics')
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
@@ -505,6 +527,8 @@ describe('LandingPage breakdown analytics under StrictMode (fix round 1)', () =>
     await waitFor(() => {
       expect(screen.getByText('AAPL Inc.')).toBeInTheDocument()
     })
+    // Collapse the auto-opened row first; the open that follows is the visitor's.
+    await userEvent.click(screen.getByRole('button', { name: 'AAPL' }))
     vi.mocked(track).mockClear()
 
     await userEvent.click(screen.getByRole('button', { name: 'AAPL' }))
@@ -537,6 +561,7 @@ describe('LandingPage breakdown analytics under StrictMode (fix round 1)', () =>
     // The hero's assessment cards write the page's single `assessment` — the
     // same one the breakdown panel reads. Index 3 is Reward / Risk.
     await userEvent.click(container.querySelectorAll('.assess4 .it')[3])
+    await userEvent.click(screen.getByRole('button', { name: 'AAPL' }))   // collapse
     vi.mocked(track).mockClear()
 
     await userEvent.click(screen.getByRole('button', { name: 'AAPL' }))
@@ -557,6 +582,10 @@ describe('LandingPage breakdown analytics under StrictMode (fix round 1)', () =>
     vi.mocked(track).mockClear()
 
     const control = screen.getByRole('button', { name: 'AAPL' })
+    expect(control).toHaveAttribute('aria-expanded', 'true')     // auto-opened
+    await userEvent.click(control)
+    expect(control).toHaveAttribute('aria-expanded', 'false')
+    expect(opens(track)).toHaveLength(0)
     await userEvent.click(control)
     expect(control).toHaveAttribute('aria-expanded', 'true')
     await userEvent.click(control)
@@ -598,12 +627,13 @@ const BREAKDOWN_ROW: TickerPayload = {
     score: 9.1, fundamentals_composite: 9.1, profile_label: 'Tech / Growth',
     categories: [{
       key: 'I', name: 'Growth & Margins', weight_pct: 35, score: 8,
-      metrics: [{ label: 'Revenue growth (3-yr)', raw: 0.08, score: 6,
+      metrics: [{ label: 'Revenue growth (3-yr)', raw: 8.1, display: '+8.1% / yr', score: 6,
                   weight_pct: 17.5, excluded: false, excluded_by: null }],
     }],
   },
   moat: { score: 90, gated: false, excluded: [],
-          factors: [{ label: 'ROIC level', points: 18, max_points: 20, weight_pct: 20 }] },
+          factors: [{ label: 'ROIC level', group: 'Magnitude', display: '55%', points: 18,
+                      max_points: 20, weight_pct: 20 }] },
   fair_value: { value: 211, gap_pct: -9.05, type_label: 'Mega Cap', methods: [] },
   reward_risk: { ratio: 0.9, tier: 'Balanced', reward_score: 2.8, risk_score: 3.1,
                  reward: [], risk: [] },
@@ -619,7 +649,8 @@ describe('LandingPage breakdown panel (task 10)', () => {
     await waitFor(() => {
       expect(screen.getByText('Apple Inc.')).toBeInTheDocument()
     })
-    await userEvent.click(screen.getByRole('button', { name: 'AAPL' }))
+    // A single row opens by itself (spec 5.2) — no click needed.
+    expect(screen.getByRole('button', { name: 'AAPL' })).toHaveAttribute('aria-expanded', 'true')
     return utils
   }
 
@@ -630,19 +661,21 @@ describe('LandingPage breakdown panel (task 10)', () => {
   it('expands a row into the real factor table, not an empty panel', async () => {
     const { container } = await openRow()
     const panel = container.querySelector<HTMLElement>('.bd')!
-    expect(within(panel).getByText('Growth & Margins')).toBeInTheDocument()
+    expect(within(panel).getByText(/Growth & Margins/)).toBeInTheDocument()
     expect(within(panel).getByText('Revenue growth (3-yr)')).toBeInTheDocument()
-    for (const name of ['Quality', 'Moat', 'Fair Value', 'Reward / Risk']) {
-      expect(screen.getByRole('button', { name })).toBeInTheDocument()
+    expect(within(panel).getByText('+8.1% / yr')).toBeInTheDocument()
+    for (const name of ['Quality', 'Moat', 'Fair Value', 'Reward \\/ Risk']) {
+      expect(within(panel).getByRole('button', { name: new RegExp(`^${name}`) })).toBeInTheDocument()
     }
   })
 
   it('switches the open panel when a breakdown tab is clicked', async () => {
     const { container } = await openRow()
-    await userEvent.click(screen.getByRole('button', { name: 'Moat' }))
+    await userEvent.click(within(container.querySelector<HTMLElement>('.bd')!)
+      .getByRole('button', { name: /^Moat/ }))
     const panel = container.querySelector<HTMLElement>('.bd')!
-    expect(within(panel).getByText('ROIC level')).toBeInTheDocument()
-    expect(within(panel).queryByText('Growth & Margins')).not.toBeInTheDocument()
+    expect(within(panel).getAllByText('ROIC level').length).toBeGreaterThan(0)
+    expect(within(panel).queryByText(/Growth & Margins/)).not.toBeInTheDocument()
   })
 
   // The hero cards and the breakdown share one `assessment`, so choosing an
@@ -651,8 +684,9 @@ describe('LandingPage breakdown panel (task 10)', () => {
     const { container } = await openRow()
     const cards = container.querySelectorAll('.assess4 .it')
     await userEvent.click(cards[2])
-    expect(screen.getByText('Mega Cap')).toBeInTheDocument()
-    expect(screen.queryByText('Growth & Margins')).not.toBeInTheDocument()
+    const panel = container.querySelector<HTMLElement>('.bd')!
+    expect(within(panel).getByText('Mega Cap valuation blend')).toBeInTheDocument()
+    expect(within(panel).queryByText(/Growth & Margins/)).not.toBeInTheDocument()
   })
 })
 
@@ -665,12 +699,12 @@ describe('LandingPage framework section (task 11)', () => {
 
   it('shows the framework panel for the assessment the hero cards select', async () => {
     const { container } = await renderSettled()
-    expect(detail(container)).toHaveTextContent('How strong is the underlying business?')
+    expect(detail(container).querySelector('.dh')).toHaveTextContent('Quality')
     expect(detail(container)).toHaveTextContent('35% of the score · 7 metrics')
 
     await userEvent.click(container.querySelectorAll('.assess4 .it')[1])
 
-    expect(detail(container)).toHaveTextContent('How durable are its competitive advantages?')
+    expect(detail(container).querySelector('.dh')).toHaveTextContent('Moat')
     expect(detail(container)).toHaveTextContent('40 of 100 points')
     expect(detail(container)).not.toHaveTextContent('35% of the score · 7 metrics')
   })
@@ -683,14 +717,14 @@ describe('LandingPage framework section (task 11)', () => {
     await waitFor(() => {
       expect(screen.getByText('Apple Inc.')).toBeInTheDocument()
     })
-    await userEvent.click(screen.getByRole('button', { name: 'AAPL' }))
     const panel = container.querySelector<HTMLElement>('.bd')!
-    expect(within(panel).getByText('Growth & Margins')).toBeInTheDocument()
+    expect(within(panel).getByText(/Growth & Margins/)).toBeInTheDocument()
 
     await userEvent.click(container.querySelectorAll('.mcards button')[1])
 
-    expect(within(container.querySelector<HTMLElement>('.bd')!).getByText('ROIC level')).toBeInTheDocument()
-    expect(within(container.querySelector<HTMLElement>('.bd')!).queryByText('Growth & Margins'))
+    expect(within(container.querySelector<HTMLElement>('.bd')!).getAllByText('ROIC level').length)
+      .toBeGreaterThan(0)
+    expect(within(container.querySelector<HTMLElement>('.bd')!).queryByText(/Growth & Margins/))
       .not.toBeInTheDocument()
   })
 

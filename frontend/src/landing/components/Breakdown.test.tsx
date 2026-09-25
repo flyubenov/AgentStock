@@ -21,12 +21,12 @@ function quality(over: Partial<QualityBlock> = {}): QualityBlock {
     categories: [{
       key: 'I', name: 'Growth & Margins', weight_pct: 35, score: 8,
       metrics: [
-        // A deliberately untidy float: the backend does not round `raw`, so a
-        // naive String(raw) would put 0.08123456789 on a page whose whole pitch
-        // is that every number is checkable.
-        { label: 'Revenue growth (3-yr)', raw: 0.08123456789, score: 6,
+        // `display` is the backend's formatted figure (landing/figures.py). The raw
+        // float beside it is deliberately untidy, so a panel that printed `raw`
+        // instead would put 8.123456789 on the page and fail below.
+        { label: 'Revenue growth (3-yr)', raw: 8.123456789, display: '+8.1% / yr', score: 6,
           weight_pct: 17.5, excluded: false, excluded_by: null },
-        { label: 'FCF margin', raw: null, score: null, weight_pct: 0,
+        { label: 'FCF margin', raw: 26.4, display: '26%', score: null, weight_pct: 0,
           excluded: true, excluded_by: CAPEX_LABEL },
       ],
     }],
@@ -40,7 +40,8 @@ function payload(over: Partial<TickerPayload> = {}): TickerPayload {
     quality: quality(),
     moat: {
       score: 90, gated: false, excluded: [],
-      factors: [{ label: 'ROIC level', points: 18, max_points: 20, weight_pct: 20 }],
+      factors: [{ label: 'ROIC level', group: 'Magnitude', display: '55%', points: 18,
+                  max_points: 20, weight_pct: 20 }],
     },
     fair_value: {
       value: 211, gap_pct: -9.05, type_label: 'Mega Cap',
@@ -49,9 +50,10 @@ function payload(over: Partial<TickerPayload> = {}): TickerPayload {
     },
     reward_risk: {
       ratio: 0.9, tier: 'Balanced', reward_score: 2.8, risk_score: 3.1,
-      reward: [{ label: 'Discount to 52-week high', raw: 0.05, score: 2,
-                 weight_pct: 24, dropped: false }],
-      risk: [{ label: 'Volatility', raw: 0.3, score: 3, weight_pct: 22, dropped: false }],
+      reward: [{ label: 'Discount to 52-week high', raw: 0.05, display: '5.0% below high',
+                 score: 2, weight_pct: 24, dropped: false }],
+      risk: [{ label: 'Volatility', raw: 0.3, display: '30% ann.', score: 3, weight_pct: 22,
+               dropped: false }],
     },
     calibrations: [CAPEX_LABEL], errors: [],
     ...over,
@@ -61,44 +63,55 @@ function payload(over: Partial<TickerPayload> = {}): TickerPayload {
 const show = (p = payload(), tab: AssessmentId = 0) =>
   render(<Breakdown row={p} tab={tab} onTab={vi.fn()} />)
 
+// A tab's accessible name is its label followed by its headline value
+// ("Quality9.1"), so tabs are found by the label they start with.
+const tabNamed = (name: string) =>
+  screen.getByRole('button', { name: new RegExp(`^${name.replace('/', '\\/')}`) })
+
 describe('Breakdown tabs', () => {
   it('offers a tab per assessment, labelled Reward / Risk', () => {
     show()
     for (const name of ['Quality', 'Moat', 'Fair Value', 'Reward / Risk']) {
-      expect(screen.getByRole('button', { name })).toBeInTheDocument()
+      expect(tabNamed(name)).toBeInTheDocument()
     }
   })
 
-  // `AssessmentId` is a bare index shared with Hero's assessment cards, which
+  // `AssessmentId` is a bare index shared with Hero's assessment links, which
   // call onSelectAssessment(i). If the two label lists ever drift, clicking
   // "Moat" in the hero opens "Fair Value" here and nothing else would catch it.
   it('keeps its tab labels and order identical to the hero assessment cards', () => {
     const { container } = show()
-    const labels = Array.from(container.querySelectorAll('.bd-tabs button'))
-      .map(b => b.textContent)
+    const labels = Array.from(container.querySelectorAll('.bd .tabs button'))
+      .map(b => b.firstChild?.textContent)
     expect(labels).toEqual(ASSESSMENTS.map(a => a.name))
+  })
+
+  // The mock's slim tabs carry each assessment's headline, so the strip reads as a
+  // summary before any tab is opened.
+  it('carries each assessment headline in its tab', () => {
+    const { container } = show()
+    const values = Array.from(container.querySelectorAll('.bd .tabs button b'))
+      .map(b => b.textContent)
+    expect(values).toEqual(['9.1', '90', '$211', '0.9×'])
   })
 
   it('marks the open tab as pressed and the others as not', () => {
     show(payload(), 2)
-    expect(screen.getByRole('button', { name: 'Fair Value' }))
-      .toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: 'Quality' }))
-      .toHaveAttribute('aria-pressed', 'false')
+    expect(tabNamed('Fair Value')).toHaveAttribute('aria-pressed', 'true')
+    expect(tabNamed('Quality')).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('asks for the requested tab by its assessment id', async () => {
     const onTab = vi.fn()
     render(<Breakdown row={payload()} tab={0} onTab={onTab} />)
-    await userEvent.click(screen.getByRole('button', { name: 'Moat' }))
+    await userEvent.click(tabNamed('Moat'))
     expect(onTab).toHaveBeenCalledWith(1)
-    await userEvent.click(screen.getByRole('button', { name: 'Reward / Risk' }))
+    await userEvent.click(tabNamed('Reward / Risk'))
     expect(onTab).toHaveBeenCalledWith(3)
   })
 
-  // Anchored the same way as the leak test below (prelude to task 11): without a
-  // positive assertion first, a component that rendered nothing at all would
-  // satisfy the negative regex and this test would prove only that.
+  // Anchored first: without a positive assertion, a component that rendered
+  // nothing at all would satisfy the negative regex.
   it('never labels the ratio Risk/Reward, on any tab', () => {
     const anchors = ['Growth & Margins', 'ROIC level', 'Discounted cash flow', 'Volatility']
     for (const tab of [0, 1, 2, 3] as const) {
@@ -113,42 +126,55 @@ describe('Breakdown tabs', () => {
 })
 
 describe('Breakdown — Quality', () => {
-  it('shows the four columns and the category weight', () => {
-    show()
+  it('shows the four columns, the category row and the total', () => {
+    const { container } = show()
     for (const h of ['Factor', 'Data', 'Score', 'Weight']) {
       expect(screen.getByText(h)).toBeInTheDocument()
     }
-    expect(screen.getByText(/Growth & Margins/)).toBeInTheDocument()
-    expect(screen.getByText('35%')).toBeInTheDocument()
+    // The category row: its 0–10 score scaled to its weight (8/10 of 35 = 28.0).
+    const sec = container.querySelector('tr.sec')!
+    expect(sec).toHaveTextContent('1 · Growth & Margins')
+    expect(sec).toHaveTextContent('28.0 / 35')
+    expect(sec).toHaveTextContent('35%')
     expect(screen.getByText('17.5%')).toBeInTheDocument()
+    // The total is the categories' own roll-up on the 100 scale.
+    expect(container.querySelector('tr.tot')).toHaveTextContent('91.0 / 100')
   })
 
-  it('names the profile the company was scored against', () => {
-    show()
-    expect(screen.getByText(/Tech \/ Growth/)).toBeInTheDocument()
+  it('names the profile and reads the score back onto its published band', () => {
+    const { container } = show()
+    expect(container.querySelector('.sum')).toHaveTextContent('Tech / Growth profile')
+    expect(container.querySelector('.sum .pill')).toHaveTextContent('Top-decile')
   })
 
-  it('trims a raw figure instead of printing its floating-point tail', () => {
-    show()
-    expect(screen.getByText('0.08123')).toBeInTheDocument()
-    expect(screen.queryByText('0.08123456789')).not.toBeInTheDocument()
+  it('prints the formatted figure with its unit, never the raw float', () => {
+    const { container } = show()
+    expect(screen.getByText('+8.1% / yr')).toBeInTheDocument()
+    expect(container.textContent).not.toContain('8.123456789')
+  })
+
+  it('draws a strength bar sized to the score', () => {
+    const { container } = show()
+    const bar = container.querySelector('.sc .bar i') as HTMLElement
+    expect(bar.style.width).toBe('60%')          // 6 / 10
   })
 
   it('strikes an excluded metric through at zero weight and names the calibration', () => {
     const { container } = show()
-    const excluded = container.querySelector('.metric.excluded')
+    const excluded = container.querySelector('tr.off')
     expect(excluded).toHaveTextContent('FCF margin')
     expect(excluded).toHaveTextContent('0%')
     expect(excluded).toHaveTextContent(CAPEX_LABEL)
-    // An excluded metric has no score at all — "— / 10" would read as a broken
-    // scale rather than a metric that was deliberately not scored.
-    expect(excluded).not.toHaveTextContent('/ 10')
+    // Not shown as if it counted: no figure, and no "— / 10", which would read as
+    // a broken scale rather than a metric that was deliberately not scored.
+    expect(excluded).not.toHaveTextContent('26%')
+    expect(excluded).not.toHaveTextContent('/10')
   })
 })
 
-// CONTROLLER ADDITION: quality.score is the published headline and can
-// legitimately diverge from what the categories roll up to. A headline that
-// contradicts its own table is the worst thing this panel could do.
+// quality.score is the published headline and can legitimately diverge from what
+// the categories roll up to. A headline that contradicts its own table is the
+// worst thing this panel could do.
 describe('Breakdown — Quality headline vs. its own categories', () => {
   const diverged = payload({
     quality: quality({ score: 6, fundamentals_composite: 8.4 }),
@@ -180,31 +206,47 @@ describe('Breakdown — Quality headline vs. its own categories', () => {
 })
 
 describe('Breakdown — Moat', () => {
-  it('shows moat factors as points over their max', () => {
+  it('shows moat factors as points over their max, with the figure behind them', () => {
+    const { container } = show(payload(), 1)
+    expect(screen.getByText('18/20')).toBeInTheDocument()
+    expect(screen.getByText('55%')).toBeInTheDocument()
+    // Grouped under its pillar, whose shaded row totals the group.
+    const sec = container.querySelector('tr.sec')!
+    expect(sec).toHaveTextContent('Magnitude')
+    expect(sec).toHaveTextContent('18 / 20')
+  })
+
+  it('explains a factor in concept only, in a tooltip', () => {
     show(payload(), 1)
-    expect(screen.getByText('18 / 20')).toBeInTheDocument()
-    expect(screen.getByText('ROIC level')).toBeInTheDocument()
+    const tip = screen.getByText(/Worth 20 of the 100 points/)
+    expect(tip).toHaveAttribute('role', 'tooltip')
+    // Concept, never a cut-off: no "x% earns y points" in the explanation.
+    expect(tip.textContent).not.toMatch(/\d+\s*%/)
   })
 
   it('names the pillars left out of the score in readable words', () => {
     show(payload({
       moat: { score: 70, gated: false, excluded: ['Margin durability'],
-              factors: [{ label: 'ROIC level', points: 18, max_points: 20, weight_pct: 20 }] },
+              factors: [{ label: 'ROIC level', group: 'Magnitude', display: null, points: 18,
+                          max_points: 20, weight_pct: 20 }] },
     }), 1)
-    expect(screen.getByText(/Margin durability/)).toBeInTheDocument()
+    expect(screen.getByText(/re-weighted out: Margin durability/)).toBeInTheDocument()
   })
 
-  it('reports the economic-profit gate only when it actually fired', () => {
+  it('says whether the economic-profit gate capped the score', () => {
     const gated = {
-      score: 40, gated: true, excluded: [],
-      factors: [{ label: 'ROIC level', points: 4, max_points: 20, weight_pct: 20 }],
+      score: 25, gated: true, excluded: [],
+      factors: [{ label: 'ROIC level', group: 'Magnitude', display: null, points: 4,
+                  max_points: 20, weight_pct: 20 }],
     }
     const { unmount } = show(payload({ moat: gated }), 1)
-    expect(screen.getByText(/gate/i)).toBeInTheDocument()
+    expect(screen.getByText(/gate ✗ Moat capped/)).toBeInTheDocument()
+    expect(screen.queryByText(/gate ✓ passed/)).not.toBeInTheDocument()
     unmount()
 
     show(payload(), 1)
-    expect(screen.queryByText(/gate/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/gate ✓ passed/)).toBeInTheDocument()
+    expect(screen.queryByText(/gate ✗/)).not.toBeInTheDocument()
   })
 })
 
@@ -212,62 +254,101 @@ describe('Breakdown — Fair Value', () => {
   it('shows the blend as one exact number, not a range', () => {
     const { container } = show(payload(), 2)
     expect(screen.getByText('Discounted cash flow')).toBeInTheDocument()
-    expect(screen.getByText('$211.00')).toBeInTheDocument()
+    // The exact blend on the total row; the headline rounds it to whole dollars.
+    expect(container.querySelector('tr.tot')).toHaveTextContent('$211.00')
+    expect(container.querySelector('.sum .big')).toHaveTextContent('$211')
     expect(screen.getByText('$205.00')).toBeInTheDocument()
     expect(screen.getByText('$112.75')).toBeInTheDocument()
     expect(container.textContent).not.toMatch(/\$\d[\d.]*\s*[–-]\s*\$\d/)
   })
 
+  it('sets the blend against the live price', () => {
+    const { container } = show(payload(), 2)
+    const sum = container.querySelector('.sum')!
+    expect(sum).toHaveTextContent('vs price $232.00')
+    expect(within(sum as HTMLElement).getByText('−9%')).toHaveClass('gap-warn')
+  })
+
   it('names the valuation blend it was judged on', () => {
     show(payload(), 2)
-    expect(screen.getByText(/Mega Cap/)).toBeInTheDocument()
+    expect(screen.getByText('Mega Cap valuation blend')).toBeInTheDocument()
   })
 })
 
 describe('Breakdown — Reward / Risk', () => {
-  it('states the ratio direction and shows both axes', () => {
-    show(payload(), 3)
-    expect(screen.getByText(/Reward ÷ Risk/)).toHaveTextContent('higher is better')
-    expect(screen.getByText(/Reward ÷ Risk/)).toHaveTextContent('Balanced')
+  it('states the ratio direction and range, and shows both axes', () => {
+    const { container } = show(payload(), 3)
+    const sum = container.querySelector('.sum')!
+    expect(sum).toHaveTextContent('0.9×')
+    expect(sum).toHaveTextContent('Balanced')
+    expect(sum).toHaveTextContent('Reward 2.8 ÷ Risk 3.1')
+    expect(sum).toHaveTextContent('Range 0.2×–5.0× · above 1.0 = more reward than risk')
     expect(screen.getByText('Discount to 52-week high')).toBeInTheDocument()
+    expect(screen.getByText('5.0% below high')).toBeInTheDocument()
     expect(screen.getByText('Volatility')).toBeInTheDocument()
   })
 
   it('says outright that a high risk score is the bad direction', () => {
     const { container } = show(payload(), 3)
-    const risk = container.querySelectorAll('.cat')[1]
-    expect(risk).toHaveTextContent(/Risk/)
-    expect(risk).toHaveTextContent(/high score here is the bad one/i)
+    const axes = container.querySelectorAll('tr.sec')
+    expect(axes[0]).toHaveTextContent('Reward axis · higher is better')
+    expect(axes[1]).toHaveTextContent('Risk axis · higher = more risk')
+  })
+
+  it('lights the tier it landed on in the ladder, and only that one', () => {
+    const { container } = show(payload(), 3)
+    const steps = Array.from(container.querySelectorAll('.ladder .step'))
+    expect(steps.map(s => s.textContent)).toEqual(
+      ['Value Trap', 'Risk-Favored', 'Balanced', 'Reward-Favored', 'Asymmetric Upside'])
+    expect(steps.filter(s => s.classList.contains('on')).map(s => s.textContent))
+      .toEqual(['Balanced'])
   })
 
   it('drops a dropped factor to zero weight with no score', () => {
     const { container } = show(payload({
       reward_risk: {
         ratio: 0.9, tier: 'Balanced', reward_score: 2.8, risk_score: 3.1,
-        reward: [{ label: 'Analyst upside', raw: null, score: null,
+        reward: [{ label: 'Analyst upside', raw: null, display: null, score: null,
                    weight_pct: 0, dropped: true }],
-        risk: [{ label: 'Volatility', raw: 0.3, score: 3, weight_pct: 100, dropped: false }],
+        risk: [{ label: 'Volatility', raw: 0.3, display: '30% ann.', score: 3, weight_pct: 100,
+                 dropped: false }],
       },
     }), 3)
-    const dropped = container.querySelector('.metric.excluded')!
+    const dropped = container.querySelector('tr.off')!
     expect(dropped).toHaveTextContent('Analyst upside')
     expect(dropped).toHaveTextContent('0%')
-    expect(dropped).not.toHaveTextContent('/ 5')
+    expect(dropped).not.toHaveTextContent('/5')
   })
 })
 
 describe('Breakdown — calibrations and absent assessments', () => {
-  it('lists only the calibrations that fired', () => {
-    const { container } = show(payload({
-      calibrations: ['ROIC on tangible capital', 'Economic-profit gate'],
-    }))
-    const chips = Array.from(container.querySelectorAll('.cal')).map(c => c.textContent)
-    expect(chips).toEqual(['ROIC on tangible capital', 'Economic-profit gate'])
+  it('lists only the calibrations that fired and touch the assessment on screen', () => {
+    const fired = payload({ calibrations: ['ROIC on tangible capital', 'Economic-profit gate'] })
+    const chipsOn = (tab: AssessmentId) => {
+      const { container, unmount } = render(<Breakdown row={fired} tab={tab} onTab={vi.fn()} />)
+      const chips = Array.from(container.querySelectorAll('.cal')).map(c => c.textContent)
+      unmount()
+      return chips
+    }
+    expect(chipsOn(0)).toEqual(['ROIC on tangible capital'])
+    expect(chipsOn(1)).toEqual(['ROIC on tangible capital', 'Economic-profit gate'])
+    expect(chipsOn(2)).toEqual([])
+  })
+
+  it('still shows a calibration it has no explanation for, on every tab', () => {
+    const { container } = show(payload({ calibrations: ['Some future calibration'] }), 2)
+    expect(container.querySelector('.cal')).toHaveTextContent('Some future calibration')
+  })
+
+  it('explains each fired calibration in a tooltip', () => {
+    show(payload({ calibrations: ['Economic-profit gate'] }), 1)
+    expect(screen.getByText(/no durable advantage without economic profit/))
+      .toHaveAttribute('role', 'tooltip')
   })
 
   it('renders no calibration strip at all when none fired', () => {
     const { container } = show(payload({ calibrations: [] }))
-    expect(container.querySelector('.cals')).not.toBeInTheDocument()
+    expect(container.querySelector('.applied')).not.toBeInTheDocument()
     expect(container.textContent).not.toMatch(/Calibrations/i)
   })
 
@@ -284,6 +365,7 @@ describe('Breakdown — calibrations and absent assessments', () => {
         <Breakdown row={missing} tab={tab} onTab={vi.fn()} />)
       expect(within(container).getByText(/could not be computed/i)).toBeInTheDocument()
       expect(container.querySelector('table')).not.toBeInTheDocument()
+      expect(container.textContent).not.toMatch(/Risk\s*\/\s*Reward/)
       unmount()
     }
   })
@@ -294,19 +376,20 @@ describe('Breakdown — calibrations and absent assessments', () => {
         score: null, fundamentals_composite: null, profile_label: null,
         categories: [{
           key: 'II', name: 'Returns on Capital', weight_pct: 30, score: null,
-          metrics: [{ label: 'ROIC (trailing)', raw: null, score: null, weight_pct: 0,
-                      excluded: false, excluded_by: null }],
+          metrics: [{ label: 'ROIC (trailing)', raw: null, display: null, score: null,
+                      weight_pct: 0, excluded: false, excluded_by: null }],
         }],
       }),
       moat: { score: null, gated: false, excluded: [],
-              factors: [{ label: 'ROIC level', points: null, max_points: 20, weight_pct: 20 }] },
+              factors: [{ label: 'ROIC level', group: 'Magnitude', display: null, points: null,
+                          max_points: 20, weight_pct: 20 }] },
       fair_value: { value: null, gap_pct: null, type_label: null,
                     methods: [{ label: 'Discounted cash flow', value: null,
                                 weight_pct: 0, contribution: null }] },
       reward_risk: { ratio: null, tier: null, reward_score: null, risk_score: null,
-                     reward: [{ label: 'Valuation', raw: null, score: null,
+                     reward: [{ label: 'Valuation', raw: null, display: null, score: null,
                                 weight_pct: 0, dropped: false }],
-                     risk: [{ label: 'Beta', raw: null, score: null,
+                     risk: [{ label: 'Beta', raw: null, display: null, score: null,
                               weight_pct: 0, dropped: false }] },
     })
     for (const tab of [0, 1, 2, 3] as const) {

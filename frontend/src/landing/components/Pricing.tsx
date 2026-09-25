@@ -92,8 +92,7 @@ export default function Pricing({ billing, onBilling, onChoose, onView }: {
                 {/* The amount is its own element so the "/mo" suffix cannot be
                     read as part of the price, by a test or by a reader. */}
                 <div className="price">
-                  <span className="amt">{price.headline}</span>
-                  <span className="per">/mo</span>
+                  <span className="amt">{price.headline}</span><span className="per">/mo</span>
                 </div>
                 <div className="price-alt">{price.sub}</div>
                 <ul className="feature-list">
@@ -119,10 +118,10 @@ export default function Pricing({ billing, onBilling, onChoose, onView }: {
           <div className="who">
             {WHO.map(w => (
               <div key={w.tag} className="who-card">
-                <div className="who-tag">{w.tag}</div>
-                <div className="who-title">{w.title}</div>
-                <div className="who-for">{w.who}</div>
-                <div className="who-focus"><b>Focus:</b> {w.focus}</div>
+                <div className="wtag">{w.tag}</div>
+                <div className="wt">{w.title}</div>
+                <div className="wfor">{w.who}</div>
+                <div className="wfocus"><b>Focus:</b> {w.focus}</div>
               </div>
             ))}
           </div>
@@ -136,7 +135,7 @@ export default function Pricing({ billing, onBilling, onChoose, onView }: {
                   <th scope="col">Feature</th>
                   {PLANS.map(p => (
                     <th key={p.name} scope="col"
-                        className={p.name === 'Unlimited' ? 'cmp-u' : undefined}>
+                        className={p.name === 'Unlimited' ? 'u' : undefined}>
                       {p.name}
                     </th>
                   ))}
@@ -149,14 +148,14 @@ export default function Pricing({ billing, onBilling, onChoose, onView }: {
                       {r.label}
                       {/* Rendered, not hung off `title`: a hover tooltip is
                           invisible on a phone and unreachable by keyboard. */}
-                      {r.note && <span className="cmp-note">{r.note}</span>}
+                      {r.note && <span className="sub">{r.note}</span>}
                     </th>
                     {/* Positional: value `i` is plan `i`, and Pricing.test.tsx
                         pins each row's cells to the row's own values so a
                         reordered map cannot silently re-attribute an
                         allowance to the wrong plan. */}
                     {r.values.map((v, i) => (
-                      <td key={i} className={v === '—' ? 'cmp-no' : undefined}>
+                      <td key={i} className={v === '—' ? 'no' : r.on?.[i] ? 'on' : undefined}>
                         {v}
                       </td>
                     ))}

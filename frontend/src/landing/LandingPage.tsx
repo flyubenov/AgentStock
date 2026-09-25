@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import './theme.css'
 import Nav from './components/Nav'
 import Hero from './components/Hero'
-import ResultGrid from './components/ResultGrid'
+import ResultGrid, { RunBar } from './components/ResultGrid'
 import Breakdown from './components/Breakdown'
 import Framework from './components/Framework'
 import Why from './components/Why'
@@ -41,6 +41,8 @@ export default function LandingPage() {
   // whenever storage is unavailable, never locking out a real visitor.
   const [exhausted, setExhausted] = useState(() => !canAnalyze())
   const [open, setOpen] = useState<Record<string, boolean>>({})
+  // How long the last run took, for the parallel-run bar (spec 5.2).
+  const [lastMs, setLastMs] = useState<number | null>(null)
   // The billing period the pricing cards show, and the one a plan choice carries
   // into the checkout. Annual by default (spec 5.7). Owned here rather than
   // inside Pricing because the checkout has to be told which period was on
@@ -106,13 +108,21 @@ export default function LandingPage() {
   // about the once-per-expand guarantee above, which rests on where the call
   // sits (beside setOpen, never inside the updater) and not on how often the
   // callback is rebuilt.
+  //
+  // A single-row result opens by itself (spec 5.2: "one row, auto-expanded"), so a
+  // row with no recorded state reads as open when it is the only one. That default
+  // is presentation, not a visitor action, and fires nothing; the first click on it
+  // is a collapse.
+  const isOpen = useCallback((ticker: string) =>
+    open[ticker] ?? (rows.length === 1 && rows[0].ticker === ticker), [open, rows])
+
   const toggle = useCallback((ticker: string) => {
-    const opening = !open[ticker]
-    setOpen(prev => ({ ...prev, [ticker]: !prev[ticker] }))
+    const opening = !isOpen(ticker)
+    setOpen(prev => ({ ...prev, [ticker]: opening }))
     if (opening) {
       track(EVENTS.breakdownOpened, { ticker, assessment: FRAMEWORK[assessment].name })
     }
-  }, [open, assessment])
+  }, [isOpen, assessment])
 
   const analyze = useCallback(async (tickers: string[], source: AnalyzeSource) => {
     setBusy(true)
@@ -142,6 +152,9 @@ export default function LandingPage() {
       if (body.error) setNotice(body.error)
       else if (body.invalid.length) setNotice(`Not recognised: ${body.invalid.join(', ')}`)
       setRows(results)
+      // A new result set starts from its own default expansion.
+      setOpen({})
+      setLastMs(Date.now() - started)
       // The allowance means "a run the visitor got value from" — distinct from
       // analysis_started above, which means "a run was attempted" and fires
       // unconditionally. Only count a typed run once it actually produced at
@@ -188,13 +201,21 @@ export default function LandingPage() {
   // the body background to match this page's own light background while mounted,
   // and restore whatever was there before on unmount so the dark analyst app gets
   // its background back untouched.
+  // The mock's smooth in-page scrolling (nav anchors, hero assessments) is set on
+  // <html>, so it is applied and restored the same way.
   useEffect(() => {
     const previous = document.body.style.backgroundColor
+    const previousScroll = document.documentElement.style.scrollBehavior
     document.body.style.backgroundColor = '#ffffff'
+    document.documentElement.style.scrollBehavior = 'smooth'
     return () => {
       document.body.style.backgroundColor = previous
+      document.documentElement.style.scrollBehavior = previousScroll
     }
   }, [])
+
+  const effectiveOpen: Record<string, boolean> = {}
+  for (const r of rows) effectiveOpen[r.ticker] = isOpen(r.ticker)
 
   return (
     <div className="intrinsica">
@@ -209,9 +230,10 @@ export default function LandingPage() {
         {notice && <p className="notice container">{notice}</p>}
         <section className="section" id="result">
           <div className="container">
+            <RunBar rows={rows} ms={lastMs} />
             <ResultGrid
               rows={rows}
-              open={open}
+              open={effectiveOpen}
               onToggle={toggle}
               // One `assessment` for the whole page: the hero's assessment
               // cards, every expanded row's breakdown and (from Task 11) the

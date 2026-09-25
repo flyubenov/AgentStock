@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import ResultGrid from './ResultGrid'
+import ResultGrid, { RunBar } from './ResultGrid'
 import type { TickerPayload } from '../types'
 
 function row(over: Partial<TickerPayload> = {}): TickerPayload {
@@ -181,7 +181,29 @@ describe('ResultGrid', () => {
 
   it('keeps the caret out of the accessibility tree', () => {
     const { container } = render1([row()])
-    const caret = container.querySelector('td.ex span')!
+    const caret = container.querySelector('.chev')!
     expect(caret).toHaveAttribute('aria-hidden', 'true')
+  })
+})
+
+describe('RunBar', () => {
+  it('reports each ticker, the count and the time when more than one ran', () => {
+    const { container } = render(
+      <RunBar rows={[row(), row({ ticker: 'MSFT' }), row({ ticker: 'NVDA' })]} ms={2140} />)
+    expect(container).toHaveTextContent('Computed in parallel:')
+    expect(container).toHaveTextContent('3 tickers · 2.1s')
+    expect(screen.getAllByLabelText('done')).toHaveLength(3)
+  })
+
+  it('marks a ticker whose engines all declined as failed, not done', () => {
+    render(<RunBar rows={[row(), row({ ticker: 'ZZZZ', quality: null, moat: null,
+                                          fair_value: null, reward_risk: null })]} ms={900} />)
+    expect(screen.getAllByLabelText('done')).toHaveLength(1)
+    expect(screen.getAllByLabelText('failed')).toHaveLength(1)
+  })
+
+  it('stays out of the way for a single ticker', () => {
+    const { container } = render(<RunBar rows={[row()]} ms={500} />)
+    expect(container).toBeEmptyDOMElement()
   })
 })

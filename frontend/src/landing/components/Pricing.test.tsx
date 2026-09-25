@@ -161,7 +161,7 @@ describe('Pricing', () => {
     // Named explicitly, not just implied by the array equality above: if the
     // inheritance line ever stops being first, this says why that matters.
     expect(cards[1].querySelector('.feature-list li')?.textContent)
-      .toBe('Everything in Free, at the same full depth, plus:')
+      .toBe('Everything in Free (same full depth), plus:')
     expect(cards[2].querySelector('.feature-list li')?.textContent)
       .toBe('Everything in Pro, plus:')
   })
@@ -223,10 +223,10 @@ describe('Pricing', () => {
     const { container } = show()
     const who = Array.from(container.querySelectorAll<HTMLElement>('.who-card'))
     expect(who).toHaveLength(3)
-    expect(who.map(w => w.querySelector('.who-tag')?.textContent))
+    expect(who.map(w => w.querySelector('.wtag')?.textContent))
       .toEqual(['Free · Try', 'Pro · Depth', 'Unlimited · Scale'])
     for (const card of who) {
-      expect((card.querySelector('.who-for')?.textContent ?? '').length)
+      expect((card.querySelector('.wfor')?.textContent ?? '').length)
         .toBeGreaterThan(40)
     }
   })
@@ -272,10 +272,10 @@ describe('Pricing', () => {
     const text = container.textContent ?? ''
     expect(container.querySelector('.stitle')?.textContent?.length).toBeGreaterThan(10)
     expect(container.querySelector('.kicker')?.textContent?.length).toBeGreaterThan(3)
-    expect(text).toContain('Reward / Risk')
+    expect(text).toContain('Reward/Risk')
     expect(text).not.toMatch(/signal/i)
     expect(text).not.toMatch(/Risk\s*[/-]\s*Reward/)
-    expect(text).not.toMatch(/Reward[/-]Risk/)
+    expect(text).not.toMatch(/Reward\s*-\s*Risk\b/)
     expect(text).not.toMatch(/[<>≥≤]\s*\d/)
     expect(text).not.toMatch(/scores?\s+\d/i)
     expect(text).not.toMatch(/[A-Z]{2,}_[A-Z]{2,}/)
