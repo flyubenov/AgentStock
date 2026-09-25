@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, act } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import LandingPage, { FETCH_TIMEOUT_MS } from './LandingPage'
 import Layout from '../components/Layout'
@@ -140,6 +141,63 @@ describe('LandingPage analyze (fix round 2)', () => {
     })
     expect(screen.queryByText('The analysis could not be reached. Please try again.'))
       .not.toBeInTheDocument()
+  })
+})
+
+describe('LandingPage demo limit (controller addition)', () => {
+  it('records only typed runs, never the mount sample, in the analysis_started source prop', async () => {
+    const { track } = await import('../lib/analytics')
+    await renderSettled()
+    await userEvent.type(screen.getByRole('textbox'), 'NVDA')
+    await userEvent.click(screen.getByRole('button', { name: 'Analyze →' }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Analyze →' })).toBeInTheDocument()
+    })
+
+    expect(track).toHaveBeenCalledWith('analysis_started',
+      { tickers: ['AAPL'], count: 1, source: 'sample' })
+    expect(track).toHaveBeenCalledWith('analysis_started',
+      { tickers: ['NVDA'], count: 1, source: 'typed' })
+  })
+
+  it('shows the wall after the fifth typed run and still lets a sample run through', async () => {
+    localStorage.setItem('intrinsica_demo_runs', JSON.stringify({
+      count: 4, windowStart: Date.now(),
+    }))
+    await renderSettled()
+
+    await userEvent.type(screen.getByRole('textbox'), 'NVDA')
+    await userEvent.click(screen.getByRole('button', { name: 'Analyze →' }))
+    await waitFor(() => {
+      expect(screen.getByText(/see the plans/i)).toBeInTheDocument()
+    })
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+
+    // A stored count of 5 means only the fifth typed run above landed — the
+    // mount's sample run never touched the counter.
+    expect(JSON.parse(localStorage.getItem('intrinsica_demo_runs')!).count).toBe(5)
+  })
+
+  it('refuses a typed run once already exhausted, but a fresh sample run at mount still fires', async () => {
+    localStorage.setItem('intrinsica_demo_runs', JSON.stringify({
+      count: 5, windowStart: Date.now(),
+    }))
+    const { track } = await import('../lib/analytics')
+    // The wall is already exhausted at mount, so there is never an "Analyze →"
+    // button to wait for here (renderSettled's own wait relies on it) — wait on
+    // the wall text and the sample's track() call settling instead.
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByText(/see the plans/i)).toBeInTheDocument()
+    })
+
+    // The wall replaces the input entirely — there is no control left to submit
+    // a typed run through.
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(track).toHaveBeenCalledWith('analysis_started',
+        { tickers: ['AAPL'], count: 1, source: 'sample' })
+    })
   })
 })
 

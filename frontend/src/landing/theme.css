@@ -85,6 +85,11 @@
   padding: 12px 20px; font-size: 15px; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .intrinsica .an-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .intrinsica .an-error { color: var(--neg); font-size: 13px; margin-top: 10px; }
+.intrinsica .an-wall { color: var(--dim); font-size: 15px; line-height: 1.5;
+  background: var(--accent-soft); border: 1px solid var(--line); border-radius: 8px;
+  padding: 16px 18px; }
+.intrinsica .an-wall a { color: var(--accent); font-weight: 600; text-decoration: none; }
+.intrinsica .an-wall a:hover { text-decoration: underline; }
 .intrinsica .notice { color: var(--dim); font-size: 14px; text-align: center; margin: 0 0 24px; }
 @media (max-width: 700px) { .intrinsica .assess4 { grid-template-columns: repeat(2, 1fr); }
   .intrinsica .an-row { flex-direction: column; } }

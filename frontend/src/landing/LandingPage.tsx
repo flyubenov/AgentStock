@@ -5,7 +5,14 @@ import Hero from './components/Hero'
 import SiteFooter from './components/SiteFooter'
 import { track, EVENTS } from '../lib/analytics'
 import { API_BASE } from '../lib/api'
+import { canAnalyze, recordRun } from './demoLimit'
 import type { AnalyzeResponse, AssessmentId, TickerPayload } from './types'
+
+/** 'sample' is the mount auto-run (and, from Task 9, the compare chip) — served
+ *  from cache, marketing content, never counted against the demo limit.
+ *  'typed' is a visitor's own analysis and is the only source that consumes an
+ *  allowance (see demoLimit.ts). */
+type AnalyzeSource = 'sample' | 'typed'
 
 const SAMPLE = 'AAPL'
 
@@ -23,11 +30,20 @@ export default function LandingPage() {
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [assessment, setAssessment] = useState<AssessmentId>(0)
+  // Whether this browser has used up its free demo runs. Checked once at mount
+  // and re-checked after every typed run; sample runs never touch it. Backed by
+  // demoLimit.ts, which fails open — so this starts `false` (not exhausted)
+  // whenever storage is unavailable, never locking out a real visitor.
+  const [exhausted, setExhausted] = useState(() => !canAnalyze())
 
-  const analyze = useCallback(async (tickers: string[]) => {
+  const analyze = useCallback(async (tickers: string[], source: AnalyzeSource) => {
     setBusy(true)
     setNotice(null)
-    track(EVENTS.analysisStarted, { tickers, count: tickers.length })
+    if (source === 'typed') {
+      recordRun()
+      setExhausted(!canAnalyze())
+    }
+    track(EVENTS.analysisStarted, { tickers, count: tickers.length, source })
     const started = Date.now()
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
@@ -69,7 +85,7 @@ export default function LandingPage() {
 
   useEffect(() => {
     track(EVENTS.pageView)
-    void analyze([SAMPLE])
+    void analyze([SAMPLE], 'sample')
   }, [analyze])
 
   // index.css sets a global dark body background; the elastic overscroll gutter
@@ -97,7 +113,12 @@ export default function LandingPage() {
     <div className="intrinsica">
       <Nav />
       <main>
-        <Hero onAnalyze={analyze} onSelectAssessment={setAssessment} busy={busy} />
+        <Hero
+          onAnalyze={tickers => analyze(tickers, 'typed')}
+          onSelectAssessment={setAssessment}
+          busy={busy}
+          exhausted={exhausted}
+        />
         {notice && <p className="notice container">{notice}</p>}
         {/* The results grid, methodology, why, workflow and pricing sections mount
             here in the tasks that follow; `rows` and `assessment` feed them. */}

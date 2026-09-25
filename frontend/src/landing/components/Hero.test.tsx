@@ -7,7 +7,7 @@ const noop = () => {}
 
 describe('Hero', () => {
   it('shows the four assessments with their questions', () => {
-    render(<Hero onAnalyze={noop} onSelectAssessment={noop} busy={false} />)
+    render(<Hero onAnalyze={noop} onSelectAssessment={noop} busy={false} exhausted={false} />)
     expect(ASSESSMENTS.map(a => a.name)).toEqual(
       ['Quality', 'Moat', 'Fair Value', 'Reward / Risk'])
     for (const a of ASSESSMENTS) {
@@ -17,14 +17,14 @@ describe('Hero', () => {
 
   it('selects that assessment when one is clicked', async () => {
     const onSelect = vi.fn()
-    render(<Hero onAnalyze={noop} onSelectAssessment={onSelect} busy={false} />)
+    render(<Hero onAnalyze={noop} onSelectAssessment={onSelect} busy={false} exhausted={false} />)
     await userEvent.click(screen.getByRole('button', { name: /Moat/ }))
     expect(onSelect).toHaveBeenCalledWith(1)
   })
 
   it('splits a comma-separated list, upper-cases it and drops blanks', async () => {
     const onAnalyze = vi.fn()
-    render(<Hero onAnalyze={onAnalyze} onSelectAssessment={noop} busy={false} />)
+    render(<Hero onAnalyze={onAnalyze} onSelectAssessment={noop} busy={false} exhausted={false} />)
     await userEvent.type(screen.getByRole('textbox'), 'nvda, amd ,, avgo')
     await userEvent.click(screen.getByRole('button', { name: /Analyze/ }))
     expect(onAnalyze).toHaveBeenCalledWith(['NVDA', 'AMD', 'AVGO'])
@@ -32,7 +32,7 @@ describe('Hero', () => {
 
   it('refuses a fourth ticker with a readable message and does not submit', async () => {
     const onAnalyze = vi.fn()
-    render(<Hero onAnalyze={onAnalyze} onSelectAssessment={noop} busy={false} />)
+    render(<Hero onAnalyze={onAnalyze} onSelectAssessment={noop} busy={false} exhausted={false} />)
     await userEvent.type(screen.getByRole('textbox'), 'A,B,C,D')
     await userEvent.click(screen.getByRole('button', { name: /Analyze/ }))
     expect(onAnalyze).not.toHaveBeenCalled()
@@ -41,14 +41,44 @@ describe('Hero', () => {
 
   it('does not submit an empty field', async () => {
     const onAnalyze = vi.fn()
-    render(<Hero onAnalyze={onAnalyze} onSelectAssessment={noop} busy={false} />)
+    render(<Hero onAnalyze={onAnalyze} onSelectAssessment={noop} busy={false} exhausted={false} />)
     await userEvent.click(screen.getByRole('button', { name: /Analyze/ }))
     expect(onAnalyze).not.toHaveBeenCalled()
   })
 
   it('never uses the word signal', () => {
     const { container } = render(
-      <Hero onAnalyze={noop} onSelectAssessment={noop} busy={false} />)
+      <Hero onAnalyze={noop} onSelectAssessment={noop} busy={false} exhausted={false} />)
     expect(container.textContent).not.toMatch(/signal/i)
+  })
+
+  describe('exhausted (demo limit reached)', () => {
+    it('shows a wall instead of the input and button, linking to pricing', () => {
+      render(<Hero onAnalyze={noop} onSelectAssessment={noop} busy={false} exhausted={true} />)
+      expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Analyze/ })).not.toBeInTheDocument()
+      const link = screen.getByRole('link', { name: /see the plans/i })
+      expect(link.getAttribute('href')).toBe('#pricing')
+    })
+
+    it('never uses the word signal in the wall copy either', () => {
+      const { container } = render(
+        <Hero onAnalyze={noop} onSelectAssessment={noop} busy={false} exhausted={true} />)
+      expect(container.textContent).not.toMatch(/signal/i)
+    })
+
+    it('does not claim an account or invent urgency', () => {
+      const { container } = render(
+        <Hero onAnalyze={noop} onSelectAssessment={noop} busy={false} exhausted={true} />)
+      expect(container.textContent).not.toMatch(/account/i)
+      expect(container.textContent).not.toMatch(/hurry|limited time|act now/i)
+    })
+
+    it('still renders the four assessment chips when exhausted', () => {
+      render(<Hero onAnalyze={noop} onSelectAssessment={noop} busy={false} exhausted={true} />)
+      for (const a of ASSESSMENTS) {
+        expect(screen.getByText(a.question)).toBeInTheDocument()
+      }
+    })
   })
 })

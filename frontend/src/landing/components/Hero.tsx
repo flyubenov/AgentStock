@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { DEMO_RUN_LIMIT, DEMO_WINDOW_DAYS } from '../demoLimit'
 import type { AssessmentId } from '../types'
 
 // The demo/UX pre-check only. The server (backend/routers/landing.py MAX_TICKERS)
@@ -22,9 +23,14 @@ interface Props {
   onAnalyze: (tickers: string[]) => void
   onSelectAssessment: (id: AssessmentId) => void
   busy: boolean
+  /** True once this browser has used up its free demo runs (frontend/src/
+   *  landing/demoLimit.ts). Replaces the ticker input/button with a short
+   *  message pointing at pricing — sample and compare-chip runs are unaffected,
+   *  since those never go through this control. */
+  exhausted: boolean
 }
 
-export default function Hero({ onAnalyze, onSelectAssessment, busy }: Props) {
+export default function Hero({ onAnalyze, onSelectAssessment, busy, exhausted }: Props) {
   const [value, setValue] = useState('')
   const [error, setError] = useState<string | null>(null)
 
@@ -70,20 +76,30 @@ export default function Hero({ onAnalyze, onSelectAssessment, busy }: Props) {
         </p>
 
         <div className="analyzer" id="analyze">
-          <div className="an-row">
-            <div className="an-field">
-              <input
-                value={value}
-                onChange={e => setValue(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') submit() }}
-                placeholder="Enter one or more tickers — e.g. NVDA, AMD, AVGO"
-              />
-            </div>
-            <button className="an-btn" type="button" onClick={submit} disabled={busy}>
-              {busy ? 'Analyzing…' : 'Analyze →'}
-            </button>
-          </div>
-          {error && <p className="an-error">{error}</p>}
+          {exhausted ? (
+            <p className="an-wall">
+              You've used all {DEMO_RUN_LIMIT} free analyses this browser gets in a
+              rolling {DEMO_WINDOW_DAYS}-day window. <a href="#pricing">See the plans</a> to
+              keep analyzing.
+            </p>
+          ) : (
+            <>
+              <div className="an-row">
+                <div className="an-field">
+                  <input
+                    value={value}
+                    onChange={e => setValue(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') submit() }}
+                    placeholder="Enter one or more tickers — e.g. NVDA, AMD, AVGO"
+                  />
+                </div>
+                <button className="an-btn" type="button" onClick={submit} disabled={busy}>
+                  {busy ? 'Analyzing…' : 'Analyze →'}
+                </button>
+              </div>
+              {error && <p className="an-error">{error}</p>}
+            </>
+          )}
         </div>
       </div>
     </header>
