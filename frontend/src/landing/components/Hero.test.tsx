@@ -137,4 +137,45 @@ describe('Hero', () => {
       expect(container.textContent).not.toMatch(/signal/i)
     })
   })
+
+  // Variant B3 (user decision): the page says what Intrinsica is — fundamentals
+  // turned into four scores by its own methodology, not raw data — as a strip under
+  // the headline, which replaces the v21 sub-line.
+  describe('pipeline strip', () => {
+    it('reads fundamentals, then the methodology, then four scores, in that order', () => {
+      const { container } = render(
+        <Hero onAnalyze={noop} onSelectAssessment={noop} busy={false} exhausted={false} />)
+      const steps = Array.from(container.querySelectorAll('.pipe .st')).map(s => s.textContent)
+      expect(steps).toEqual(['Dozens of fundamentals',
+        'Intrinsica methodology · weights & calibrations', 'Four scores'])
+      expect(container.querySelector('.pipe .st.out')).toHaveTextContent('Four scores')
+    })
+
+    it('sits between the headline and the four assessments', () => {
+      const { container } = render(
+        <Hero onAnalyze={noop} onSelectAssessment={noop} busy={false} exhausted={false} />)
+      const order = Array.from(container.querySelectorAll('.h3, .pipe, .assess4'))
+        .map(e => e.className)
+      expect(order).toEqual(['h3', 'pipe', 'assess4'])
+    })
+
+    it('replaces the old sub-line rather than adding to it', () => {
+      render(<Hero onAnalyze={noop} onSelectAssessment={noop} busy={false} exhausted={false} />)
+      expect(screen.queryByText(/Evaluate stocks using/)).not.toBeInTheDocument()
+    })
+
+    it('stays when the demo allowance is exhausted', () => {
+      const { container } = render(
+        <Hero onAnalyze={noop} onSelectAssessment={noop} busy={false} exhausted={true} />)
+      expect(container.querySelectorAll('.pipe .st')).toHaveLength(3)
+    })
+
+    it('keeps its arrows out of the accessibility tree', () => {
+      const { container } = render(
+        <Hero onAnalyze={noop} onSelectAssessment={noop} busy={false} exhausted={false} />)
+      const arrows = Array.from(container.querySelectorAll('.pipe .ar'))
+      expect(arrows).toHaveLength(2)
+      for (const a of arrows) expect(a).toHaveAttribute('aria-hidden', 'true')
+    })
+  })
 })

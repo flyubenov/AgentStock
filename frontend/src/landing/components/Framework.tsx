@@ -66,6 +66,7 @@ export default function Framework({ tab, onTab }: {
               <div key={p.title}><b>{p.title}</b> {p.body}</div>
             ))}
           </div>
+          <p className="judg"><b>{OVERVIEW.judgment.title}</b> {OVERVIEW.judgment.body}</p>
           <p className="ovtail">{OVERVIEW.tail}</p>
         </div>
 

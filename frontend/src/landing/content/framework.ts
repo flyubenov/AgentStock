@@ -155,8 +155,23 @@ export const OVERVIEW = {
     { title: 'Calibrated for distortions.', body: 'Data-triggered adjustments handle acquisition goodwill, amortization-depressed earnings, heavy capex, cyclicals and pre-profit growth. Every calibration that fires is named on the result, with the reason.' },
     { title: 'Built to run in parallel.', body: 'One ticker or a hundred are computed concurrently — the same engine behind a single lookup, a watchlist re-run and a screen across the universe.' },
   ],
+  /** Said plainly because it is true: three of the four assessments are judgments,
+   *  not quantities with a correct value. Intrinsica's scores are the product of its
+   *  own methodology, and the page's transparency is what makes that honest. */
+  judgment: {
+    title: 'A methodology, not a measurement.',
+    body: 'Quality, Moat and Reward/Risk have no single correct formula. Intrinsica assembles the fundamentals that bear on each, weights them and turns them into a score, so companies can be compared on the same scale. Every input and weight is on the page, so you can see exactly how a score was reached, and disagree with it.',
+  },
   tail: 'Click any assessment below for its categories, weights and calibrations.',
 }
+
+/** The hero's pipeline strip: what goes in, what Intrinsica adds, what comes out.
+ *  The last step names the four assessments set directly beneath it. */
+export const PIPELINE = [
+  'Dozens of fundamentals',
+  'Intrinsica methodology · weights & calibrations',
+  'Four scores',
+] as const
 
 /** `affects` holds assessment NAMES, matched against FRAMEWORK rather than an
  *  index, so a reordered FRAMEWORK cannot silently re-point a calibration at the

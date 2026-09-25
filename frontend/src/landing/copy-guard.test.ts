@@ -184,7 +184,7 @@ describe('copy guard — the files it scans', () => {
   // below would pass against a page that said "signal" in forty-eight point type.
   it('extracts real copy, not an empty string', () => {
     const copy = sources.map(([, text]) => text).join('\n')
-    expect(copy).toMatch(/Evaluate stocks using a consistent, transparent fundamental framework/)
+    expect(copy).toMatch(/Fundamental Stock Analysis/)       // JSX text in Hero
     expect(copy).toMatch(/no payment was taken/)
     expect(copy).toMatch(/Choose your plan/)
   })

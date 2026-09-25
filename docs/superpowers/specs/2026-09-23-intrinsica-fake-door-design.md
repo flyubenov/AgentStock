@@ -91,6 +91,11 @@ Workflow · Pricing · Sign up (CTA)**.
 ### 5.1 Hero
 
 - Wordmark **Intrinsica**, then **Fundamental Stock Analysis**.
+- **Pipeline strip** directly under the headline *(added 2026-09-26, user decision,
+  variant B3)*: `Dozens of fundamentals → Intrinsica methodology · weights & calibrations →
+  Four scores`, the last pill highlighted. It says what Intrinsica is: not raw financial
+  data, but the fundamentals turned into four scores by its own methodology. The "Four
+  scores" pill lands on the four assessments set directly beneath it.
 - **The four assessments inline under the headline** (placement "V2", locked), each a
   coloured dot + name + its plain-English question, and each **clickable**: clicking jumps
   to the methodology section and selects that assessment's tab.
@@ -98,11 +103,16 @@ Workflow · Pricing · Sign up (CTA)**.
   - Moat — *How durable are its competitive advantages?*
   - Fair Value — *What is the business worth based on its fundamentals and valuation methods?*
   - Reward / Risk — *How attractive is the current price relative to intrinsic value and downside risk?*
-- Sub-line: "Evaluate stocks using a consistent, transparent fundamental framework."
+- ~~Sub-line: "Evaluate stocks using a consistent, transparent fundamental framework."~~
+  *Removed 2026-09-26 (variant B3): the pipeline strip carries this claim instead.*
 - **Analyzer** immediately below: one rounded field (mono, focus glow, no magnifier icon),
   placeholder "Enter one or more tickers — e.g. NVDA, AMD, AVGO", and an **Analyze →**
-  button. No popular-ticker chips and no trust line — the field sits directly above the
-  results grid so input and output read as one unit.
+  button. No trust line — the field sits directly above the results grid so input and
+  output read as one unit.
+- **Compare chip** under the analyzer *(user decision, 2026-09-26 — supersedes v21's
+  "no chips")*: "Or try: Compare AAPL · MSFT · NVDA" fills the input with the three
+  tickers and runs them in parallel as a sample run. It never consumes the typed demo
+  allowance and stays available after it is used up.
 
 ### 5.2 Results
 
@@ -177,6 +187,12 @@ returns the same result. Then a 2×2 highlight grid:
   result, with the reason.
 - **Built to run in parallel.** One ticker or a hundred are computed concurrently — the same
   engine behind a single lookup, a watchlist re-run and a universe screen.
+
+Then a highlighted note *(added 2026-09-26, user decision, variant E)*: **"A methodology,
+not a measurement."** Quality, Moat and Reward/Risk have no single correct formula.
+Intrinsica assembles the fundamentals that bear on each, weights them and turns them into
+a score, so companies can be compared on the same scale. Every input and weight is on the
+page, so you can see exactly how a score was reached, and disagree with it.
 
 Closing line: "Click any assessment below for its categories, weights and calibrations."
 

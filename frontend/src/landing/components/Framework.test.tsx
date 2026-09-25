@@ -252,4 +252,17 @@ describe('Framework — page rules', () => {
     expect(container.querySelector('form')).not.toBeInTheDocument()
     expect(container.querySelector('textarea')).not.toBeInTheDocument()
   })
+
+  // Variant E (user decision): three of the four assessments are judgments, and
+  // the overview card says so, between the four highlights and the closing line.
+  it('says plainly that the scores are a methodology, not a measurement', () => {
+    const { container } = show(0)
+    const note = container.querySelector('.ovcard .judg')!
+    expect(note).toHaveTextContent('A methodology, not a measurement.')
+    expect(note).toHaveTextContent(/Quality, Moat and Reward\/Risk have no single correct formula/)
+    expect(note).toHaveTextContent(/disagree with it/)
+    const order = Array.from(container.querySelectorAll('.ovcard .ovpts, .ovcard .judg, .ovcard .ovtail'))
+      .map(e => e.className)
+    expect(order).toEqual(['ovpts', 'judg', 'ovtail'])
+  })
 })

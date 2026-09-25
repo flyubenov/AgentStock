@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { DEMO_RUN_LIMIT, DEMO_WINDOW_DAYS } from '../demoLimit'
+import { PIPELINE } from '../content/framework'
 import type { AnalyzeSource, AssessmentId } from '../types'
 
 // The demo/UX pre-check only. The server (backend/routers/landing.py MAX_TICKERS)
@@ -75,6 +76,19 @@ export default function Hero({ onAnalyze, onSelectAssessment, busy, exhausted }:
         <div className="brand">Intrinsica</div>
         <div className="h3">Fundamental Stock Analysis</div>
 
+        {/* What Intrinsica is, as a flow: it does not show raw financial data, it
+            turns the fundamentals into four scores through its own methodology.
+            The last step lands on the four assessments directly below. This
+            replaces the v21 sub-line (user decision, variant B3). */}
+        <div className="pipe">
+          {PIPELINE.map((step, i) => (
+            <span key={step} className="pipe-step-wrap">
+              {i > 0 && <span className="ar" aria-hidden="true">→</span>}
+              <span className={i === PIPELINE.length - 1 ? 'st out' : 'st'}>{step}</span>
+            </span>
+          ))}
+        </div>
+
         {/* Each assessment is a link to the methodology section that also selects
             that assessment's tab there (spec 5.1: "clicking jumps to the
             methodology section and selects that assessment's tab"). */}
@@ -94,10 +108,6 @@ export default function Hero({ onAnalyze, onSelectAssessment, busy, exhausted }:
               <div className="q">{a.question}</div>
             </a>
           ))}
-        </div>
-
-        <div className="sub">
-          Evaluate stocks using a consistent, transparent fundamental framework.
         </div>
 
         <div className="analyzer" id="analyze">
