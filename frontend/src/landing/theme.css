@@ -141,3 +141,72 @@
 
 @media (max-width: 700px) { .intrinsica .assess4 { grid-template-columns: repeat(2, 1fr); }
   .intrinsica .an-row { flex-direction: column; } }
+
+/* Breakdown panel (spec 5.3): a full-width slim tab strip over one table per
+ * assessment, rendered inside the grid's expanded row. Every selector is scoped
+ * under .bd so the grid's own `.g td` / `.g th` rules — which reach these nested
+ * tables as descendants — lose on specificity rather than on source order. */
+.intrinsica .bd { padding: 18px 14px 20px; font-family: var(--fb); }
+.intrinsica .bd-tabs { display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 6px; margin-bottom: 18px; }
+.intrinsica .bd-tabs button { background: var(--bg); border: 1px solid var(--line);
+  border-radius: 8px; padding: 8px 10px; font-family: var(--fh); font-weight: 600;
+  font-size: 13px; color: var(--dim); cursor: pointer; }
+.intrinsica .bd-tabs button:hover { border-color: var(--accent); color: var(--text); }
+.intrinsica .bd-tabs button.on { background: var(--accent-soft); border-color: var(--accent);
+  color: var(--accent); }
+.intrinsica .bd-tabs button:focus-visible { outline: 2px solid var(--accent);
+  outline-offset: 2px; }
+
+.intrinsica .bd .bd-sum { font-size: 14px; color: var(--dim); margin: 0 0 14px;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.intrinsica .bd .bd-sum b { color: var(--text); }
+.intrinsica .bd .rr-pill { background: var(--accent-soft); border: 1px solid var(--line);
+  border-radius: 999px; padding: 8px 14px; }
+.intrinsica .bd .rr-pill .tier { font-family: var(--fh); font-weight: 600;
+  font-size: 12px; color: var(--accent); }
+.intrinsica .bd .bd-missing, .intrinsica .bd .bd-note { font-size: 13px;
+  color: var(--mute); line-height: 1.55; margin: 12px 0 0; }
+.intrinsica .bd .bd-note b { color: var(--text); }
+.intrinsica .bd .bd-missing { margin: 0; }
+
+.intrinsica .bd .cat { margin-bottom: 18px; }
+.intrinsica .bd .cat-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-family: var(--fh); font-weight: 600; font-size: 13px; color: var(--text);
+  margin-bottom: 6px; }
+.intrinsica .bd .cat-h .wt { background: var(--accent-soft); color: var(--accent);
+  border-radius: 999px; padding: 2px 9px; font-size: 11px; font-weight: 600; }
+.intrinsica .bd .cat-h .cs { margin-left: auto; font-family: var(--fm);
+  font-size: 12px; color: var(--mute); }
+.intrinsica .bd .cat-h .an { font-family: var(--fb); font-weight: 400;
+  font-size: 12px; color: var(--mute); }
+
+.intrinsica .bd .bt { width: 100%; border-collapse: collapse; font-size: 13px; }
+.intrinsica .bd .bt th { text-align: left; font-family: var(--fh); font-weight: 600;
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em;
+  color: var(--mute); border-bottom: 1px solid var(--line); padding: 6px 10px;
+  white-space: nowrap; }
+.intrinsica .bd .bt td { padding: 7px 10px; border-bottom: 1px solid var(--line);
+  color: var(--text); vertical-align: top; }
+.intrinsica .bd .bt td:not(:first-child) { font-family: var(--fm); white-space: nowrap; }
+.intrinsica .bd .bt tr.excluded td { color: var(--mute); text-decoration: line-through; }
+/* The reason a metric was dropped is the one part of a struck row that still
+   has to read normally — it explains the strike rather than being struck by it. */
+.intrinsica .bd .bt tr.excluded .xn { text-decoration: none; }
+.intrinsica .bd .xn { display: block; font-family: var(--fb); font-size: 11px;
+  color: var(--warn); margin-top: 2px; }
+.intrinsica .bd .bd-sum .xn { display: inline; margin: 0; }
+
+.intrinsica .bd .cals { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.intrinsica .bd .cals-h { font-size: 12px; color: var(--mute); }
+/* A span, not the hero's `.chip` button style: these are statements of what the
+   engine did, not controls, and must not offer a pointer cursor. */
+.intrinsica .bd .cal { background: var(--stage); border: 1px solid var(--line);
+  border-radius: 999px; padding: 4px 11px; font-size: 12px; color: var(--dim); }
+
+@media (max-width: 700px) {
+  .intrinsica .bd-tabs { grid-template-columns: repeat(2, 1fr); }
+  .intrinsica .bd { padding: 14px 10px 16px; }
+  .intrinsica .bd .bt { font-size: 12px; }
+}

@@ -454,3 +454,65 @@ describe('Layout nav (controller addition)', () => {
     expect(analyse.className).toContain('text-blue-400')
   })
 })
+
+// Task 10: `renderBreakdown` used to return null, so nothing here proved the
+// expanded row renders anything at all. These assert on the real Breakdown's
+// output and on the one piece of state the page shares with it — `assessment`,
+// which the hero cards write and the panel reads.
+const BREAKDOWN_ROW = {
+  ticker: 'AAPL', company_name: 'Apple Inc.', price: 232,
+  quality: {
+    score: 9.1, fundamentals_composite: 9.1, profile_label: 'Tech / Growth',
+    categories: [{
+      key: 'I', name: 'Growth & Margins', weight_pct: 35, score: 8,
+      metrics: [{ label: 'Revenue growth (3-yr)', raw: 0.08, score: 6,
+                  weight_pct: 17.5, excluded: false, excluded_by: null }],
+    }],
+  },
+  moat: { score: 90, gated: false, excluded: [],
+          factors: [{ label: 'ROIC level', points: 18, max_points: 20, weight_pct: 20 }] },
+  fair_value: { value: 211, gap_pct: -9.05, type_label: 'Mega Cap', methods: [] },
+  reward_risk: { ratio: 0.9, tier: 'Balanced', reward_score: 2.8, risk_score: 3.1,
+                 reward: [], risk: [] },
+  calibrations: [], errors: [],
+}
+
+describe('LandingPage breakdown panel (task 10)', () => {
+  async function openRow() {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      json: async () => ({ results: [BREAKDOWN_ROW], invalid: [], error: null }),
+    }))
+    const utils = renderPage()
+    await waitFor(() => {
+      expect(screen.getByText('Apple Inc.')).toBeInTheDocument()
+    })
+    await userEvent.click(screen.getByRole('button', { name: 'AAPL' }))
+    return utils
+  }
+
+  it('expands a row into the real factor table, not an empty panel', async () => {
+    await openRow()
+    expect(screen.getByText('Growth & Margins')).toBeInTheDocument()
+    expect(screen.getByText('Revenue growth (3-yr)')).toBeInTheDocument()
+    for (const name of ['Quality', 'Moat', 'Fair Value', 'Reward / Risk']) {
+      expect(screen.getByRole('button', { name })).toBeInTheDocument()
+    }
+  })
+
+  it('switches the open panel when a breakdown tab is clicked', async () => {
+    await openRow()
+    await userEvent.click(screen.getByRole('button', { name: 'Moat' }))
+    expect(screen.getByText('ROIC level')).toBeInTheDocument()
+    expect(screen.queryByText('Growth & Margins')).not.toBeInTheDocument()
+  })
+
+  // The hero cards and the breakdown share one `assessment`, so choosing an
+  // assessment up in the hero must move the panel already open below it.
+  it('follows the hero assessment cards, which write the same assessment state', async () => {
+    const { container } = await openRow()
+    const cards = container.querySelectorAll('.assess4 .it')
+    await userEvent.click(cards[2])
+    expect(screen.getByText('Mega Cap')).toBeInTheDocument()
+    expect(screen.queryByText('Growth & Margins')).not.toBeInTheDocument()
+  })
+})

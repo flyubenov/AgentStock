@@ -3,6 +3,7 @@ import './theme.css'
 import Nav from './components/Nav'
 import Hero from './components/Hero'
 import ResultGrid from './components/ResultGrid'
+import Breakdown from './components/Breakdown'
 import SiteFooter from './components/SiteFooter'
 import { track, EVENTS } from '../lib/analytics'
 import { API_BASE } from '../lib/api'
@@ -118,12 +119,6 @@ export default function LandingPage() {
     }
   }, [])
 
-  // `assessment` is held here for the framework tabs Task 11 adds to this file —
-  // it reads this value as a prop, not this component. Referencing it as a no-op
-  // keeps this file compiling under noUnusedLocals until that task lands; delete
-  // this line when it consumes the state.
-  void assessment
-
   return (
     <div className="intrinsica">
       <Nav />
@@ -141,7 +136,13 @@ export default function LandingPage() {
               rows={rows}
               open={open}
               onToggle={toggle}
-              renderBreakdown={() => null}
+              // One `assessment` for the whole page: the hero's assessment
+              // cards, every expanded row's breakdown and (from Task 11) the
+              // framework tabs all read and write this single value, so opening
+              // "Moat" anywhere opens it everywhere.
+              renderBreakdown={r => (
+                <Breakdown row={r} tab={assessment} onTab={setAssessment} />
+              )}
             />
             <p className="free-note">
               <b>Everything here is the real analysis — full depth, nothing blurred.</b>{' '}
@@ -152,7 +153,8 @@ export default function LandingPage() {
           </div>
         </section>
         {/* The methodology, why, workflow and pricing sections mount here in the
-            tasks that follow; `assessment` feeds the framework tabs. */}
+            tasks that follow; `assessment` already feeds every expanded row's
+            breakdown panel, and will feed the framework tabs too. */}
       </main>
       <SiteFooter />
     </div>

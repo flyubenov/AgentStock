@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { money, num, pct, gapClass } from './format'
+import { money, num, pct, gapClass, figure, weight } from './format'
 
 describe('formatters', () => {
   it('renders an em dash for every absent value', () => {
@@ -56,5 +56,53 @@ describe('formatters', () => {
   it('still signs a value that survives rounding', () => {
     expect(pct(0.05)).toBe('+0.1%')
     expect(pct(-0.06)).toBe('-0.1%')
+  })
+})
+
+// Task 10: the breakdown table shows a metric's underlying figure and its share
+// of a category. Neither job fits num()/pct(): a raw figure spans margins (0.08)
+// and multiples (55.2) so a fixed decimal count is wrong for one of them, and a
+// weight is unsigned and must not read "+35.0%". Both live here rather than
+// inline in Breakdown.tsx so the em-dash guarantee has exactly one implementation.
+describe('figure', () => {
+  it('renders an em dash for every absent or non-finite value', () => {
+    expect(figure(null)).toBe('—')
+    expect(figure(NaN)).toBe('—')
+    expect(figure(Infinity)).toBe('—')
+  })
+
+  it('trims a floating-point tail the backend never rounded', () => {
+    expect(figure(0.08123456789)).toBe('0.08123')
+    expect(figure(55.234567)).toBe('55.23')
+  })
+
+  it('leaves a clean value clean', () => {
+    expect(figure(232)).toBe('232')
+    expect(figure(0.3)).toBe('0.3')
+    expect(figure(-3.43)).toBe('-3.43')
+  })
+
+  it('prints zero unsigned', () => {
+    expect(figure(0)).toBe('0')
+    expect(figure(-0)).toBe('0')
+  })
+})
+
+describe('weight', () => {
+  it('renders an em dash for every absent or non-finite value', () => {
+    expect(weight(null)).toBe('—')
+    expect(weight(NaN)).toBe('—')
+  })
+
+  it('drops a pointless decimal but keeps a real one', () => {
+    expect(weight(35)).toBe('35%')
+    expect(weight(17.5)).toBe('17.5%')
+    expect(weight(11.67)).toBe('11.7%')
+    expect(weight(0)).toBe('0%')
+  })
+
+  it('never signs a weight — a share of a category has no direction', () => {
+    expect(weight(35)).not.toContain('+')
+    expect(weight(-0)).toBe('0%')
   })
 })
