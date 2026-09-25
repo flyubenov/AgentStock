@@ -74,15 +74,16 @@ def _fetch_sync(ticker: str, _bucket: int) -> dict:
 
 
 async def fetch_quote(ticker: str) -> float | None:
-    """A fresh current price, for callers that need one to actually change between
-    calls within a process's lifetime -- unlike fetch_ticker_info above.
+    """A fresh current price, for callers that need one that cannot be stale by more
+    than a single call -- unlike fetch_ticker_info above.
 
-    Deliberately NOT memoized (contrast _fetch_sync's @lru_cache, "cached per ticker
-    per process"): this exists specifically so the landing cache's fast-layer refresh
-    (backend/landing/cache.py, LANDING_FAST_TTL) gets a genuinely fresh price on every
-    call, instead of the same frozen dict _fetch_sync's cache would otherwise hand
-    back for the rest of the process's life -- do not add an lru_cache here, that
-    would silently turn the fast layer back into a no-op in any warm instance.
+    Deliberately NOT memoized (contrast _fetch_sync's @lru_cache, TTL-bucketed via
+    _info_bucket): _fetch_sync is memoised with a TTL, so it can legitimately serve a
+    price up to _INFO_TTL seconds old. That is fine for fetch_ticker_info's callers,
+    but not for the landing cache's fast-layer refresh (backend/landing/cache.py,
+    LANDING_FAST_TTL), which exists specifically to get a genuinely fresh price on
+    every call -- do not add an lru_cache here, that would reintroduce the same
+    TTL-bounded staleness this function exists to avoid.
 
     yfinance's Ticker.fast_info was evaluated as the cheap-quote path first, but in
     this yfinance version (1.3.0) fast_info.last_price internally triggers a full
