@@ -28,6 +28,20 @@ export default function Framework({ tab, onTab }: {
   // pushes the second one's trigger off the screen that opened it. Purely local
   // presentation state, unlike `tab`, which the whole page shares.
   const [openCal, setOpenCal] = useState<string | null>(null)
+  // A calibration can affect two assessments — Tangible-ROIC is listed under
+  // both Quality and Moat — so without this an expanded row follows the reader
+  // across a tab switch and greets them already open on a panel they have only
+  // just arrived at. Spec 5.4 item 5's "all collapsed by default" is about
+  // arriving at a panel, not about this section's first render, so the
+  // expansion is dropped whenever `tab` moves. Deliberately React's documented
+  // render-phase adjustment rather than an effect: an effect would paint the
+  // stale open row for a frame before collapsing it, and it would be a second
+  // set-state-in-effect on a page that already carries one.
+  const [shownTab, setShownTab] = useState<AssessmentId>(tab)
+  if (shownTab !== tab) {
+    setShownTab(tab)
+    setOpenCal(null)
+  }
   const a = FRAMEWORK[tab]
   const cals = CALIBRATIONS.filter(c => c.affects.includes(a.name))
 

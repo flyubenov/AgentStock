@@ -156,6 +156,24 @@ describe('Framework — calibrations', () => {
       .toBeInTheDocument()
   })
 
+  // Spec 5.4 item 5 — "all collapsed by default" reads as *on arrival at a
+  // panel*, not merely on the section's first render. Tangible-ROIC affects
+  // both Quality and Moat, so without a reset an expanded row follows the
+  // reader onto a panel they have only just opened.
+  it('collapses an expanded calibration when the assessment changes', async () => {
+    const { rerender } = render(<Framework tab={0} onTab={vi.fn()} />)
+    await userEvent.click(screen.getByText('Tangible-ROIC (ex-goodwill)'))
+    expect(screen.getByText(/When it applies/)).toBeInTheDocument()
+
+    rerender(<Framework tab={1} onTab={vi.fn()} />)
+    // The row itself is still listed — Moat is its second assessment — so this
+    // is a statement about its expansion, not about it disappearing.
+    expect(screen.getByText('Tangible-ROIC (ex-goodwill)')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Tangible-ROIC/ }))
+      .toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByText(/When it applies/)).not.toBeInTheDocument()
+  })
+
   it('tags a one-directional calibration Guarded and a plain one only Conditional', async () => {
     const { container } = show(1)
     await userEvent.click(screen.getByText('Tangible-ROIC (ex-goodwill)'))
@@ -218,8 +236,13 @@ describe('Framework — page rules', () => {
     }
   })
 
+  // Anchored for the same reason as the two guards above: three `not` assertions
+  // on their own are satisfied by a component that rendered nothing at all, so
+  // the panel has to be proved present before its emptiness means anything.
   it('takes no card, payment, address or name input', () => {
     const { container } = show()
+    expect(container.querySelector('.mdetail')).toBeInTheDocument()
+    expect(screen.getByText('How Intrinsica works')).toBeInTheDocument()
     expect(container.querySelector('input')).not.toBeInTheDocument()
     expect(container.querySelector('form')).not.toBeInTheDocument()
     expect(container.querySelector('textarea')).not.toBeInTheDocument()
