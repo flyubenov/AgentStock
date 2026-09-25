@@ -509,7 +509,40 @@ describe('LandingPage breakdown analytics under StrictMode (fix round 1)', () =>
 
     await userEvent.click(screen.getByRole('button', { name: 'AAPL' }))
 
-    expect(opens(track)).toEqual([['breakdown_opened', { ticker: 'AAPL' }]])
+    expect(opens(track))
+      .toEqual([['breakdown_opened', { ticker: 'AAPL', assessment: 'Quality' }]])
+  })
+
+  // Fix round 16d: spec section 9 names this event `breakdown_opened (ticker,
+  // assessment tab)`. The plan dropped the tab and so did the implementation,
+  // so an expand was recorded without the thing the visitor was actually
+  // reading. Asserted with the page on a NON-default tab, because a constant
+  // 'Quality' passes the test above and this is the one that catches it.
+  //
+  // Still under StrictMode, and still an exact one-call list: `assessment` had
+  // to join `toggle`'s dependency array, and the once-per-open guarantee (the
+  // track call sits beside setOpen, never inside the updater) has to survive
+  // that untouched.
+  it('records the assessment tab the row opens on, not a constant', async () => {
+    const { track } = await import('../lib/analytics')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      json: async () => ({ results: [compareRow('AAPL')], invalid: [], error: null }),
+    }))
+    const { container } = render(
+      <StrictMode><MemoryRouter><LandingPage /></MemoryRouter></StrictMode>
+    )
+    await waitFor(() => {
+      expect(screen.getByText('AAPL Inc.')).toBeInTheDocument()
+    })
+    // The hero's assessment cards write the page's single `assessment` — the
+    // same one the breakdown panel reads. Index 3 is Reward / Risk.
+    await userEvent.click(container.querySelectorAll('.assess4 .it')[3])
+    vi.mocked(track).mockClear()
+
+    await userEvent.click(screen.getByRole('button', { name: 'AAPL' }))
+
+    expect(opens(track))
+      .toEqual([['breakdown_opened', { ticker: 'AAPL', assessment: 'Reward / Risk' }]])
   })
 
   it('fires nothing when the row is collapsed again', async () => {

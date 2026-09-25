@@ -91,11 +91,28 @@ export default function LandingPage() {
   // breakdown_opened twice per expand in development. The transition is
   // computed from the current `open` — which is therefore a dependency — and
   // the event is emitted once, beside the state change rather than within it.
+  //
+  // The panel opens on whichever assessment the page is currently showing —
+  // one `assessment` is shared by the hero cards, the framework tabs and every
+  // breakdown — so the expand means nothing without it: spec section 9 names
+  // the event `breakdown_opened (ticker, assessment tab)`. It is the tab's
+  // human name, the same value methodology_viewed posts, never the AssessmentId
+  // index (spec section 8: no internal identifiers leave the app). Individual
+  // tab SWITCHES inside an open panel stay uninstrumented — section 9 names
+  // them among the things deliberately not tracked; this is the state at the
+  // moment of the open, and fires only on the open transition.
+  //
+  // `assessment` joins the dependency array for that read. It changes nothing
+  // about the once-per-expand guarantee above, which rests on where the call
+  // sits (beside setOpen, never inside the updater) and not on how often the
+  // callback is rebuilt.
   const toggle = useCallback((ticker: string) => {
     const opening = !open[ticker]
     setOpen(prev => ({ ...prev, [ticker]: !prev[ticker] }))
-    if (opening) track(EVENTS.breakdownOpened, { ticker })
-  }, [open])
+    if (opening) {
+      track(EVENTS.breakdownOpened, { ticker, assessment: FRAMEWORK[assessment].name })
+    }
+  }, [open, assessment])
 
   const analyze = useCallback(async (tickers: string[], source: AnalyzeSource) => {
     setBusy(true)
