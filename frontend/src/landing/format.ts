@@ -30,7 +30,16 @@ export function pct(v: number | null): string {
  *  (0.08), multiples (55.2) and ratios (-3.43), and any single precision is
  *  wrong for one of them. Four significant digits, with the trailing zeros
  *  dropped — the backend does not round `raw`, so the alternative is printing
- *  0.08123456789 on a page whose pitch is that every number is checkable. */
+ *  0.08123456789 on a page whose pitch is that every number is checkable.
+ *
+ *  `String(Number(...))` switches to exponent notation outside roughly
+ *  1e-6 … 1e21, so figure(5e-7) is "5e-7". That is deliberate and pinned in
+ *  format.test.ts rather than clamped: no metric the contract emits (margins,
+ *  multiples, ratios, leverage) comes near either bound, and at a magnitude
+ *  that did, both fixed alternatives read worse than the exponent — "0.0000005"
+ *  is a column of leading zeros and 1e21 fixed is a 22-digit integer. The
+ *  em-dash guarantee is unaffected: an exponent string is still a real number,
+ *  never NaN, Infinity or "null". */
 export function figure(v: number | null): string {
   if (!finite(v)) return DASH
   // -0 === 0, so this catches both signed zeroes before toPrecision can turn

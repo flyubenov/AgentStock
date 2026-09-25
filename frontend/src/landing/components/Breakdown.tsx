@@ -14,10 +14,13 @@ const TABS = ['Quality', 'Moat', 'Fair Value', 'Reward / Risk'] as const
 
 const FACTOR_COLS = ['Factor', 'Data', 'Score', 'Weight']
 
-/** The published Quality score and the categories' own composite are rounded to
- *  one decimal from different places in the engine, so they can differ by a
- *  rounding hair without anything having been adjusted. Anything larger is a
- *  real adjustment and gets explained. */
+/** The two figures are rounded to DIFFERENT precisions, in different places, by
+ *  backend/landing/contract.py: the published `score` to one decimal, the
+ *  categories' own `fundamentals_composite` to two. So they can differ by a
+ *  rounding hair — up to half of the coarser step — without anything having
+ *  been adjusted, and 0.05 is that half-step. Anything larger is a real
+ *  adjustment and gets explained. Do not "correct" this to 0.005: the one-decimal
+ *  side is what sets the floor. */
 const COMPOSITE_TOLERANCE = 0.05
 
 /** "8.0 / 10" — but a bare em dash when there is no value, since "— / 10" reads

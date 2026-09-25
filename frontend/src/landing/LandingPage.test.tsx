@@ -6,6 +6,7 @@ import { MemoryRouter } from 'react-router-dom'
 import LandingPage, { FETCH_TIMEOUT_MS } from './LandingPage'
 import { runsUsed } from './demoLimit'
 import Layout from '../components/Layout'
+import type { TickerPayload } from './types'
 
 vi.mock('../lib/analytics', () => ({
   track: vi.fn(),
@@ -459,7 +460,7 @@ describe('Layout nav (controller addition)', () => {
 // expanded row renders anything at all. These assert on the real Breakdown's
 // output and on the one piece of state the page shares with it — `assessment`,
 // which the hero cards write and the panel reads.
-const BREAKDOWN_ROW = {
+const BREAKDOWN_ROW: TickerPayload = {
   ticker: 'AAPL', company_name: 'Apple Inc.', price: 232,
   quality: {
     score: 9.1, fundamentals_composite: 9.1, profile_label: 'Tech / Growth',

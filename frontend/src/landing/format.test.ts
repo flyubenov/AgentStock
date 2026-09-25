@@ -86,6 +86,26 @@ describe('figure', () => {
     expect(figure(0)).toBe('0')
     expect(figure(-0)).toBe('0')
   })
+
+  // Prelude to task 11. figure() leans on String(Number(...)), which switches to
+  // exponent notation outside roughly 1e-6 … 1e21. Pinned rather than clamped:
+  // see the rationale on figure() itself. These two tests exist so the boundary
+  // is a decision on record, not an accident — a later clamp to toFixed() would
+  // fail the second one and have to argue with the comment.
+  it('keeps fixed notation across the whole range any real metric occupies', () => {
+    expect(figure(0.000001)).toBe('0.000001')
+    expect(figure(-0.0000123)).toBe('-0.0000123')
+    expect(figure(999900000000000000000)).toBe('999900000000000000000')
+  })
+
+  it('falls back to exponent notation past that range, never to NaN or null', () => {
+    expect(figure(5e-7)).toBe('5e-7')
+    expect(figure(-5e-7)).toBe('-5e-7')
+    expect(figure(1.5e21)).toBe('1.5e+21')
+    for (const v of [5e-7, -5e-7, 1.5e21]) {
+      expect(figure(v)).not.toMatch(/NaN|Infinity|null|undefined/)
+    }
+  })
 })
 
 describe('weight', () => {

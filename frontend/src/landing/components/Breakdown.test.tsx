@@ -96,10 +96,16 @@ describe('Breakdown tabs', () => {
     expect(onTab).toHaveBeenCalledWith(3)
   })
 
+  // Anchored the same way as the leak test below (prelude to task 11): without a
+  // positive assertion first, a component that rendered nothing at all would
+  // satisfy the negative regex and this test would prove only that.
   it('never labels the ratio Risk/Reward, on any tab', () => {
+    const anchors = ['Growth & Margins', 'ROIC level', 'Discounted cash flow', 'Volatility']
     for (const tab of [0, 1, 2, 3] as const) {
       const { container, unmount } = render(
         <Breakdown row={payload()} tab={tab} onTab={vi.fn()} />)
+      expect(container.textContent).toContain(anchors[tab])
+      expect(container.querySelector('table')).toBeInTheDocument()
       expect(container.textContent).not.toMatch(/Risk\s*\/\s*Reward/)
       unmount()
     }
