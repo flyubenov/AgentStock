@@ -33,6 +33,41 @@ const ALL_LABELS = [
   'Exports',
 ]
 
+/** The whole matrix, one ordered triple per row, positionally aligned with
+ *  ALL_LABELS above.
+ *
+ *  ALL_LABELS pinned the rows; only column 0 was ever pinned to a plan, so a
+ *  Pro/Unlimited column swap authored in this data passed the entire suite —
+ *  verified before this was written, by swapping `Watchlists` to
+ *  `['1', 'Unlimited', '5–10']`: 21 of 21 tests still passed, and the matrix
+ *  would have shipped offering Pro unlimited watchlists. Every cell is retyped
+ *  here rather than read back out of COMPARE_ROWS, because an expectation
+ *  derived from the data it checks asserts nothing.
+ *
+ *  The two Free cells that also exist as running code stay derived from the
+ *  constants (see the demo-caps test below) so the copy still cannot drift from
+ *  the limit a visitor actually hits; their Pro and Unlimited cells are literal
+ *  like every other. */
+const ALL_VALUES: [string, string, string][] = [
+  ['Full', 'Full', 'Full'],
+  ['Full', 'Full', 'Full'],
+  [`~${DEMO_RUN_LIMIT}`, 'Unlimited', 'Unlimited'],
+  [String(MAX_TICKERS), '10', '100+ (bulk)'],
+  ['—', 'Up to 3', 'Up to 3'],
+  ['1', '5–10', 'Unlimited'],
+  ['5', '50', 'Unlimited'],
+  ['—', 'Basic', 'Advanced'],
+  ['6 months', '~2 years', 'Full history'],
+  ['6 months', 'Yes', 'Advanced'],
+  ['—', '—', 'Yes'],
+  ['Preview', 'Preview', 'Full'],
+  ['Preview', 'Preview', 'Yes'],
+  ['—', '10–20', 'Unlimited'],
+  ['—', '—', 'Yes'],
+  ['—', '—', 'Yes'],
+  ['—', 'CSV / PDF', 'Bulk'],
+]
+
 describe('plans', () => {
   it('offers exactly Free, Pro and Unlimited, with Pro featured', () => {
     expect(PLANS.map(p => p.name)).toEqual(['Free', 'Pro', 'Unlimited'])
@@ -187,6 +222,15 @@ describe('plans', () => {
     const run = COMPARE_ROWS.find(r => r.label === 'Tickers per analysis run')
     expect(run).toBeDefined()
     expect(run!.values).toEqual(['3', '10', '100+ (bulk)'])
+  })
+
+  // Task 13's fix round pinned the *render* order against this data; it did not
+  // pin this data against the plans. Both columns of every row are pinned here,
+  // so a Pro/Unlimited swap fails on the row it was authored in — and it fails
+  // naming the row, because the labels are asserted alongside the values.
+  it('pins all three columns of every row, not only Free’s', () => {
+    expect(COMPARE_ROWS.map(r => r.label)).toEqual(ALL_LABELS)
+    expect(COMPARE_ROWS.map(r => r.values)).toEqual(ALL_VALUES)
   })
 
   it('gives every compare row exactly three values, one per plan', () => {

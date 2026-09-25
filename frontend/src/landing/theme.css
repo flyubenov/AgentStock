@@ -467,5 +467,13 @@
   .intrinsica .billing-toggle { display: flex; }
   .intrinsica .billing-toggle button { flex: 1; justify-content: center; padding: 8px 12px; }
   .intrinsica .cmp-plans { font-size: 12.5px; }
-  .intrinsica .cmp-plans th, .intrinsica .cmp-plans td { padding: 8px 8px; }
+  /* Named through `thead th` and `tbody th` rather than a bare `th`. A media
+     query adds no specificity, so the bare form (0,2,1) lost to the base
+     `.intrinsica .cmp-plans thead th` / `tbody th` rules (0,2,2) that Task 13's
+     `<th scope="row">` fix introduced — and on a phone the header row and the
+     whole first column kept desktop padding while only the value cells shrank.
+     The 860px block above is already specific enough (`tbody th` vs `tbody th`,
+     later in source wins), so it has no equivalent problem. */
+  .intrinsica .cmp-plans thead th, .intrinsica .cmp-plans tbody th,
+  .intrinsica .cmp-plans td { padding: 8px 8px; }
 }
