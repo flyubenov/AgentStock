@@ -130,17 +130,75 @@ function expectFunnel(names: string[], expected: string[]) {
 const PAYMENT_WORDS =
   /card number|cardholder|name on card|credit card|debit card|\bcvc\b|\bcvv\b|expir|security code|\biban\b|sort.?code|account.?number|routing/i
 
-/** The only input this site may render. The ticker box in Hero carries no `type`
- *  attribute, which the DOM normalises to `text`; the checkout's optional email
- *  is `type="email"` and appears only AFTER the payment click. Everything else —
- *  `password`, `tel`, `number`, `month` — is banned outright. */
+/** The only input types this site may render. The ticker box in Hero carries no
+ *  `type` attribute, which the DOM normalises to `text`; the checkout's optional
+ *  email is `type="email"` and appears only AFTER the payment click. Everything
+ *  else — `password`, `tel`, `number`, `month` — is banned outright. */
 const ALLOWED_INPUT_TYPES = new Set(['text', 'email'])
 
-function expectNoPaymentSurface(container: HTMLElement, where: string) {
-  for (const input of Array.from(container.querySelectorAll('input'))) {
+/** Address, postal and name terms, checked ONLY against an input's own naming
+ *  attributes and its label — never against `outerHTML`, which is why they were
+ *  missing from PAYMENT_WORDS above: that sweep runs over the whole element, so
+ *  a bare /name/ there matches every `name="..."` attribute in the document and
+ *  fires on everything. Kept off `textContent` too: "Billing" is legitimate
+ *  copy on the checkout's summary line. */
+const IDENTITY_WORDS =
+  /address|street|\bcity\b|postal|post.?code|\bzip\b|full name|first name|last name|surname|billing name/i
+
+/** An input this site is allowed to render, named by WHERE it lives rather than
+ *  by what it is called. The whitelist below is the point of this file's
+ *  strongest guarantee: a blacklist of forbidden words can always be walked
+ *  around by a word nobody thought of — `Billing address` and `Full name` both
+ *  cleared PAYMENT_WORDS, and a planted pair of them left this file 7/7 green —
+ *  whereas an input that is not one of these cannot exist at all. */
+type SanctionedInput = { selector: string; type: string; what: string }
+
+/** Hero's ticker box. Matched through its container, not through a word in its
+ *  placeholder, so re-wording the placeholder does not silently widen the
+ *  whitelist and a payment field dropped beside it does not silently fit. */
+const HERO_TICKER: SanctionedInput =
+  { selector: '#analyze .an-field input', type: 'text', what: 'the Hero ticker box' }
+
+/** The checkout's optional email, which exists only after the payment click. */
+const CHECKOUT_EMAIL: SanctionedInput =
+  { selector: 'input#co-email', type: 'email', what: 'the optional email' }
+
+function expectNoPaymentSurface(
+  container: HTMLElement,
+  where: string,
+  sanctioned: SanctionedInput[],
+) {
+  const inputs = Array.from(container.querySelectorAll('input'))
+  // WHITELIST FIRST, and by count AND identity. Count alone would accept a
+  // payment field that had displaced a sanctioned one; identity alone would
+  // accept a payment field standing beside it.
+  expect(inputs.map(i => i.outerHTML), `${where}: unsanctioned input(s) present`)
+    .toHaveLength(sanctioned.length)
+  for (const { selector, type, what } of sanctioned) {
+    const matched = Array.from(container.querySelectorAll(selector))
+    expect(matched, `${where}: expected exactly one input for ${what}`).toHaveLength(1)
+    expect((matched[0] as HTMLInputElement).type, `${where}: ${what}`).toBe(type)
+  }
+
+  // Then the blacklists, unchanged and deliberately kept: defence in depth, and
+  // the word sweeps also catch a payment surface built from elements that are
+  // not inputs at all, which no input whitelist can see.
+  for (const input of inputs) {
     expect(ALLOWED_INPUT_TYPES.has(input.type), `${where}: <input type=${input.type}>`)
       .toBe(true)
     expect(input.outerHTML, where).not.toMatch(PAYMENT_WORDS)
+    // Scoped to what the field calls itself and to the label a visitor reads,
+    // for the reason given on IDENTITY_WORDS.
+    const labels = Array.from(input.labels ?? []).map(l => l.textContent ?? '')
+    const naming = [
+      input.getAttribute('placeholder') ?? '',
+      input.getAttribute('aria-label') ?? '',
+      input.getAttribute('name') ?? '',
+      input.getAttribute('autocomplete') ?? '',
+      ...labels,
+    ].join(' | ')
+    expect(naming, `${where}: an input asking for an address or a name`)
+      .not.toMatch(IDENTITY_WORDS)
     // Browsers autofill card details off this attribute; `cc-number`, `cc-exp`,
     // `cc-csc` would each be a payment field in all but name.
     expect(input.getAttribute('autocomplete') ?? '', where).not.toMatch(/^cc-/)
@@ -277,28 +335,34 @@ describe('the fake-door funnel, end to end', () => {
     expect(names().filter(n => !SPEC_EVENTS.includes(n))).toEqual([])
   })
 
+  /** The claim in the name is "anywhere", so the assertion has to be closed,
+   *  not enumerated: every input on the page is checked against the list of the
+   *  ones that may exist, rather than against a list of words that may not
+   *  appear. The enumerated version of this test passed with a `Billing
+   *  address` and a `Full name` field planted on the landing page. */
   it('never renders a payment surface anywhere in the funnel', async () => {
     const { observers } = captureFunnel()
     const { container } = render(<App />)
     await settled()
 
-    expectNoPaymentSurface(container, 'landing page')
+    expectNoPaymentSurface(container, 'landing page', [HERO_TICKER])
     act(() => observers[0]([{ isIntersecting: true }]))
 
     await userEvent.click(screen.getByRole('button', { name: 'Choose Unlimited' }))
     await screen.findByRole('button', { name: 'Proceed to payment' })
-    expectNoPaymentSurface(container, 'checkout before the click')
+    expectNoPaymentSurface(container, 'checkout before the click', [])
 
     await userEvent.click(screen.getByRole('button', { name: 'Proceed to payment' }))
     await screen.findByText(/no payment was taken/i)
-    expectNoPaymentSurface(container, 'checkout after the click')
+    expectNoPaymentSurface(container, 'checkout after the click', [CHECKOUT_EMAIL])
 
-    // The one sanctioned input on the whole site, and only after the click: an
-    // optional email with a real label. Asserted positively so the sweep above
-    // cannot be satisfied by a page that renders no inputs at all.
+    // The one sanctioned input on this page, and only after the click: an
+    // optional email with a real label. The whitelist above already pins its
+    // count, position and type; what is added here is that it is LABELLED — a
+    // field a visitor can read the purpose of, rather than one identified only
+    // by an id the test happens to know.
     const inputs = Array.from(container.querySelectorAll('input'))
     expect(inputs).toHaveLength(1)
-    expect(inputs[0].type).toBe('email')
     expect(screen.getByLabelText(/optional/i)).toBe(inputs[0])
   })
 
@@ -384,6 +448,6 @@ describe('the fake-door funnel, end to end', () => {
     expect(container.textContent).not.toMatch(/\$/)
     expect(screen.queryByRole('button', { name: 'Proceed to payment' })).not.toBeInTheDocument()
     expect(names()).not.toContain('checkout_started')
-    expectNoPaymentSurface(container, 'unknown plan')
+    expectNoPaymentSurface(container, 'unknown plan', [])
   })
 })
