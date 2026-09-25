@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor, act } from '@testing-library/react'
+import { render, screen, waitFor, act, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import LandingPage, { FETCH_TIMEOUT_MS } from './LandingPage'
@@ -13,6 +13,7 @@ vi.mock('../lib/analytics', () => ({
     pageView: 'page_view',
     analysisStarted: 'analysis_started',
     analysisCompleted: 'analysis_completed',
+    breakdownOpened: 'breakdown_opened',
   },
 }))
 
@@ -271,6 +272,73 @@ describe('LandingPage demo limit — only a successful typed run counts (fix rou
     })
 
     expect(runsUsed()).toBe(1)
+  })
+})
+
+// Controller Addition 2: the compare chip is a prefill shortcut into the same
+// analyze() path as the button, tagged 'sample', rendering into the same
+// ResultGrid this task wires up. Assertions are on rendered output (the DOM the
+// real ResultGrid produces), never on the fetch mock echoing itself.
+function compareRow(ticker: string, qualityScore: number) {
+  return {
+    ticker, company_name: `${ticker} Inc.`, price: 100,
+    quality: { score: qualityScore, profile_label: null, categories: [] },
+    moat: { score: 50, gated: false, excluded: [], factors: [] },
+    fair_value: { value: 110, gap_pct: 5, type_label: null, methods: [] },
+    reward_risk: { ratio: 1.2, tier: null, reward_score: 1, risk_score: 1, reward: [], risk: [] },
+    calibrations: [], errors: [],
+  }
+}
+
+describe('LandingPage compare chip (controller addition 2)', () => {
+  it('fills the input, analyzes the fixed trio as a sample run, and renders all three rows with the best-in-column highlight', async () => {
+    const { track } = await import('../lib/analytics')
+    await renderSettled()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      json: async () => ({
+        results: [compareRow('AAPL', 8), compareRow('MSFT', 9.5), compareRow('NVDA', 7)],
+        invalid: [], error: null,
+      }),
+    }))
+
+    await userEvent.click(screen.getByRole('button', { name: /Compare/ }))
+
+    await waitFor(() => {
+      expect(screen.getByText('MSFT')).toBeInTheDocument()
+    })
+    expect(screen.getByText('AAPL')).toBeInTheDocument()
+    expect(screen.getByText('NVDA')).toBeInTheDocument()
+    expect(screen.getByRole('textbox')).toHaveValue('AAPL, MSFT, NVDA')
+    expect(track).toHaveBeenCalledWith('analysis_started',
+      { tickers: ['AAPL', 'MSFT', 'NVDA'], count: 3, source: 'sample' })
+
+    const grid = screen.getByText('MSFT').closest('table')!
+    expect(within(grid).getByText('9.5')).toHaveClass('best')
+  })
+
+  it('keeps working after the typed allowance is exhausted, and never consumes it', async () => {
+    localStorage.setItem('intrinsica_demo_runs', JSON.stringify({
+      count: 5, windowStart: Date.now(),
+    }))
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      json: async () => ({
+        results: [compareRow('AAPL', 8), compareRow('MSFT', 9.5), compareRow('NVDA', 7)],
+        invalid: [], error: null,
+      }),
+    }))
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByText(/see the plans/i)).toBeInTheDocument()
+    })
+    // The wall replaced the input/button, but the chip must still be present.
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /Compare/ }))
+    await waitFor(() => {
+      expect(screen.getByText('MSFT')).toBeInTheDocument()
+    })
+    expect(screen.getByText(/see the plans/i)).toBeInTheDocument()
+    expect(JSON.parse(localStorage.getItem('intrinsica_demo_runs')!).count).toBe(5)
   })
 })
 

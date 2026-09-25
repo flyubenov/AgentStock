@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import './theme.css'
 import Nav from './components/Nav'
 import Hero from './components/Hero'
+import ResultGrid from './components/ResultGrid'
 import SiteFooter from './components/SiteFooter'
 import { track, EVENTS } from '../lib/analytics'
 import { API_BASE } from '../lib/api'
@@ -35,6 +36,15 @@ export default function LandingPage() {
   // demoLimit.ts, which fails open — so this starts `false` (not exhausted)
   // whenever storage is unavailable, never locking out a real visitor.
   const [exhausted, setExhausted] = useState(() => !canAnalyze())
+  const [open, setOpen] = useState<Record<string, boolean>>({})
+
+  const toggle = useCallback((ticker: string) => {
+    setOpen(prev => {
+      const next = { ...prev, [ticker]: !prev[ticker] }
+      if (next[ticker]) track(EVENTS.breakdownOpened, { ticker })
+      return next
+    })
+  }, [])
 
   const analyze = useCallback(async (tickers: string[], source: AnalyzeSource) => {
     setBusy(true)
@@ -110,11 +120,10 @@ export default function LandingPage() {
     }
   }, [])
 
-  // `rows` and `assessment` are held here for the results/framework sections Tasks
-  // 9–13 add to this file — they read these values as props, not this component.
-  // Referencing them as a no-op keeps this file compiling under noUnusedLocals on
-  // its own until those tasks land; delete this line when they consume the state.
-  void rows
+  // `assessment` is held here for the framework tabs Task 11 adds to this file —
+  // it reads this value as a prop, not this component. Referencing it as a no-op
+  // keeps this file compiling under noUnusedLocals until that task lands; delete
+  // this line when it consumes the state.
   void assessment
 
   return (
@@ -122,14 +131,30 @@ export default function LandingPage() {
       <Nav />
       <main>
         <Hero
-          onAnalyze={tickers => analyze(tickers, 'typed')}
+          onAnalyze={analyze}
           onSelectAssessment={setAssessment}
           busy={busy}
           exhausted={exhausted}
         />
         {notice && <p className="notice container">{notice}</p>}
-        {/* The results grid, methodology, why, workflow and pricing sections mount
-            here in the tasks that follow; `rows` and `assessment` feed them. */}
+        <section className="section" id="result">
+          <div className="container">
+            <ResultGrid
+              rows={rows}
+              open={open}
+              onToggle={toggle}
+              renderBreakdown={() => null}
+            />
+            <p className="free-note">
+              <b>Everything here is the real analysis — full depth, nothing blurred.</b>{' '}
+              The demo is open to everyone: up to 3 tickers per run, no account needed.
+              At launch the <b>Free</b> plan keeps that depth with about 5 analyses a
+              month; <b>Pro</b> removes the cap and adds the research workflow.
+            </p>
+          </div>
+        </section>
+        {/* The methodology, why, workflow and pricing sections mount here in the
+            tasks that follow; `assessment` feeds the framework tabs. */}
       </main>
       <SiteFooter />
     </div>

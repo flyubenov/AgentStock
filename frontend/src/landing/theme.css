@@ -91,5 +91,45 @@
 .intrinsica .an-wall a { color: var(--accent); font-weight: 600; text-decoration: none; }
 .intrinsica .an-wall a:hover { text-decoration: underline; }
 .intrinsica .notice { color: var(--dim); font-size: 14px; text-align: center; margin: 0 0 24px; }
+
+/* Compare chip: a prefill shortcut beside the analyzer input, not a mode toggle.
+ * Lives outside Hero's exhausted-wall branch so it keeps working after the demo
+ * allowance runs out (Task 8d/9 handoff). */
+.intrinsica .an-chips { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 14px; font-size: 13px; color: var(--mute); }
+.intrinsica .chip { background: #fff; border: 1px solid var(--line); border-radius: 999px;
+  padding: 6px 14px; font-size: 13px; font-family: var(--fb); color: var(--dim);
+  cursor: pointer; }
+.intrinsica .chip:hover { border-color: var(--accent); color: var(--text); }
+
+/* Results grid (style B / Institutional): values only, units in the header. */
+.intrinsica .tB { overflow-x: auto; }
+.intrinsica .g { width: 100%; border-collapse: collapse; font-family: var(--fb);
+  font-size: 14px; }
+.intrinsica .g th { text-align: left; font-family: var(--fh); font-weight: 600;
+  font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--mute);
+  border-bottom: 1px solid var(--line); padding: 10px 12px; white-space: nowrap; }
+.intrinsica .g th u { font-weight: 400; text-decoration: none; color: var(--mute);
+  text-transform: none; }
+.intrinsica .g td { padding: 14px 12px; border-bottom: 1px solid var(--line);
+  vertical-align: top; color: var(--text); }
+.intrinsica .g tr.row { cursor: pointer; }
+.intrinsica .g tr.row:hover { background: var(--stage); }
+.intrinsica .g tr.row.open { background: var(--accent-soft); }
+.intrinsica .g td.co { display: flex; flex-direction: column; gap: 2px; }
+.intrinsica .g td.co .cn { font-size: 12px; color: var(--mute); }
+.intrinsica .g td.ex { color: var(--mute); text-align: right; }
+.intrinsica .g tr.exp td { background: var(--stage); cursor: default; padding: 0; }
+/* Best-in-column highlight (blue), compare mode only — no stars. */
+.intrinsica .g td.best { background: var(--accent-soft); font-weight: 600; color: var(--accent); }
+.intrinsica .g td.gap-pos { color: var(--pos); }
+.intrinsica .g td.gap-near { color: var(--accent); }
+.intrinsica .g td.gap-warn { color: var(--warn); }
+.intrinsica .g td.gap-neg { color: var(--neg); }
+.intrinsica .g td.gap-none { color: var(--mute); }
+
+.intrinsica .free-note { max-width: 720px; margin: 24px auto 0; font-size: 13px;
+  line-height: 1.6; color: var(--mute); text-align: center; }
+
 @media (max-width: 700px) { .intrinsica .assess4 { grid-template-columns: repeat(2, 1fr); }
   .intrinsica .an-row { flex-direction: column; } }

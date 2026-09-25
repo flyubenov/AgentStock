@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import Hero, { ASSESSMENTS } from './Hero'
+import Hero, { ASSESSMENTS, COMPARE_TICKERS } from './Hero'
 
 const noop = () => {}
 
@@ -27,7 +27,7 @@ describe('Hero', () => {
     render(<Hero onAnalyze={onAnalyze} onSelectAssessment={noop} busy={false} exhausted={false} />)
     await userEvent.type(screen.getByRole('textbox'), 'nvda, amd ,, avgo')
     await userEvent.click(screen.getByRole('button', { name: /Analyze/ }))
-    expect(onAnalyze).toHaveBeenCalledWith(['NVDA', 'AMD', 'AVGO'])
+    expect(onAnalyze).toHaveBeenCalledWith(['NVDA', 'AMD', 'AVGO'], 'typed')
   })
 
   it('refuses a fourth ticker with a readable message and does not submit', async () => {
@@ -79,6 +79,33 @@ describe('Hero', () => {
       for (const a of ASSESSMENTS) {
         expect(screen.getByText(a.question)).toBeInTheDocument()
       }
+    })
+  })
+
+  // --- Controller Addition 2: the compare chip ---
+  describe('compare chip', () => {
+    it('fills the input with the fixed trio and analyzes it as a sample run', async () => {
+      const onAnalyze = vi.fn()
+      render(<Hero onAnalyze={onAnalyze} onSelectAssessment={noop} busy={false} exhausted={false} />)
+      await userEvent.click(screen.getByRole('button', { name: /Compare/ }))
+      expect(onAnalyze).toHaveBeenCalledWith(COMPARE_TICKERS, 'sample')
+      expect(screen.getByRole('textbox')).toHaveValue(COMPARE_TICKERS.join(', '))
+    })
+
+    it('still renders and works when the typed allowance is exhausted', async () => {
+      const onAnalyze = vi.fn()
+      render(<Hero onAnalyze={onAnalyze} onSelectAssessment={noop} busy={false} exhausted={true} />)
+      // The wall is up — no textbox, no Analyze button — but the chip survives.
+      expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+      const chip = screen.getByRole('button', { name: /Compare/ })
+      await userEvent.click(chip)
+      expect(onAnalyze).toHaveBeenCalledWith(COMPARE_TICKERS, 'sample')
+    })
+
+    it('does not use the internal word signal in the chip copy', () => {
+      const { container } = render(
+        <Hero onAnalyze={noop} onSelectAssessment={noop} busy={false} exhausted={false} />)
+      expect(container.textContent).not.toMatch(/signal/i)
     })
   })
 })
