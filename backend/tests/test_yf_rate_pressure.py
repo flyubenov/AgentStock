@@ -40,6 +40,6 @@ def test_fetch_sync_flags_rate_limit_pressure(monkeypatch):
         lambda t: (_ for _ in ()).throw(Exception("Too Many Requests: rate limited")),
     )
     with pytest.raises(Exception):
-        yahoo._fetch_sync("ZZZZ")
+        yahoo._fetch_sync("ZZZZ", 0)
     yahoo._fetch_sync.cache_clear()
     assert pool.rate_limit_pressure() is True

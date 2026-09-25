@@ -65,7 +65,10 @@ async def test_fetch_ticker_info_runs_on_the_yf_pool():
 
     assert out == {"symbol": "AAPL"}
     assert seen["fn"] is yahoo._fetch_sync
-    assert seen["args"] == ("AAPL",)
+    # second arg is the current TTL bucket (see yahoo._info_bucket) -- time-dependent,
+    # so assert its shape rather than an exact value.
+    assert seen["args"][0] == "AAPL"
+    assert seen["args"][1] == yahoo._info_bucket()
 
 
 def test_rate_limit_backoff_is_bounded():
@@ -99,7 +102,7 @@ def test_fetch_sync_backoff_sleeps_are_capped(monkeypatch):
     monkeypatch.setattr(yahoo.yf, "Ticker", lambda t: (_ for _ in ()).throw(_RateLimited("rate limit")))
 
     with pytest.raises(Exception):
-        yahoo._fetch_sync("ZZZZ")
+        yahoo._fetch_sync("ZZZZ", 0)
 
     yahoo._fetch_sync.cache_clear()
     assert sum(sleeps) <= 12.0

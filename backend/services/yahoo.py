@@ -27,15 +27,30 @@ _RATE_LIMIT_BACKOFF = 3.0
 # enough of those starve the pool and the whole batch freezes with no error.
 _HISTORY_TIMEOUT = float(os.getenv("YF_HISTORY_TIMEOUT", "30"))
 
+# TTL for the info cache below, in seconds. Kept short enough to dedupe the three
+# engines that each want the same ticker's info at the start of one run (they start
+# concurrently, seconds apart) while still letting the landing cache's multi-day slow
+# layer genuinely refresh instead of replaying a frozen dict for a process's lifetime.
+_INFO_TTL = float(os.getenv("YF_INFO_TTL", "900"))  # 15 minutes
+
+
+def _info_bucket() -> int:
+    """Changes every _INFO_TTL seconds, so an lru_cache entry keyed on an older
+    bucket can never be hit again and ages out via normal LRU eviction. Cheaper and
+    far less risky than replacing the memoisation with a bespoke TTL cache."""
+    return int(time.time() // _INFO_TTL)
+
 
 async def fetch_ticker_info(ticker: str) -> dict:
     """Async wrapper around yfinance Ticker.info (dedicated yfinance pool)."""
-    return await run_yf(_fetch_sync, ticker.upper())
+    return await run_yf(_fetch_sync, ticker.upper(), _info_bucket())
 
 
 @lru_cache(maxsize=256)
-def _fetch_sync(ticker: str) -> dict:
-    """Fetch yfinance info with retry on rate-limit. Cached per ticker per process."""
+def _fetch_sync(ticker: str, _bucket: int) -> dict:
+    """Fetch yfinance info with retry on rate-limit. Cached per ticker per process,
+    for as long as _bucket (see _info_bucket) stays the same -- i.e. up to _INFO_TTL
+    seconds."""
     for attempt in range(_RATE_LIMIT_RETRIES):
         try:
             t = yf.Ticker(ticker)
