@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import './theme.css'
 import Nav from './components/Nav'
 import Hero from './components/Hero'
@@ -7,11 +8,13 @@ import Breakdown from './components/Breakdown'
 import Framework from './components/Framework'
 import Why from './components/Why'
 import Workflow from './components/Workflow'
+import Pricing from './components/Pricing'
 import SiteFooter from './components/SiteFooter'
 import { track, EVENTS } from '../lib/analytics'
 import { API_BASE } from '../lib/api'
 import { canAnalyze, recordRun } from './demoLimit'
 import { FRAMEWORK } from './content/framework'
+import type { Billing } from './content/plans'
 import type { AnalyzeResponse, AnalyzeSource, AssessmentId, TickerPayload } from './types'
 
 const SAMPLE = 'AAPL'
@@ -36,6 +39,33 @@ export default function LandingPage() {
   // whenever storage is unavailable, never locking out a real visitor.
   const [exhausted, setExhausted] = useState(() => !canAnalyze())
   const [open, setOpen] = useState<Record<string, boolean>>({})
+  // The billing period the pricing cards show, and the one a plan choice carries
+  // into the checkout. Annual by default (spec 5.7). Owned here rather than
+  // inside Pricing because the checkout has to be told which period was on
+  // screen when the visitor chose. Switching it fires no analytics: spec
+  // section 9's list is closed and names the billing toggle among the things
+  // deliberately left uninstrumented — plan_selected already carries the period
+  // that was actually chosen, which is the only one worth counting.
+  const [billing, setBilling] = useState<Billing>('annual')
+  const navigate = useNavigate()
+
+  // Both branches route to the same checkout, worded differently there (spec 6):
+  // pointing Free back at the demo was considered and rejected, because the demo
+  // is not the Free plan. The event, however, is deliberately NOT the same.
+  // free_plan_clicked is its own event and is excluded from paid-intent
+  // conversion — clicking Free is the opposite of a purchase signal — so it
+  // carries the same props but never rides plan_selected, and nothing here lets
+  // it be counted as one.
+  const choosePlan = useCallback((plan: string, b: Billing) => {
+    track(plan === 'Free' ? EVENTS.freePlanClicked : EVENTS.planSelected,
+          { plan, billing: b })
+    navigate(`/checkout?plan=${encodeURIComponent(plan)}&billing=${b}`)
+  }, [navigate])
+
+  // Stable identity on purpose: Pricing's intersection observer is keyed on this
+  // callback, so an inline arrow would tear the observer down and rebuild it on
+  // every render of the page.
+  const reportPricingView = useCallback(() => track(EVENTS.pricingViewed), [])
 
   // The analytics call must stay OUTSIDE the updater. React requires state
   // updaters to be pure and deliberately double-invokes them under StrictMode
@@ -177,7 +207,16 @@ export default function LandingPage() {
             writes the page's `assessment`, so neither is wired to it. */}
         <Why />
         <Workflow />
-        {/* The pricing section mounts here in the task that follows. */}
+        {/* pricing_viewed is fired from here, not from inside Pricing, for the
+            same reason methodology_viewed is: the component that owns the state
+            owns the instrumentation. Pricing only reports that it scrolled into
+            view; whether that is worth an event is this page's decision. */}
+        <Pricing
+          billing={billing}
+          onBilling={setBilling}
+          onChoose={choosePlan}
+          onView={reportPricingView}
+        />
       </main>
       <SiteFooter />
     </div>

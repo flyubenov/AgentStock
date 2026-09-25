@@ -1,0 +1,312 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import Pricing from './Pricing'
+import { COMPARE_ROWS, PLANS } from '../content/plans'
+
+/** Every negative assertion below is anchored: a real string and a real element
+ *  are asserted first, so a Pricing that rendered nothing could not satisfy the
+ *  guard by being empty. That matters most for the card/payment guard — this
+ *  section is the closest thing on the page to a purchase flow, and "the DOM
+ *  contains no card field" is trivially true of an empty DOM. */
+
+type Entry = { isIntersecting: boolean }
+type IOCallback = (entries: Entry[]) => void
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
+const show = (billing: 'annual' | 'monthly' = 'annual', onChoose = vi.fn(),
+              onBilling = vi.fn()) => {
+  const utils = render(
+    <Pricing billing={billing} onBilling={onBilling} onChoose={onChoose} />)
+  return { ...utils, onChoose, onBilling }
+}
+
+describe('Pricing', () => {
+  it('anchors the section the nav points at, and heads it', () => {
+    const { container } = show()
+    expect(container.querySelector('section#pricing')).toBeInTheDocument()
+    expect(screen.getByText('Choose your plan')).toBeInTheDocument()
+  })
+
+  it('shows the annual effective prices by default', () => {
+    show()
+    expect(screen.getByText('$18.00')).toBeInTheDocument()
+    expect(screen.getByText('$25.00')).toBeInTheDocument()
+    expect(screen.getByText('billed annually · $216/yr · save 18%')).toBeInTheDocument()
+    expect(screen.getByText('billed annually · $300/yr · save 17%')).toBeInTheDocument()
+    expect(screen.queryByText('$21.99')).not.toBeInTheDocument()
+  })
+
+  it('switches to monthly prices', () => {
+    show('monthly')
+    expect(screen.getByText('$21.99')).toBeInTheDocument()
+    expect(screen.getByText('$29.99')).toBeInTheDocument()
+    expect(screen.queryByText('$18.00')).not.toBeInTheDocument()
+    expect(screen.queryByText('$25.00')).not.toBeInTheDocument()
+  })
+
+  it('costs nothing on Free, on either billing period', () => {
+    for (const billing of ['annual', 'monthly'] as const) {
+      const { container, unmount } = render(
+        <Pricing billing={billing} onBilling={vi.fn()} onChoose={vi.fn()} />)
+      const free = container.querySelectorAll<HTMLElement>('.price-card')[0]
+      expect(within(free).getByText('$0')).toBeInTheDocument()
+      expect(within(free).getByText('No card, ever')).toBeInTheDocument()
+      unmount()
+    }
+  })
+
+  // The toggle is a pair of aria-pressed buttons, the same pattern the framework
+  // cards use. It is a controlled pair: it asks the page to change billing and
+  // renders whatever comes back, so `billing` is the only source of truth.
+  it('marks the active billing period and asks for the other one', async () => {
+    const { onBilling } = show('annual')
+    const annual = screen.getByRole('button', { name: /Annual/ })
+    const monthly = screen.getByRole('button', { name: 'Monthly' })
+    expect(annual).toHaveAttribute('aria-pressed', 'true')
+    expect(monthly).toHaveAttribute('aria-pressed', 'false')
+
+    await userEvent.click(monthly)
+    expect(onBilling).toHaveBeenCalledWith('monthly')
+    // Controlled: nothing moved on its own, because `billing` did not change.
+    expect(screen.getByRole('button', { name: /Annual/ }))
+      .toHaveAttribute('aria-pressed', 'true')
+  })
+
+  // The toggle advertises a saving of its own, and until this test nothing in
+  // the suite checked it against the savings the cards actually quote: raising
+  // it to "save ~40%" broke nothing. An overstated discount on the one page
+  // whose job is to measure genuine willingness to pay corrupts the number it
+  // exists to collect, so the tag is both pinned and bounded — it may never
+  // claim more than the smallest saving a paid plan really offers.
+  it('advertises an annual saving that neither plan overstates', () => {
+    show()
+    const annual = screen.getByRole('button', { name: /Annual/ })
+    const tag = annual.querySelector('.save')
+    expect(tag).not.toBeNull()
+    expect(tag!.textContent).toBe('save ~17%')
+
+    const claimed = Number(tag!.textContent!.match(/(\d+)%/)![1])
+    const real = PLANS.slice(1).map(p => {
+      const m = p.annual!.sub.match(/save (\d+)%/)
+      expect(m).not.toBeNull()
+      return Number(m![1])
+    })
+    expect(real).toHaveLength(2)
+    expect(claimed).toBeLessThanOrEqual(Math.min(...real))
+
+    // Monthly carries no tag: there is nothing saved by paying monthly.
+    expect(screen.getByRole('button', { name: 'Monthly' }).querySelector('.save'))
+      .toBeNull()
+  })
+
+  it('reports the chosen plan and billing period', async () => {
+    const { onChoose } = show('annual')
+    await userEvent.click(screen.getByRole('button', { name: 'Choose Pro' }))
+    expect(onChoose).toHaveBeenCalledWith('Pro', 'annual')
+  })
+
+  it('carries the billing period actually showing into the choice', async () => {
+    const { onChoose } = show('monthly')
+    await userEvent.click(screen.getByRole('button', { name: 'Choose Unlimited' }))
+    expect(onChoose).toHaveBeenCalledWith('Unlimited', 'monthly')
+  })
+
+  it('routes Free through the same chooser', async () => {
+    const { onChoose } = show()
+    await userEvent.click(screen.getByRole('button', { name: 'Start free' }))
+    expect(onChoose).toHaveBeenCalledWith('Free', 'annual')
+  })
+
+  it('features Pro and only Pro, with no "most popular" text', () => {
+    const { container } = show()
+    const cards = Array.from(container.querySelectorAll<HTMLElement>('.price-card'))
+    expect(cards).toHaveLength(3)
+    expect(cards.map(c => c.classList.contains('featured')))
+      .toEqual([false, true, false])
+    expect(within(cards[1]).getByText('Deep Stock Analysis')).toBeInTheDocument()
+    expect(container.textContent).not.toMatch(/most popular|best value|recommended/i)
+  })
+
+  it('renders every feature bullet of every plan', () => {
+    const { container } = show()
+    const bullets = Array.from(container.querySelectorAll('.feature-list li'))
+    expect(bullets).toHaveLength(17)
+    expect(screen.getByText('Unlimited analyses — no monthly cap')).toBeInTheDocument()
+    expect(screen.getByText('Up to 3 tickers per analysis run')).toBeInTheDocument()
+  })
+
+  // plans.test.ts pins the order of the arrays; this pins the order the reader
+  // actually sees. Without it a component that sorted or reversed `p.features`
+  // would still render all seventeen bullets, still satisfy every other
+  // assertion in this file, and still move Pro's opening line — "Everything in
+  // Free, at the same full depth, plus:" — down the card. That line is what
+  // tells a reader the upgrade buys volume and workflow rather than depth that
+  // was withheld, which is the claim this whole page exists to test.
+  it('renders each card’s bullets in the order its plan declares them', () => {
+    const { container } = show()
+    const cards = Array.from(container.querySelectorAll<HTMLElement>('.price-card'))
+    expect(cards).toHaveLength(PLANS.length)
+    cards.forEach((card, i) => {
+      const bullets = Array.from(card.querySelectorAll('.feature-list li'))
+        .map(li => li.textContent)
+      expect(bullets).toEqual(PLANS[i].features)
+    })
+    // Named explicitly, not just implied by the array equality above: if the
+    // inheritance line ever stops being first, this says why that matters.
+    expect(cards[1].querySelector('.feature-list li')?.textContent)
+      .toBe('Everything in Free, at the same full depth, plus:')
+    expect(cards[2].querySelector('.feature-list li')?.textContent)
+      .toBe('Everything in Pro, plus:')
+  })
+
+  it('renders the whole compare matrix', () => {
+    const { container } = show()
+    const rows = Array.from(container.querySelectorAll('.cmp-plans tbody tr'))
+    expect(rows).toHaveLength(COMPARE_ROWS.length)
+    expect(rows.map(r => r.querySelector('td')?.textContent?.startsWith(
+      COMPARE_ROWS[rows.indexOf(r)].label))).not.toContain(false)
+    expect(Array.from(container.querySelectorAll('.cmp-plans thead th'))
+      .map(th => th.textContent)).toEqual(['Feature', 'Free', 'Pro', 'Unlimited'])
+    expect(screen.getByText('Stocks per watchlist')).toBeInTheDocument()
+    expect(screen.getByText(/Preview = the filters are visible/)).toBeInTheDocument()
+    expect(screen.getByText(/Free sells the framework/)).toBeInTheDocument()
+  })
+
+  it('shows the three who-it-is-for cards above the matrix', () => {
+    const { container } = show()
+    const who = Array.from(container.querySelectorAll<HTMLElement>('.who-card'))
+    expect(who).toHaveLength(3)
+    expect(who.map(w => w.querySelector('.who-tag')?.textContent))
+      .toEqual(['Free · Try', 'Pro · Depth', 'Unlimited · Scale'])
+    for (const card of who) {
+      expect((card.querySelector('.who-for')?.textContent ?? '').length)
+        .toBeGreaterThan(40)
+    }
+  })
+
+  // The single hardest constraint in the project: the page must be structurally
+  // incapable of taking money. Anchored on content that is really there, so an
+  // empty render fails rather than passes.
+  it('exposes no card, payment, address or name field anywhere', () => {
+    const { container } = render(
+      <Pricing billing="annual" onBilling={vi.fn()} onChoose={vi.fn()} />)
+    expect(screen.getByText('Choose your plan')).toBeInTheDocument()
+    expect(screen.getByText('$18.00')).toBeInTheDocument()
+    expect(container.querySelectorAll('.price-card')).toHaveLength(3)
+
+    expect(container.querySelectorAll('input')).toHaveLength(0)
+    expect(container.querySelectorAll('form')).toHaveLength(0)
+    expect(container.querySelectorAll('textarea')).toHaveLength(0)
+    expect(container.querySelectorAll('select')).toHaveLength(0)
+    expect(container.querySelectorAll('input[type="password"]')).toHaveLength(0)
+    expect(container.querySelectorAll('[autocomplete]')).toHaveLength(0)
+    expect(container.textContent)
+      .not.toMatch(/card number|cvc|cvv|expiry|billing address|cardholder/i)
+  })
+
+  // A smoke test measures willingness to pay. Manufactured pressure — a
+  // countdown, a seat count, a deadline — corrupts the one number this page
+  // exists to collect, so none of it may exist.
+  it('invents no urgency and promises no account or charge', () => {
+    const { container } = show()
+    expect(screen.getByText('Choose Unlimited')).toBeInTheDocument()
+    const text = container.textContent ?? ''
+    expect(text).not.toMatch(/only \d+|seats? (left|remaining)|spots? left/i)
+    expect(text).not.toMatch(/hurry|limited time|offer ends|expires?\b|countdown|act now/i)
+    expect(text).not.toMatch(/free trial|trial (started|begins)|your account/i)
+    expect(text).not.toMatch(/you will be charged|charged today|payment due/i)
+  })
+
+  // Spec section 8, and the same two regexes Framework.test.tsx and
+  // WhyWorkflow.test.tsx use. An outcome band ("Moat 80+") carries no inequality
+  // operator; a published cut-off does, which is what separates them.
+  it('leaks no banned word, internal identifier or scoring cut-off', () => {
+    const { container } = show()
+    const text = container.textContent ?? ''
+    expect(container.querySelector('.stitle')?.textContent?.length).toBeGreaterThan(10)
+    expect(container.querySelector('.kicker')?.textContent?.length).toBeGreaterThan(3)
+    expect(text).toContain('Reward / Risk')
+    expect(text).not.toMatch(/signal/i)
+    expect(text).not.toMatch(/Risk\s*[/-]\s*Reward/)
+    expect(text).not.toMatch(/Reward[/-]Risk/)
+    expect(text).not.toMatch(/[<>≥≤]\s*\d/)
+    expect(text).not.toMatch(/scores?\s+\d/i)
+    expect(text).not.toMatch(/[A-Z]{2,}_[A-Z]{2,}/)
+    expect(text).not.toMatch(/\.py\b/)
+  })
+
+  // Controller ruling: nothing on this page hides behind hover. Every note in
+  // the matrix is rendered inline instead.
+  it('hides nothing behind a hover tooltip', () => {
+    const { container } = show()
+    expect(screen.getByText(/Intrinsica re-runs your watchlists/)).toBeInTheDocument()
+    expect(container.querySelector('[title]')).toBeNull()
+  })
+
+  // Two briefs in a row invented class names and shipped no CSS for any of them.
+  // Every class this section renders must have a rule in theme.css, or the
+  // section ships unstyled and nothing in the suite notices.
+  it('styles every class it renders', () => {
+    // Resolved from the vitest root (frontend/) rather than import.meta.url,
+    // which vite serves as an http: URL that node:fs cannot open.
+    const css = readFileSync(resolve(process.cwd(), 'src/landing/theme.css'), 'utf8')
+    expect(css.length).toBeGreaterThan(1000)
+    const { container } = show()
+    const used = new Set<string>()
+    for (const el of container.querySelectorAll('*')) {
+      for (const cls of el.classList) used.add(cls)
+    }
+    expect(used.size).toBeGreaterThan(15)
+    const unstyled = [...used].filter(c => !new RegExp(`\\.${c}(?![\\w-])`).test(css))
+    expect(unstyled).toEqual([])
+  })
+
+  it('reports the section as viewed once it scrolls into view', () => {
+    const observers: IOCallback[] = []
+    vi.stubGlobal('IntersectionObserver', class {
+      constructor(cb: IOCallback) { observers.push(cb) }
+      observe() {}
+      disconnect() {}
+    })
+    const onView = vi.fn()
+    render(<Pricing billing="annual" onBilling={vi.fn()} onChoose={vi.fn()}
+                    onView={onView} />)
+    expect(onView).not.toHaveBeenCalled()
+
+    observers[0]([{ isIntersecting: true }])
+    observers[0]([{ isIntersecting: true }])
+    expect(onView).toHaveBeenCalledTimes(1)
+  })
+
+  // Mounting is not viewing: this section renders with the page, well below the
+  // fold. An observer that never reports an intersection must never report a view.
+  it('does not report a view for a section that merely mounted', () => {
+    const observers: IOCallback[] = []
+    vi.stubGlobal('IntersectionObserver', class {
+      constructor(cb: IOCallback) { observers.push(cb) }
+      observe() {}
+      disconnect() {}
+    })
+    const onView = vi.fn()
+    render(<Pricing billing="annual" onBilling={vi.fn()} onChoose={vi.fn()}
+                    onView={onView} />)
+    expect(observers).toHaveLength(1)
+    observers[0]([{ isIntersecting: false }])
+    expect(onView).not.toHaveBeenCalled()
+  })
+
+  it('does not break where IntersectionObserver is unavailable', () => {
+    vi.stubGlobal('IntersectionObserver', undefined)
+    expect(() => render(
+      <Pricing billing="annual" onBilling={vi.fn()} onChoose={vi.fn()}
+               onView={vi.fn()} />)).not.toThrow()
+    expect(screen.getByText('Choose your plan')).toBeInTheDocument()
+    expect(screen.getByText('$18.00')).toBeInTheDocument()
+  })
+})

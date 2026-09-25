@@ -2,7 +2,7 @@ import { StrictMode } from 'react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, act, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import LandingPage, { FETCH_TIMEOUT_MS } from './LandingPage'
 import { runsUsed } from './demoLimit'
 import Layout from '../components/Layout'
@@ -17,6 +17,9 @@ vi.mock('../lib/analytics', () => ({
     analysisCompleted: 'analysis_completed',
     breakdownOpened: 'breakdown_opened',
     methodologyViewed: 'methodology_viewed',
+    pricingViewed: 'pricing_viewed',
+    planSelected: 'plan_selected',
+    freePlanClicked: 'free_plan_clicked',
   },
 }))
 
@@ -605,5 +608,133 @@ describe('LandingPage framework section (task 11)', () => {
 
     expect(screen.getByText(/When it applies/)).toBeInTheDocument()
     expect(track).not.toHaveBeenCalled()
+  })
+})
+
+// Task 13: the pricing section is the closest thing on this page to a purchase
+// flow, and the analytics rule that governs it is not symmetric. plan_selected
+// and free_plan_clicked carry the same props and route to the same checkout,
+// but free_plan_clicked is excluded from paid-intent conversion — so the two
+// must never fire for each other. Each test below asserts both the event that
+// should fire and the one that must not.
+describe('LandingPage pricing section (task 13)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('mounts the pricing section last, after the workflow', async () => {
+    const { container } = await renderSettled()
+    const ids = Array.from(container.querySelectorAll('main section[id]')).map(s => s.id)
+    expect(ids).toContain('pricing')
+    expect(ids.indexOf('workflow')).toBeLessThan(ids.indexOf('pricing'))
+    expect(screen.getByText('Choose your plan')).toBeInTheDocument()
+    expect(screen.getByText('$18.00')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Choose Pro' })).toBeInTheDocument()
+  })
+
+  it('records plan_selected with the plan and billing period, not free_plan_clicked', async () => {
+    const { track } = await import('../lib/analytics')
+    await renderSettled()
+    vi.mocked(track).mockClear()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Choose Pro' }))
+
+    expect(track).toHaveBeenCalledWith('plan_selected', { plan: 'Pro', billing: 'annual' })
+    expect(track).not.toHaveBeenCalledWith('free_plan_clicked', expect.anything())
+  })
+
+  // Spec section 9 and spec 6: "Free clicks must be logged as their own
+  // analytics event and must never be counted in paid-intent conversion."
+  it('records a Free click as its own event, and never as plan_selected', async () => {
+    const { track } = await import('../lib/analytics')
+    await renderSettled()
+    vi.mocked(track).mockClear()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Start free' }))
+
+    expect(track).toHaveBeenCalledWith('free_plan_clicked', { plan: 'Free', billing: 'annual' })
+    expect(track).not.toHaveBeenCalledWith('plan_selected', expect.anything())
+    // Nor may it carry a prop that would let it be re-counted as paid intent.
+    const call = vi.mocked(track).mock.calls.find(c => c[0] === 'free_plan_clicked')!
+    expect(Object.keys(call[1] as object).sort()).toEqual(['billing', 'plan'])
+  })
+
+  // Spec section 9: the billing toggle is deliberately uninstrumented. It still
+  // has to work — the prices and the period carried into the checkout both move.
+  it('switches the prices on the toggle and fires nothing for the switch itself', async () => {
+    const { track } = await import('../lib/analytics')
+    await renderSettled()
+    expect(screen.getByText('$18.00')).toBeInTheDocument()
+    vi.mocked(track).mockClear()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Monthly' }))
+
+    expect(screen.getByText('$21.99')).toBeInTheDocument()
+    expect(screen.queryByText('$18.00')).not.toBeInTheDocument()
+    expect(track).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Choose Unlimited' }))
+    expect(track).toHaveBeenCalledWith('plan_selected',
+      { plan: 'Unlimited', billing: 'monthly' })
+  })
+
+  it('reports pricing_viewed once, when the section is scrolled to rather than mounted', async () => {
+    const seen: ((entries: { isIntersecting: boolean }[]) => void)[] = []
+    vi.stubGlobal('IntersectionObserver', class {
+      constructor(cb: (entries: { isIntersecting: boolean }[]) => void) { seen.push(cb) }
+      observe() {}
+      disconnect() {}
+    })
+    const { track } = await import('../lib/analytics')
+    await renderSettled()
+    expect(track).not.toHaveBeenCalledWith('pricing_viewed')
+
+    expect(seen).toHaveLength(1)
+    seen[0]([{ isIntersecting: true }])
+    seen[0]([{ isIntersecting: true }])
+
+    expect(vi.mocked(track).mock.calls.filter(c => c[0] === 'pricing_viewed'))
+      .toHaveLength(1)
+  })
+
+  it('routes the chosen plan and billing period to the checkout', async () => {
+    function CheckoutStub() {
+      const { search } = useLocation()
+      return <div>checkout{search}</div>
+    }
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/checkout" element={<CheckoutStub />} />
+        </Routes>
+      </MemoryRouter>
+    )
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Analyze →' })).toBeInTheDocument()
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'Monthly' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Choose Unlimited' }))
+
+    expect(screen.getByText('checkout?plan=Unlimited&billing=monthly')).toBeInTheDocument()
+  })
+
+  // The single hardest constraint in the project, asserted against the whole
+  // assembled page rather than the section alone — anchored on the pricing
+  // content really being there first.
+  it('adds no card, payment, address or name field to the page', async () => {
+    const { container } = await renderSettled()
+    const pricing = container.querySelector<HTMLElement>('section#pricing')
+    expect(pricing).not.toBeNull()
+    expect(within(pricing!).getByText('Choose your plan')).toBeInTheDocument()
+    expect(within(pricing!).getByText('$25.00')).toBeInTheDocument()
+
+    expect(pricing!.querySelectorAll('input, textarea, select, form')).toHaveLength(0)
+    // The analyzer's ticker box is the page's only input, and it takes a ticker.
+    const inputs = Array.from(container.querySelectorAll('input'))
+    expect(inputs).toHaveLength(1)
+    expect(inputs[0].outerHTML).not.toMatch(/card|cvc|cvv|payment|expiry|address|cardholder/i)
+    expect(container.textContent).not.toMatch(/card number|cvc|cvv|billing address/i)
   })
 })

@@ -352,3 +352,114 @@
 @media (max-width: 700px) {
   .intrinsica .diff-grid, .intrinsica .workflow { grid-template-columns: 1fr; }
 }
+
+/* Pricing (spec 5.7): the billing toggle, three plan cards, the who-it-is-for
+ * cards and the canonical plan matrix. Same card vocabulary as the framework
+ * and why sections — token border, --bg fill, 12–14px radius — so the page
+ * still reads as one system. Every colour below is a token declared at the top
+ * of this file; nothing here introduces a literal, and the breakpoints are the
+ * page's usual two tiers at 860px and 700px. */
+.intrinsica .billing-toggle { display: inline-flex; gap: 4px; margin: 22px 0 6px;
+  padding: 4px; background: var(--stage); border: 1px solid var(--line);
+  border-radius: 999px; }
+.intrinsica .billing-toggle button { display: inline-flex; align-items: center; gap: 8px;
+  background: none; border: 0; border-radius: 999px; padding: 8px 18px;
+  font-family: var(--fh); font-weight: 600; font-size: 13px; color: var(--dim);
+  cursor: pointer; }
+.intrinsica .billing-toggle button:hover { color: var(--text); }
+.intrinsica .billing-toggle button.on { background: var(--bg); color: var(--accent);
+  box-shadow: 0 0 0 1px var(--line); }
+.intrinsica .billing-toggle button:focus-visible { outline: 2px solid var(--accent);
+  outline-offset: 2px; }
+.intrinsica .billing-toggle .save { font-family: var(--fb); font-weight: 600;
+  font-size: 11px; color: var(--pos); }
+
+.intrinsica .price-grid { display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 14px; margin: 18px 0 8px; align-items: stretch; }
+/* Equal height with the CTA pinned to the bottom (spec 5.7): the card is a
+   column and the button takes the leftover space above it. */
+.intrinsica .price-card { display: flex; flex-direction: column;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 14px;
+  padding: 22px 20px; }
+.intrinsica .price-card.featured { border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-soft); }
+.intrinsica .pc-badge { align-self: flex-start; background: var(--accent-soft);
+  color: var(--accent); border-radius: 999px; padding: 3px 11px;
+  font-family: var(--fh); font-weight: 600; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.06em; }
+.intrinsica .pc-badge.free { background: var(--stage); color: var(--mute); }
+.intrinsica .price-card h3 { margin: 12px 0 6px; font-size: 18px; font-weight: 700;
+  color: var(--text); }
+.intrinsica .pc-for { font-size: 13px; line-height: 1.55; color: var(--mute); }
+.intrinsica .price { display: flex; align-items: baseline; gap: 4px; margin-top: 16px; }
+.intrinsica .price .amt { font-family: var(--fh); font-weight: 700; font-size: 34px;
+  letter-spacing: -0.02em; color: var(--text); }
+.intrinsica .price .per { font-size: 14px; color: var(--mute); }
+.intrinsica .price-alt { margin-top: 4px; font-size: 12px; color: var(--mute); }
+.intrinsica .feature-list { list-style: none; margin: 18px 0 20px; padding: 0;
+  border-top: 1px solid var(--line); }
+.intrinsica .feature-list li { position: relative; padding: 9px 0 0 18px;
+  font-size: 13px; line-height: 1.55; color: var(--dim); }
+.intrinsica .feature-list li::before { content: '·'; position: absolute; left: 4px;
+  color: var(--accent); font-weight: 700; }
+.intrinsica .btn-plan { margin-top: auto; width: 100%; background: var(--bg);
+  border: 1px solid var(--line); border-radius: 8px; padding: 11px 16px;
+  font-family: var(--fh); font-weight: 600; font-size: 14px; color: var(--text);
+  cursor: pointer; }
+.intrinsica .btn-plan:hover { border-color: var(--accent); color: var(--accent); }
+.intrinsica .btn-plan:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.intrinsica .price-card.featured .btn-plan { background: var(--accent); color: #fff;
+  border-color: var(--accent); }
+.intrinsica .price-card.featured .btn-plan:hover { opacity: .92; color: #fff; }
+
+.intrinsica .compare { margin-top: 40px; padding-top: 28px;
+  border-top: 1px solid var(--line); }
+.intrinsica .compare-h { margin: 0; font-size: 20px; font-weight: 700; color: var(--text); }
+.intrinsica .compare-sub { margin: 8px 0 0; font-size: 14px; line-height: 1.6;
+  color: var(--dim); }
+.intrinsica .compare-sub b { color: var(--text); }
+.intrinsica .who { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  margin: 20px 0 22px; }
+.intrinsica .who-card { background: var(--bg); border: 1px solid var(--line);
+  border-radius: 12px; padding: 16px; }
+.intrinsica .who-tag { font-family: var(--fm); font-size: 11px; font-weight: 500;
+  letter-spacing: 0.05em; color: var(--accent); }
+.intrinsica .who-title { margin-top: 6px; font-family: var(--fh); font-weight: 600;
+  font-size: 14px; color: var(--text); }
+.intrinsica .who-for { margin-top: 6px; font-size: 13px; line-height: 1.55;
+  color: var(--mute); }
+.intrinsica .who-focus { margin-top: 8px; padding-top: 8px;
+  border-top: 1px solid var(--line); font-size: 12.5px; line-height: 1.55;
+  color: var(--mute); }
+.intrinsica .who-focus b { color: var(--dim); }
+
+.intrinsica .cmp-wrap { overflow-x: auto; }
+.intrinsica .cmp-plans { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.intrinsica .cmp-plans th { text-align: left; font-family: var(--fh); font-weight: 600;
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--mute); border-bottom: 1px solid var(--line); padding: 9px 12px;
+  white-space: nowrap; }
+.intrinsica .cmp-plans th.cmp-u { color: var(--accent); }
+.intrinsica .cmp-plans td { padding: 10px 12px; border-bottom: 1px solid var(--line);
+  color: var(--text); vertical-align: top; }
+.intrinsica .cmp-plans td:first-child { color: var(--dim); width: 42%; }
+.intrinsica .cmp-plans td.cmp-no { color: var(--mute); }
+/* The row's explanation, shown inline rather than hung off `title` — see
+   Pricing.tsx: this page carries no hover-only affordance. */
+.intrinsica .cmp-plans .cmp-note { display: block; margin-top: 3px; font-size: 11.5px;
+  line-height: 1.5; color: var(--mute); }
+.intrinsica .compare-note { margin: 18px 0 0; font-size: 13px; line-height: 1.6;
+  color: var(--mute); }
+
+@media (max-width: 860px) {
+  .intrinsica .price-grid, .intrinsica .who { grid-template-columns: 1fr; }
+  .intrinsica .cmp-plans td:first-child { width: auto; }
+}
+@media (max-width: 700px) {
+  .intrinsica .price-card { padding: 18px 16px; }
+  .intrinsica .price .amt { font-size: 29px; }
+  .intrinsica .billing-toggle { display: flex; }
+  .intrinsica .billing-toggle button { flex: 1; justify-content: center; padding: 8px 12px; }
+  .intrinsica .cmp-plans { font-size: 12.5px; }
+  .intrinsica .cmp-plans th, .intrinsica .cmp-plans td { padding: 8px 8px; }
+}
