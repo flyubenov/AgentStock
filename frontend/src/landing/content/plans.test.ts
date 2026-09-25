@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { PLANS, COMPARE_ROWS, priceFor, totalFor } from './plans'
+import { PLANS, COMPARE_ROWS, PERIODS, WHO, priceFor, totalFor } from './plans'
+import { DEMO_RUN_LIMIT } from '../demoLimit'
+import { MAX_TICKERS } from '../components/Hero'
 
 /** The pricing copy is data for the same reason the framework copy is: the plan
  *  matrix has to agree with itself. The card prices, the annual totals, the
@@ -122,9 +124,13 @@ describe('plans', () => {
       expect(Number.isFinite(effective)).toBe(true)
       expect(Number.isFinite(monthly)).toBe(true)
 
+      // The yearly figure is a number now, so the checkout quotes it without a
+      // regex that could match nothing; both it and the sentence on the card are
+      // recomputed here from the effective monthly price.
+      expect(plan.annual!.yearly).toBe(effective * 12)
       const stated = plan.annual!.sub.match(/\$(\d+)\/yr/)
       expect(stated).not.toBeNull()
-      expect(Number(stated![1])).toBe(effective * 12)
+      expect(Number(stated![1])).toBe(plan.annual!.yearly)
 
       const saving = plan.annual!.sub.match(/save (\d+)%/)
       expect(saving).not.toBeNull()
@@ -143,6 +149,21 @@ describe('plans', () => {
     expect(totalFor('Unlimited', 'monthly')).toBe('$29.99 / month')
     expect(totalFor('Free', 'annual')).toBe('$0 — free plan')
     expect(totalFor('Free', 'monthly')).toBe('$0 — free plan')
+  })
+
+  // The checkout reads its plan from `?plan=`, which any visitor can edit. An
+  // unrecognised name must not fall through to the Free branch: `?plan=Bogus`
+  // answered with "$0 — free plan" is a fake door telling a visitor something
+  // false about money, which is the one thing this page may never do.
+  it('names no price at all for a plan it does not recognise', () => {
+    for (const billing of ['annual', 'monthly'] as const) {
+      for (const name of ['Bogus', '', 'free', 'PRO', 'Unlimited ']) {
+        const total = totalFor(name, billing)
+        expect(total).toBe('No plan selected')
+        expect(total).not.toMatch(/\$/)
+        expect(total).not.toMatch(/free/i)
+      }
+    }
   })
 
   // The checkout (Task 14) shows only `totalFor`. If it disagreed with the card
@@ -204,13 +225,59 @@ describe('plans', () => {
     expect(byLabel('Score-history charts')).toBe('6 months')
   })
 
-  // The two Free caps that also exist as running code: demoLimit.ts's
-  // DEMO_RUN_LIMIT of 5 and landing.py's MAX_TICKERS of 3. The hero's free-note
-  // already quotes both. Four places, one pair of numbers.
+  // The two Free caps that also exist as running code, and both are imported
+  // rather than retyped — the point of this test is that the copy cannot drift
+  // from the limit the visitor actually hits.
+  //
+  //   - DEMO_RUN_LIMIT (demoLimit.ts) is the whole monthly allowance.
+  //   - MAX_TICKERS (components/Hero.tsx) is the per-run cap the shipped demo
+  //     pre-checks and names in its error message. The server holds the real
+  //     one, in backend/routers/landing.py (MAX_TICKERS, line 13); that file is
+  //     Python and unimportable from here, and Hero's constant is documented as
+  //     its client mirror, so this pins the mirror and the server cap is
+  //     asserted in the backend's own suite.
+  //
+  // The matrix is pinned as well as the bullet: the card and the compare row
+  // quote the same allowance to the same reader, and only one of them was
+  // checked before.
   it('quotes the same Free caps the shipped demo enforces', () => {
     const free = PLANS[0]
-    expect(free.features.some(f => f.includes('~5'))).toBe(true)
-    expect(free.features.some(f => f.includes('3 tickers'))).toBe(true)
+    expect(free.features.some(f => f.includes(`~${DEMO_RUN_LIMIT}`))).toBe(true)
+    expect(free.features.some(f => f.includes(`${MAX_TICKERS} tickers`))).toBe(true)
+
+    const byLabel = (l: string) => {
+      const row = COMPARE_ROWS.find(r => r.label === l)
+      expect(row).toBeDefined()
+      return row!.values[0]
+    }
+    expect(byLabel('Analyses per month')).toBe(`~${DEMO_RUN_LIMIT}`)
+    expect(byLabel('Tickers per analysis run')).toBe(String(MAX_TICKERS))
+  })
+
+  // Moved out of Pricing.tsx: the toggle's tag is a pricing number, and a
+  // pricing number written in a component is one no data test can reach. The
+  // bound on the percentage it claims stays in Pricing.test.tsx, where it is
+  // read off the rendered button — that is what the visitor is promised.
+  it('offers annual and monthly, and advertises a saving on annual only', () => {
+    expect(PERIODS.map(p => p.id)).toEqual(['annual', 'monthly'])
+    expect(PERIODS.map(p => p.label)).toEqual(['Annual', 'Monthly'])
+    expect(PERIODS[0].save).toBe('save ~17%')
+    // Nothing is saved by paying monthly, so nothing may claim otherwise.
+    expect(PERIODS[1].save).toBeUndefined()
+  })
+
+  // The who-cards restate one plan each, in PLANS order. A card that opened
+  // with a different plan than the one it describes would sell the wrong tier.
+  it('gives each plan one who-it-is-for card, in plan order', () => {
+    expect(WHO).toHaveLength(PLANS.length)
+    WHO.forEach((w, i) => {
+      expect(w.tag.startsWith(PLANS[i].name)).toBe(true)
+      expect(w.title.length).toBeGreaterThan(10)
+      expect(w.who.length).toBeGreaterThan(40)
+      expect(w.focus.length).toBeGreaterThan(40)
+    })
+    expect(WHO.map(w => w.tag))
+      .toEqual(['Free · Try', 'Pro · Depth', 'Unlimited · Scale'])
   })
 
   it('never calls Free the full product', () => {
@@ -226,7 +293,7 @@ describe('plans', () => {
   // this module must spell it the same way — anchored on a string that is
   // really there, so an empty module could not satisfy it.
   it('says assessment rather than signal, and Reward / Risk rather than Risk/Reward', () => {
-    const text = JSON.stringify([PLANS, COMPARE_ROWS])
+    const text = JSON.stringify([PLANS, COMPARE_ROWS, WHO, PERIODS])
     expect(text).toContain('Reward / Risk')
     expect(text).toContain('four assessments')
     expect(text).not.toMatch(/signal/i)
@@ -239,7 +306,7 @@ describe('plans', () => {
 
   // Spec section 8 rules 3 and 5, and the fake-door rule on invented urgency.
   it('publishes no scoring cut-off, no internal identifier and no manufactured scarcity', () => {
-    const text = JSON.stringify([PLANS, COMPARE_ROWS])
+    const text = JSON.stringify([PLANS, COMPARE_ROWS, WHO, PERIODS])
     expect(text.length).toBeGreaterThan(500)
     expect(text).not.toMatch(/[<>≥≤]\s*\d/)
     expect(text).not.toMatch(/scores?\s+\d/i)

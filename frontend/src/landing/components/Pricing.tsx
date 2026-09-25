@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { COMPARE_ROWS, PLANS, priceFor, type Billing } from '../content/plans'
+import { COMPARE_ROWS, PERIODS, PLANS, WHO, priceFor, type Billing } from '../content/plans'
 
 /** The pricing section (spec 5.7): three plan cards over a billing toggle, then
  *  the who-it-is-for cards and the canonical plan matrix.
@@ -25,39 +25,6 @@ import { COMPARE_ROWS, PLANS, priceFor, type Billing } from '../content/plans'
  *  no analytics — spec section 9's list is closed and names the annual/monthly
  *  toggle among the things deliberately left uninstrumented, because
  *  `plan_selected` already carries the period actually chosen. */
-
-interface Who {
-  tag: string
-  title: string
-  who: string
-  focus: string
-}
-
-const WHO: Who[] = [
-  {
-    tag: 'Free · Try',
-    title: 'Experience the framework',
-    who: 'For the curious investor judging the framework on stocks they already know.',
-    focus: 'every analysis is complete and nothing is blurred — but volume, watchlists, history and discovery are capped.',
-  },
-  {
-    tag: 'Pro · Depth',
-    title: 'Deep individual research',
-    who: 'For the serious individual investor researching the stocks they care about.',
-    focus: 'unlimited analysis on the names you pick, plus your research workflow.',
-  },
-  {
-    tag: 'Unlimited · Scale',
-    title: 'Systematic & automated',
-    who: 'For investors scanning & monitoring a whole universe or portfolio.',
-    focus: 'discover across the market and let Intrinsica monitor it for you.',
-  },
-]
-
-const PERIODS: { id: Billing; label: string; save?: string }[] = [
-  { id: 'annual', label: 'Annual', save: 'save ~17%' },
-  { id: 'monthly', label: 'Monthly' },
-]
 
 export default function Pricing({ billing, onBilling, onChoose, onView }: {
   billing: Billing
@@ -162,24 +129,34 @@ export default function Pricing({ billing, onBilling, onChoose, onView }: {
           <div className="cmp-wrap">
             <table className="cmp-plans">
               <thead>
+                {/* scope on every header, and the feature name below is a
+                    `th scope="row"`: read cell by cell, a screen reader then
+                    says "Watchlists, Pro, 5–10" rather than a bare "5–10". */}
                 <tr>
-                  <th>Feature</th>
-                  <th>Free</th>
-                  <th>Pro</th>
-                  <th className="cmp-u">Unlimited</th>
+                  <th scope="col">Feature</th>
+                  {PLANS.map(p => (
+                    <th key={p.name} scope="col"
+                        className={p.name === 'Unlimited' ? 'cmp-u' : undefined}>
+                      {p.name}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {COMPARE_ROWS.map(r => (
                   <tr key={r.label}>
-                    <td>
+                    <th scope="row">
                       {r.label}
                       {/* Rendered, not hung off `title`: a hover tooltip is
                           invisible on a phone and unreachable by keyboard. */}
                       {r.note && <span className="cmp-note">{r.note}</span>}
-                    </td>
+                    </th>
+                    {/* Positional: value `i` is plan `i`, and Pricing.test.tsx
+                        pins each row's cells to the row's own values so a
+                        reordered map cannot silently re-attribute an
+                        allowance to the wrong plan. */}
                     {r.values.map((v, i) => (
-                      <td key={PLANS[i].name} className={v === '—' ? 'cmp-no' : undefined}>
+                      <td key={i} className={v === '—' ? 'cmp-no' : undefined}>
                         {v}
                       </td>
                     ))}

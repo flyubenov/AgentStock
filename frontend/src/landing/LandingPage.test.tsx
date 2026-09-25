@@ -625,8 +625,15 @@ describe('LandingPage pricing section (task 13)', () => {
   it('mounts the pricing section last, after the workflow', async () => {
     const { container } = await renderSettled()
     const ids = Array.from(container.querySelectorAll('main section[id]')).map(s => s.id)
+    // Presence first, then order: indexOf returns -1 for a section that never
+    // mounted, so "workflow before pricing" is otherwise satisfied by a page
+    // with no workflow section at all.
+    expect(ids).toContain('workflow')
     expect(ids).toContain('pricing')
     expect(ids.indexOf('workflow')).toBeLessThan(ids.indexOf('pricing'))
+    // "Last" is the claim in the name, so it is the claim asserted: pricing is
+    // the end of the page, with nothing mounted below the plans.
+    expect(ids[ids.length - 1]).toBe('pricing')
     expect(screen.getByText('Choose your plan')).toBeInTheDocument()
     expect(screen.getByText('$18.00')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Choose Pro' })).toBeInTheDocument()

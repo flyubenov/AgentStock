@@ -20,9 +20,27 @@
  *
  *  The Free caps are not aspirational: `~5 analyses a month` is demoLimit.ts's
  *  own allowance and `3 tickers per run` is the backend's per-run cap. The hero
- *  free-note quotes both as well. One pair of numbers, four places. */
+ *  free-note quotes both as well. One pair of numbers, four places, and
+ *  plans.test.ts derives its assertion from the constants rather than retyping
+ *  them.
+ *
+ *  Every string the pricing section renders is here, including the two that
+ *  used to sit in Pricing.tsx: the billing toggle's `save ~17%` tag (a pricing
+ *  number, and a pricing number in a component is one no data test can reach)
+ *  and the three who-it-is-for cards. */
 
 export type Billing = 'annual' | 'monthly'
+
+/** The annual band. `yearly` is the raw number — what one year actually costs —
+ *  and `sub` is the copy that quotes it. Keeping the number rather than parsing
+ *  it back out of the sentence is what lets `totalFor` name a year's total
+ *  without a regex that can quietly match nothing. plans.test.ts pins the two
+ *  against each other and against the effective monthly price. */
+export interface AnnualBand {
+  effective: string
+  yearly: number
+  sub: string
+}
 
 export interface Plan {
   name: 'Free' | 'Pro' | 'Unlimited'
@@ -31,7 +49,7 @@ export interface Plan {
   featured?: boolean
   cta: string
   /** Absent on Free, which costs nothing on either period. */
-  annual?: { effective: string; sub: string }
+  annual?: AnnualBand
   monthly?: { effective: string; sub: string }
   features: string[]
 }
@@ -65,7 +83,8 @@ export const PLANS: Plan[] = [
     forLine: 'Unlimited analysis & your research workflow.',
     featured: true,
     cta: 'Choose Pro',
-    annual: { effective: '$18.00', sub: 'billed annually · $216/yr · save 18%' },
+    annual: { effective: '$18.00', yearly: 216,
+              sub: 'billed annually · $216/yr · save 18%' },
     monthly: { effective: '$21.99', sub: 'billed monthly · $21.99/mo' },
     features: [
       'Everything in Free, at the same full depth, plus:',
@@ -80,7 +99,8 @@ export const PLANS: Plan[] = [
     title: 'Discover, Monitor & Automate at Scale',
     forLine: 'Automated, systematic research across your universe.',
     cta: 'Choose Unlimited',
-    annual: { effective: '$25.00', sub: 'billed annually · $300/yr · save 17%' },
+    annual: { effective: '$25.00', yearly: 300,
+              sub: 'billed annually · $300/yr · save 17%' },
     monthly: { effective: '$29.99', sub: 'billed monthly · $29.99/mo' },
     features: [
       'Everything in Pro, plus:',
@@ -102,16 +122,71 @@ export function priceFor(plan: Plan, billing: Billing): { headline: string; sub:
   return { headline: band.effective, sub: band.sub }
 }
 
+export interface Period {
+  id: Billing
+  label: string
+  /** Annual only. Bounded by Pricing.test.tsx, off the rendered button: the
+   *  toggle may never advertise more than the smallest saving a paid plan
+   *  really offers. It lives here rather than in Pricing.tsx because it is a
+   *  pricing number, and a pricing number written in a component is one no data
+   *  test can reach. */
+  save?: string
+}
+
+export const PERIODS: Period[] = [
+  { id: 'annual', label: 'Annual', save: 'save ~17%' },
+  { id: 'monthly', label: 'Monthly' },
+]
+
 /** What the checkout (Task 14) names as the total for a chosen plan and period.
  *  Derived from the same PLANS entries the cards render, so the checkout can
- *  never quote a figure the card did not show. */
+ *  never quote a figure the card did not show.
+ *
+ *  The unknown-plan branch is separate from Free on purpose. The checkout reads
+ *  its plan from `?plan=`, which any visitor can edit, and folding an
+ *  unrecognised name into the Free branch would answer `/checkout?plan=Bogus`
+ *  with "$0 — free plan": a page telling a visitor something false about money.
+ *  It says nothing about price instead, and the caller sends the reader back to
+ *  the plans. */
 export function totalFor(planName: string, billing: Billing): string {
   const plan = PLANS.find(p => p.name === planName)
-  if (!plan || plan.name === 'Free') return '$0 — free plan'
+  if (!plan) return 'No plan selected'
+  if (plan.name === 'Free') return '$0 — free plan'
   if (billing === 'monthly') return `${plan.monthly!.effective} / month`
-  const yearly = plan.annual!.sub.match(/\$(\d+)\/yr/)?.[1] ?? ''
-  return `$${yearly} / year (${plan.annual!.effective}/mo)`
+  return `$${plan.annual!.yearly} / year (${plan.annual!.effective}/mo)`
 }
+
+/** The three "who it is for" cards above the matrix (spec 5.7). Copy, so it
+ *  lives with the rest of the copy: each card restates one plan's promise, and
+ *  a restatement kept in a different file from the thing it restates drifts.
+ *  `tag` opens with the plan name, in PLANS order — plans.test.ts pins that. */
+export interface Audience {
+  tag: string
+  title: string
+  who: string
+  focus: string
+}
+
+export const WHO: Audience[] = [
+  {
+    tag: 'Free · Try',
+    title: 'Experience the framework',
+    who: 'For the curious investor judging the framework on stocks they already know.',
+    focus: 'every analysis is complete and nothing is blurred — but volume, watchlists, history and discovery are capped.',
+  },
+  {
+    tag: 'Pro · Depth',
+    title: 'Deep individual research',
+    who: 'For the serious individual investor researching the stocks they care about.',
+    focus: 'unlimited analysis on the names you pick, plus your research workflow.',
+  },
+  {
+    tag: 'Unlimited · Scale',
+    title: 'Systematic & automated',
+    who: 'For investors scanning & monitoring a whole universe or portfolio.',
+    focus: 'discover across the market and let Intrinsica monitor it for you.',
+  },
+]
 
 /** The canonical plan matrix (spec 5.7). Two resolutions are encoded here:
  *

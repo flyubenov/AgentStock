@@ -435,14 +435,20 @@
 
 .intrinsica .cmp-wrap { overflow-x: auto; }
 .intrinsica .cmp-plans { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-.intrinsica .cmp-plans th { text-align: left; font-family: var(--fh); font-weight: 600;
+.intrinsica .cmp-plans thead th { text-align: left; font-family: var(--fh); font-weight: 600;
   font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em;
   color: var(--mute); border-bottom: 1px solid var(--line); padding: 9px 12px;
   white-space: nowrap; }
-.intrinsica .cmp-plans th.cmp-u { color: var(--accent); }
+.intrinsica .cmp-plans thead th.cmp-u { color: var(--accent); }
 .intrinsica .cmp-plans td { padding: 10px 12px; border-bottom: 1px solid var(--line);
   color: var(--text); vertical-align: top; }
-.intrinsica .cmp-plans td:first-child { color: var(--dim); width: 42%; }
+/* The feature name is a `th scope="row"` for the screen reader, and has to keep
+   reading as the body text it looks like — so it takes the row styling, not
+   the uppercase column-header styling above. */
+.intrinsica .cmp-plans tbody th { text-align: left; font-family: inherit; font-weight: 400;
+  font-size: inherit; letter-spacing: normal; text-transform: none;
+  padding: 10px 12px; border-bottom: 1px solid var(--line);
+  color: var(--dim); vertical-align: top; width: 42%; }
 .intrinsica .cmp-plans td.cmp-no { color: var(--mute); }
 /* The row's explanation, shown inline rather than hung off `title` — see
    Pricing.tsx: this page carries no hover-only affordance. */
@@ -453,7 +459,7 @@
 
 @media (max-width: 860px) {
   .intrinsica .price-grid, .intrinsica .who { grid-template-columns: 1fr; }
-  .intrinsica .cmp-plans td:first-child { width: auto; }
+  .intrinsica .cmp-plans tbody th { width: auto; }
 }
 @media (max-width: 700px) {
   .intrinsica .price-card { padding: 18px 16px; }

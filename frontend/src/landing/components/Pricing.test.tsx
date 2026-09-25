@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -165,17 +166,57 @@ describe('Pricing', () => {
       .toBe('Everything in Pro, plus:')
   })
 
-  it('renders the whole compare matrix', () => {
+  // Nothing in the DOM ties a value to its column — the cells are rendered in
+  // array order and read as a row of four — so the pinning has to be here.
+  // Until this test, reversing `r.values.map(...)` broke nothing: every row
+  // still had four cells, every label still matched, `cmp-no` still appeared,
+  // and the page showed Free offering unlimited analyses and 100+ tickers while
+  // Unlimited offered "—" for everything. A matrix that misstates every plan's
+  // allowances, on the page whose whole purpose is measuring willingness to pay.
+  // Each row's cells are pinned to that row's own values, in order.
+  it('renders the whole compare matrix, every value under its own plan', () => {
     const { container } = show()
     const rows = Array.from(container.querySelectorAll('.cmp-plans tbody tr'))
     expect(rows).toHaveLength(COMPARE_ROWS.length)
-    expect(rows.map(r => r.querySelector('td')?.textContent?.startsWith(
-      COMPARE_ROWS[rows.indexOf(r)].label))).not.toContain(false)
+    // The columns the values are pinned against, in PLANS order.
     expect(Array.from(container.querySelectorAll('.cmp-plans thead th'))
-      .map(th => th.textContent)).toEqual(['Feature', 'Free', 'Pro', 'Unlimited'])
+      .map(th => th.textContent))
+      .toEqual(['Feature', ...PLANS.map(p => p.name)])
+
+    rows.forEach((row, i) => {
+      // `toBe(true)` rather than a negated contains: a row with no header cell
+      // yields undefined, and undefined must fail rather than slip through.
+      expect(row.querySelector('th')?.textContent?.startsWith(COMPARE_ROWS[i].label))
+        .toBe(true)
+      expect(Array.from(row.querySelectorAll('td')).map(td => td.textContent))
+        .toEqual(COMPARE_ROWS[i].values)
+    })
+
     expect(screen.getByText('Stocks per watchlist')).toBeInTheDocument()
     expect(screen.getByText(/Preview = the filters are visible/)).toBeInTheDocument()
     expect(screen.getByText(/Free sells the framework/)).toBeInTheDocument()
+  })
+
+  // Task 9 made the results grid keyboard-operable and hover tooltips were ruled
+  // out for being keyboard-unreachable; a seventeen-row matrix read cell by cell
+  // with no row or column association is the same failure one level down. With
+  // the scopes, a screen reader says "Watchlists, Pro, 5–10" instead of "5–10".
+  it('associates every matrix cell with its row and its column', () => {
+    const { container } = show()
+    const cols = Array.from(container.querySelectorAll('.cmp-plans thead th'))
+    expect(cols).toHaveLength(PLANS.length + 1)
+    expect(cols.map(th => th.getAttribute('scope')))
+      .toEqual(cols.map(() => 'col'))
+
+    const rows = Array.from(container.querySelectorAll('.cmp-plans tbody tr'))
+    expect(rows).toHaveLength(COMPARE_ROWS.length)
+    for (const row of rows) {
+      const heads = Array.from(row.querySelectorAll('th'))
+      expect(heads).toHaveLength(1)
+      expect(heads[0].getAttribute('scope')).toBe('row')
+      // The feature name is the row's header, not a value cell beside it.
+      expect(row.firstElementChild).toBe(heads[0])
+    }
   })
 
   it('shows the three who-it-is-for cards above the matrix', () => {
@@ -253,9 +294,11 @@ describe('Pricing', () => {
   // Every class this section renders must have a rule in theme.css, or the
   // section ships unstyled and nothing in the suite notices.
   it('styles every class it renders', () => {
-    // Resolved from the vitest root (frontend/) rather than import.meta.url,
-    // which vite serves as an http: URL that node:fs cannot open.
-    const css = readFileSync(resolve(process.cwd(), 'src/landing/theme.css'), 'utf8')
+    // Resolved relative to this file, not to process.cwd(): run from the repo
+    // root rather than frontend/, a cwd-relative path does not merely fail, it
+    // throws ENOENT and the guard reports an error instead of a verdict.
+    const here = dirname(fileURLToPath(import.meta.url))
+    const css = readFileSync(resolve(here, '../theme.css'), 'utf8')
     expect(css.length).toBeGreaterThan(1000)
     const { container } = show()
     const used = new Set<string>()
