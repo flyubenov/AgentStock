@@ -400,3 +400,39 @@ async def test_failed_fast_refresh_survives_its_own_entry_vanishing_mid_await():
     assert second["current_price"] == first["current_price"] == 130.0
     assert second["risk_reward"] == first["risk_reward"]
     assert "AAA" in cache._fast  # correctly re-established, not left missing
+
+
+# --- 14 (fix round 2, finding 9). A failed fast refresh's negative-cache backoff
+# actually holds: a view inside FAST_NEGATIVE_TTL does not retry the failing quote
+# again; one just past it does. ---
+async def test_failed_fast_refresh_backs_off_for_the_negative_ttl_then_retries():
+    run = AsyncMock(side_effect=lambda t: _ok_run(t, price=100.0))
+    inputs_fetch = AsyncMock(side_effect=lambda t: _inputs(t, price=100.0))
+    fake_time = [0.0]
+
+    with patch("landing.cache._now", lambda: fake_time[0]):
+        with _patched(run=run, inputs_fetch=inputs_fetch, quote=AsyncMock(return_value=130.0)):
+            await cache.get_analysis("AAA")
+            fake_time[0] += cache.FAST_TTL + 1
+            await cache.get_analysis("AAA")  # establishes a real fast entry (130.0)
+
+        # The fast layer now expires and the refresh fails -- this stamps a fresh ts
+        # with failed=True per finding 9.
+        fake_time[0] += cache.FAST_TTL + 1
+        failing_quote = AsyncMock(side_effect=RuntimeError("yahoo down"))
+        with _patched(run=run, inputs_fetch=inputs_fetch, quote=failing_quote):
+            await cache.get_analysis("AAA")
+        assert failing_quote.await_count == 1
+
+        # Still inside the negative-cache backoff window -- must not retry yet, even
+        # though the entry's ts is long past what FAST_TTL alone would allow.
+        fake_time[0] += cache.FAST_NEGATIVE_TTL - 1
+        with _patched(run=run, inputs_fetch=inputs_fetch, quote=failing_quote):
+            await cache.get_analysis("AAA")
+        assert failing_quote.await_count == 1
+
+        # Past the negative-cache backoff -- retries.
+        fake_time[0] += 2
+        with _patched(run=run, inputs_fetch=inputs_fetch, quote=failing_quote):
+            await cache.get_analysis("AAA")
+        assert failing_quote.await_count == 2
