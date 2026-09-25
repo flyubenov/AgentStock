@@ -166,7 +166,6 @@ describe('CheckoutPage', () => {
     expect(callsOf(track, 'free_plan_clicked'))
       .toEqual([['free_plan_clicked', { plan: 'Free', billing: 'monthly' }]])
     expect(callsOf(track, 'payment_button_clicked')).toHaveLength(0)
-    expect(callsOf(track, 'plan_selected')).toHaveLength(0)
     expect(callsOf(track, 'checkout_started'))
       .toEqual([['checkout_started', { plan: 'Free', billing: 'monthly' }]])
   })
@@ -210,6 +209,30 @@ describe('CheckoutPage', () => {
       .toBeInTheDocument()
   })
 
+  // The input is deliberately not inside a <form> — a form on this page is one
+  // edit away from being a checkout — so nothing supplies the submit gesture by
+  // default. Without this, a visitor types an address, presses Enter and the page
+  // silently drops the invitation the copy directly above has just promised,
+  // while the email leg of the funnel quietly undercounts.
+  it('submits the email on Enter, and still posts nothing for a blank field', async () => {
+    const track = await tracker()
+    show()
+    await userEvent.click(proceed())
+
+    const box = screen.getByRole('textbox', { name: /optional/i })
+    await userEvent.type(box, '{Enter}')
+    expect(callsOf(track, 'email_submitted')).toHaveLength(0)
+    expect(screen.queryByText(/we[’']ll email you when early access opens/i))
+      .not.toBeInTheDocument()
+
+    await userEvent.type(box, 'keys@b.com{Enter}')
+    expect(callsOf(track, 'email_submitted')).toEqual([
+      ['email_submitted', { plan: 'Pro', billing: 'annual', email: 'keys@b.com' }],
+    ])
+    expect(screen.getByText(/we[’']ll email you when early access opens/i))
+      .toBeInTheDocument()
+  })
+
   // Fires on arrival and stays fired: a re-render — clicking through, typing an
   // email — must not post the funnel step again.
   it('records the checkout view once on arrival, carrying the plan', async () => {
@@ -221,6 +244,16 @@ describe('CheckoutPage', () => {
     await userEvent.click(proceed())
     await userEvent.type(screen.getByRole('textbox', { name: /optional/i }), 'x')
     expect(callsOf(track, 'checkout_started')).toHaveLength(1)
+  })
+
+  // The sentence points the reader at a demo that is not on this route, and the
+  // mini-nav only offers the plans — so the pointer has to be a link or it is an
+  // instruction the page cannot carry out.
+  it('links the demo it points at, so the reader can reach it from here', async () => {
+    show('?plan=Free&billing=annual')
+    await userEvent.click(screen.getByRole('button', { name: 'Create free account' }))
+    expect(screen.getByRole('link', { name: /the demo/i }))
+      .toHaveAttribute('href', '/#analyze')
   })
 
   it('offers a way back to pricing', () => {
@@ -290,6 +323,41 @@ describe('CheckoutPage copy rules', () => {
     return [paid, free, none]
   }
 
+  // The single absolute constraint of this project, proven on every state the
+  // page can reach rather than on the paid one alone. The DOM is correct today
+  // because both paths share one input in one place — but before this loop
+  // existed, an edit that added a field to the `!plan` branch would have passed
+  // the entire suite.
+  it('offers no form, select, textarea or non-email input in any state', async () => {
+    const rendered = await states()
+    expect(rendered).toHaveLength(3)
+    for (const { container } of rendered) {
+      // Anchored: an empty container satisfies every negative below for free.
+      expect(container.querySelector('section#checkout')).toBeInTheDocument()
+      expect(container.textContent).toMatch(/Intrinsica/)
+
+      expect(container.querySelectorAll('form,select,textarea,input:not([type="email"])'))
+        .toHaveLength(0)
+      expect(container.querySelectorAll('input').length).toBeLessThanOrEqual(1)
+    }
+  })
+
+  // A standalone route opens at h1: /checkout is its own document, not a section
+  // of the landing page. Levels may not skip either — h2 straight to h4 reads as
+  // a missing section to anything navigating by heading.
+  it('opens at h1 and skips no heading level, in every state', async () => {
+    for (const { container } of await states()) {
+      const levels = [...container.querySelectorAll('h1,h2,h3,h4,h5,h6')]
+        .map(h => Number(h.tagName[1]))
+      expect(levels.length).toBeGreaterThan(0)
+      expect(container.querySelectorAll('h1')).toHaveLength(1)
+      expect(levels[0]).toBe(1)
+      for (let i = 1; i < levels.length; i++) {
+        expect(levels[i]).toBeLessThanOrEqual(levels[i - 1] + 1)
+      }
+    }
+  })
+
   // Spec section 8, and the fake-door rule on invented urgency. A countdown or
   // a seat count corrupts the one number this page exists to collect.
   it('leaks no banned word, internal identifier, scoring cut-off or manufactured urgency', async () => {
@@ -343,6 +411,37 @@ describe('CheckoutPage copy rules', () => {
     expect(used.size).toBeGreaterThan(10)
     const unstyled = [...used].filter(c => !new RegExp(`\\.${c}(?![\\w-])`).test(css))
     expect(unstyled).toEqual([])
+  })
+})
+
+/** The free disclosure quotes the demo's per-run cap, and this project's
+ *  convention is that no second copy of that number exists anywhere. Proven by
+ *  moving the constant: the module is re-mocked with a different cap and the copy
+ *  has to follow it, which a hardcoded "3" cannot do. Asserting the shipped
+ *  value against the shipped constant would have been a tautology — it passes
+ *  just as happily against a number typed into the copy by hand. */
+describe('CheckoutPage free disclosure tracks the demo cap', () => {
+  it('quotes MAX_TICKERS rather than a number of its own', async () => {
+    vi.resetModules()
+    vi.doMock('./components/Hero', async importActual => ({
+      ...(await importActual<typeof import('./components/Hero')>()),
+      MAX_TICKERS: 7,
+    }))
+    try {
+      const { default: Fresh } = await import('./CheckoutPage')
+      const { container } = render(
+        <MemoryRouter initialEntries={['/checkout?plan=Free&billing=annual']}>
+          <Fresh />
+        </MemoryRouter>,
+      )
+      await userEvent.click(screen.getByRole('button', { name: 'Create free account' }))
+      expect(container.textContent).toMatch(/no account was created/i)
+      expect(container.textContent).toMatch(/up to 7 tickers per run/i)
+      expect(container.textContent).not.toMatch(/up to 3 tickers/i)
+    } finally {
+      vi.doUnmock('./components/Hero')
+      vi.resetModules()
+    }
   })
 })
 

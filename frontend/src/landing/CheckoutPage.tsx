@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import './theme.css'
 import { PERIODS, PLANS, totalFor, type Billing } from './content/plans'
+import { MAX_TICKERS } from './components/Hero'
 import { track, EVENTS } from '../lib/analytics'
 
 /** The last step of the fake door (spec section 6), and the one page on the site
@@ -49,7 +50,7 @@ function Shell({ title, children }: { title: string; children: ReactNode }) {
       <section className="section stage" id="checkout">
         <div className="container">
           <div className="kicker">Checkout</div>
-          <h2 className="stitle">{title}</h2>
+          <h1 className="stitle">{title}</h1>
           <div className="checkout">{children}</div>
         </div>
       </section>
@@ -170,18 +171,25 @@ export default function CheckoutPage() {
       {clicked && (
         <>
           <div className="disclosure">
-            <h4>
+            <h2>
               {free
                 ? "✓ You're on the Intrinsica early-access list"
                 : "✓ You're on the Intrinsica founding list"}
-            </h4>
+            </h2>
+            {/* The cap is interpolated from MAX_TICKERS, never retyped: a second
+                copy of that number is a false statement about the product the
+                moment the demo cap moves, and this sentence sits inside the
+                honesty copy. The demo is linked rather than merely named because
+                it is not on this route and the mini-nav only offers the plans —
+                `#analyze` is Hero's analyzer, absolute so it resolves from
+                /checkout. */}
             <p>
               {free ? (
                 <>
                   Accounts aren't open yet, so <b>no account was created</b>. We've recorded
                   your interest in <b>the Free plan</b> and will invite you when early access
-                  opens. In the meantime the demo stays open — up to 3 tickers per run, no
-                  account needed.
+                  opens. In the meantime <a href="/#analyze">the demo</a> stays open — up
+                  to {MAX_TICKERS} tickers per run, no account needed.
                 </>
               ) : (
                 <>
@@ -195,10 +203,18 @@ export default function CheckoutPage() {
             <label className="co-opt" htmlFor="co-email">
               Optional — add your email for an early-access invite.
             </label>
+            {/* Deliberately not a <form>: a form element on this page is one edit
+                away from being a checkout. That leaves nothing to supply the
+                submit gesture, so Enter is wired by hand — a visitor who types an
+                address and presses Enter must not have the invitation the copy
+                just promised them dropped silently, and the email leg of the
+                funnel must not undercount because of it. Blank + Enter still
+                posts nothing: `notify` already returns on an empty field. */}
             <div className="co-email">
               <input id="co-email" type="email" value={email}
                      placeholder="you@email.com"
-                     onChange={e => { setEmail(e.target.value); setSent(false) }} />
+                     onChange={e => { setEmail(e.target.value); setSent(false) }}
+                     onKeyDown={e => { if (e.key === 'Enter') notify() }} />
               <button type="button" onClick={notify}>Notify me</button>
             </div>
             {sent && (

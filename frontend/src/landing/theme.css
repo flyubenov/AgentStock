@@ -513,11 +513,17 @@
 /* Revealed in place on the click, never before it. */
 .intrinsica .disclosure { margin-top: 20px; background: var(--accent-soft);
   border: 1px solid var(--line); border-radius: 12px; padding: 18px 18px 16px; }
-.intrinsica .disclosure h4 { margin: 0 0 8px; font-size: 15px; font-weight: 700;
+/* h2, not h4: the checkout is a standalone route and opens at h1, so the
+   disclosure heading is the next level down. Every value here is explicit, so the
+   tag change leaves the rendering identical. */
+.intrinsica .disclosure h2 { margin: 0 0 8px; font-size: 15px; font-weight: 700;
   color: var(--text); }
 .intrinsica .disclosure p { margin: 0 0 14px; font-size: 13.5px; line-height: 1.6;
   color: var(--dim); }
 .intrinsica .disclosure p b { color: var(--text); }
+/* Matches the in-copy link in the hero's demo wall — accent, no underline. */
+.intrinsica .disclosure a { color: var(--accent); font-weight: 600;
+  text-decoration: none; }
 
 /* Optional means optional: a plain label above the field, no required marker,
    nothing gated behind it. */
