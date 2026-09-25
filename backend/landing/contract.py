@@ -4,9 +4,10 @@ import math
 import re
 
 from risk_reward.config import REWARD_SLOTS, RISK_SLOTS
+from landing.figures import moat_figure, quality_figure, rr_figure
 from landing.labels import (
     CATEGORY_LABELS, ERROR_LABELS, EXCLUSION_LABELS, GENERIC_ERROR_LABEL,
-    METHOD_LABELS, MOAT_FACTOR_LABELS, RR_FACTOR_LABELS, humanize,
+    METHOD_LABELS, MOAT_FACTOR_LABELS, MOAT_GROUP_LABELS, RR_FACTOR_LABELS, humanize,
 )
 
 # Fallback category weights when the engine did not report renormalized ones.
@@ -87,6 +88,8 @@ def _quality(sc: dict | None) -> dict | None:
             "metrics": [{
                 "label": m.get("label"),
                 "raw": _finite(m.get("raw")),
+                # The raw figure in its own unit, ready to print (landing/figures.py).
+                "display": quality_figure(m.get("label"), _finite(m.get("raw"))),
                 "score": _round(m.get("score")),
                 "weight_pct": 0.0 if (m.get("excluded") or m.get("score") is None) else share,
                 "excluded": bool(m.get("excluded")),
@@ -124,6 +127,7 @@ def _moat(sc: dict | None) -> dict | None:
     bd = sc.get("moat_breakdown") or {}
     pillars, maxima = bd.get("pillars") or {}, bd.get("maxima") or {}
     available = sum(maxima.values()) or 100
+    inputs = bd.get("inputs") or {}
     factors = []
     for code, points in pillars.items():
         # Controller addition 3: MoatBlock.factors[].max_points is a non-null number
@@ -135,6 +139,9 @@ def _moat(sc: dict | None) -> dict | None:
             continue
         factors.append({
             "label": MOAT_FACTOR_LABELS.get(code, humanize(code)),
+            # Pillar codes group by their letter: A magnitude, B durability, C cash.
+            "group": MOAT_GROUP_LABELS.get(str(code)[:1], "Other"),
+            "display": moat_figure(code, inputs.get(code)),
             "points": _round(points),
             "max_points": max_points,
             "weight_pct": round(max_points / available * 100, 2),
@@ -198,6 +205,7 @@ def _reward_risk(rr: dict | None) -> dict | None:
             out.append({
                 "label": RR_FACTOR_LABELS.get(slot, humanize(slot)),
                 "raw": _finite(ms.get("raw")),
+                "display": rr_figure(ms.get("source"), _finite(ms.get("raw"))),
                 "score": _round(ms.get("score")),
                 "weight_pct": weight_pct,
                 "dropped": bool(ms.get("dropped")),

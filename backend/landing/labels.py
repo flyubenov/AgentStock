@@ -32,6 +32,9 @@ MOAT_FACTOR_LABELS = {
     "B3": "Margin durability", "C1": "Free-cash-flow conversion",
 }
 
+# The three moat pillar groups, keyed by the pillar code's letter (40 / 50 / 10 points).
+MOAT_GROUP_LABELS = {"A": "Magnitude", "B": "Durability", "C": "Cash-backing"}
+
 RR_FACTOR_LABELS = {
     "valuation": "Valuation", "growth": "Growth", "profitability": "Profitability",
     "analyst_upside": "Analyst upside", "discount": "Discount to 52-week high",
