@@ -210,3 +210,107 @@
   .intrinsica .bd { padding: 14px 10px 16px; }
   .intrinsica .bd .bt { font-size: 12px; }
 }
+
+/* "How Intrinsica works" (spec 5.4): overview card -> four assessment cards ->
+ * one detail panel. Every colour below is a token declared at the top of this
+ * file; the four assessment dots take their own token inline from
+ * content/framework.ts, which is the single place those four are named. */
+.intrinsica .ovcard { background: var(--bg); border: 1px solid var(--line);
+  border-radius: 14px; padding: 28px 26px; }
+.intrinsica .kicker { font-family: var(--fh); font-weight: 600; font-size: 12px;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); }
+.intrinsica .stitle { font-size: 28px; font-weight: 700; margin: 8px 0 12px;
+  color: var(--text); letter-spacing: -0.01em; }
+.intrinsica .ssub { font-size: 15px; line-height: 1.65; color: var(--dim); margin: 0; }
+.intrinsica .ovpts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px 24px;
+  margin: 22px 0 18px; }
+.intrinsica .ovpts > div { font-size: 13.5px; line-height: 1.6; color: var(--mute); }
+.intrinsica .ovpts b { font-family: var(--fh); font-size: 13px; color: var(--text); }
+.intrinsica .ovtail { font-size: 13px; color: var(--mute); margin: 0;
+  padding-top: 16px; border-top: 1px solid var(--line); }
+
+.intrinsica .mcards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+  margin: 20px 0; }
+.intrinsica .mcards .mcard { display: flex; flex-direction: column; gap: 8px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 12px;
+  padding: 16px; text-align: left; font-family: inherit; cursor: pointer; }
+.intrinsica .mcards .mcard:hover { border-color: var(--accent); }
+.intrinsica .mcards .mcard.on { border-color: var(--accent); background: var(--accent-soft); }
+.intrinsica .mcards .mcard:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.intrinsica .mcards .cn { display: flex; align-items: center; gap: 8px;
+  font-family: var(--fh); font-weight: 600; font-size: 14px; color: var(--text); }
+.intrinsica .mcards .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.intrinsica .mcards .cq { font-size: 13px; line-height: 1.45; color: var(--mute); }
+.intrinsica .mcards .cs { margin-top: auto; font-family: var(--fm); font-size: 11px;
+  color: var(--accent); }
+
+.intrinsica .mdetail { background: var(--bg); border: 1px solid var(--line);
+  border-radius: 14px; padding: 24px 26px; }
+.intrinsica .mdetail .dh { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-family: var(--fh); font-weight: 700; font-size: 18px; color: var(--text); }
+.intrinsica .mdetail .dh .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.intrinsica .mdetail .scale { background: var(--accent-soft); color: var(--accent);
+  border-radius: 999px; padding: 3px 10px; font-family: var(--fm); font-size: 11px;
+  font-weight: 500; }
+.intrinsica .mdetail .dq { font-size: 14px; color: var(--mute); margin: 8px 0 0; }
+.intrinsica .mdetail .d-what { font-size: 14.5px; line-height: 1.65; color: var(--dim);
+  margin: 10px 0 20px; }
+
+.intrinsica .grpblock { border-top: 1px solid var(--line); padding: 14px 0; }
+.intrinsica .grp { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  font-family: var(--fh); font-weight: 600; font-size: 14px; color: var(--text); }
+.intrinsica .grp .wt2 { background: var(--stage); border: 1px solid var(--line);
+  border-radius: 999px; padding: 2px 10px; font-family: var(--fb); font-weight: 600;
+  font-size: 11px; color: var(--dim); }
+.intrinsica .gmetrics { font-size: 12.5px; line-height: 1.55; color: var(--mute);
+  margin-top: 6px; }
+.intrinsica .gwhen { font-size: 13px; line-height: 1.55; color: var(--dim); margin-top: 6px; }
+/* Green for the good direction, amber for the poor one — the same two tokens the
+ * results grid bands its fair-value gap with, so one page-wide vocabulary. */
+.intrinsica .gwhen .up { color: var(--pos); }
+.intrinsica .gwhen .dn { color: var(--warn); }
+.intrinsica .mdetail .note { border-top: 1px solid var(--line); margin: 6px 0 0;
+  padding-top: 14px; font-size: 12.5px; line-height: 1.6; color: var(--mute); }
+
+.intrinsica .cal-wrap { margin-top: 20px; }
+.intrinsica .cal-title { font-family: var(--fh); font-weight: 600; font-size: 13px;
+  color: var(--accent); margin-bottom: 10px; }
+.intrinsica .arow { border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px;
+  background: var(--stage); overflow: hidden; }
+.intrinsica .arow.open { border-color: var(--accent); background: var(--bg); }
+.intrinsica .arow .ah { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  width: 100%; background: none; border: 0; padding: 11px 14px; font-family: inherit;
+  text-align: left; cursor: pointer; }
+.intrinsica .arow .ah:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.intrinsica .arow .nm { font-family: var(--fh); font-weight: 600; font-size: 13px;
+  color: var(--text); }
+.intrinsica .arow .sm { font-size: 12.5px; color: var(--mute); }
+.intrinsica .arow .ab { padding: 0 14px 14px; }
+.intrinsica .arow .kv { margin-bottom: 10px; }
+.intrinsica .arow .k { font-family: var(--fh); font-weight: 600; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.04em; color: var(--mute); }
+.intrinsica .arow .k.when { color: var(--accent); }
+.intrinsica .arow .kv p { margin: 3px 0 0; font-size: 13px; line-height: 1.55;
+  color: var(--dim); }
+.intrinsica .arow .ex { font-size: 12.5px; color: var(--mute); margin-bottom: 10px; }
+.intrinsica .arow .ex b { color: var(--text); }
+.intrinsica .tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.intrinsica .tg { border-radius: 999px; padding: 2px 10px; font-size: 11px; font-weight: 600;
+  border: 1px solid var(--line); background: var(--bg); color: var(--dim); }
+.intrinsica .tg.cond { color: var(--accent); background: var(--accent-soft);
+  border-color: var(--accent-soft); }
+.intrinsica .tg.guard { color: var(--pos); }
+.intrinsica .tg.live { color: var(--warn); }
+/* The tag meanings are shown, not hung off `title`: a hover tooltip is invisible
+ * on the phones a marketing page is mostly read on, and unreachable by keyboard. */
+.intrinsica .tagnote { margin: 8px 0 0; font-size: 11.5px; line-height: 1.55;
+  color: var(--mute); }
+
+@media (max-width: 860px) {
+  .intrinsica .mcards { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 700px) {
+  .intrinsica .ovpts { grid-template-columns: 1fr; }
+  .intrinsica .ovcard, .intrinsica .mdetail { padding: 20px 16px; }
+  .intrinsica .stitle { font-size: 23px; }
+}

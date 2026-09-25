@@ -4,10 +4,12 @@ import Nav from './components/Nav'
 import Hero from './components/Hero'
 import ResultGrid from './components/ResultGrid'
 import Breakdown from './components/Breakdown'
+import Framework from './components/Framework'
 import SiteFooter from './components/SiteFooter'
 import { track, EVENTS } from '../lib/analytics'
 import { API_BASE } from '../lib/api'
 import { canAnalyze, recordRun } from './demoLimit'
+import { FRAMEWORK } from './content/framework'
 import type { AnalyzeResponse, AnalyzeSource, AssessmentId, TickerPayload } from './types'
 
 const SAMPLE = 'AAPL'
@@ -152,9 +154,25 @@ export default function LandingPage() {
             </p>
           </div>
         </section>
-        {/* The methodology, why, workflow and pricing sections mount here in the
-            tasks that follow; `assessment` already feeds every expanded row's
-            breakdown panel, and will feed the framework tabs too. */}
+        {/* The framework tabs are the third reader of the page's single
+            `assessment`, beside the hero cards and every expanded row's
+            breakdown panel — picking "Moat" in any of the three shows Moat in
+            all three, which is the point of there being one piece of state.
+            methodology_viewed is fired here rather than inside Framework so the
+            component that owns the state owns its instrumentation; the event
+            itself is spec section 9's, and nothing new is introduced. Framework
+            tab switches are not otherwise tracked, and neither are its
+            calibration row expands — section 9 names both as deliberately
+            uninstrumented. */}
+        <Framework
+          tab={assessment}
+          onTab={id => {
+            setAssessment(id)
+            track(EVENTS.methodologyViewed, { assessment: FRAMEWORK[id].name })
+          }}
+        />
+        {/* The why, workflow and pricing sections mount here in the tasks that
+            follow. */}
       </main>
       <SiteFooter />
     </div>

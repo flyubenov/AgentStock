@@ -16,6 +16,7 @@ vi.mock('../lib/analytics', () => ({
     analysisStarted: 'analysis_started',
     analysisCompleted: 'analysis_completed',
     breakdownOpened: 'breakdown_opened',
+    methodologyViewed: 'methodology_viewed',
   },
 }))
 
@@ -491,20 +492,26 @@ describe('LandingPage breakdown panel (task 10)', () => {
     return utils
   }
 
+  // Scoped to the expanded row's own `.bd` panel since task 11: the framework
+  // section below the grid names the same Quality category, so an unscoped
+  // getByText would now match two elements and fail on ambiguity rather than on
+  // anything real.
   it('expands a row into the real factor table, not an empty panel', async () => {
-    await openRow()
-    expect(screen.getByText('Growth & Margins')).toBeInTheDocument()
-    expect(screen.getByText('Revenue growth (3-yr)')).toBeInTheDocument()
+    const { container } = await openRow()
+    const panel = container.querySelector<HTMLElement>('.bd')!
+    expect(within(panel).getByText('Growth & Margins')).toBeInTheDocument()
+    expect(within(panel).getByText('Revenue growth (3-yr)')).toBeInTheDocument()
     for (const name of ['Quality', 'Moat', 'Fair Value', 'Reward / Risk']) {
       expect(screen.getByRole('button', { name })).toBeInTheDocument()
     }
   })
 
   it('switches the open panel when a breakdown tab is clicked', async () => {
-    await openRow()
+    const { container } = await openRow()
     await userEvent.click(screen.getByRole('button', { name: 'Moat' }))
-    expect(screen.getByText('ROIC level')).toBeInTheDocument()
-    expect(screen.queryByText('Growth & Margins')).not.toBeInTheDocument()
+    const panel = container.querySelector<HTMLElement>('.bd')!
+    expect(within(panel).getByText('ROIC level')).toBeInTheDocument()
+    expect(within(panel).queryByText('Growth & Margins')).not.toBeInTheDocument()
   })
 
   // The hero cards and the breakdown share one `assessment`, so choosing an
@@ -515,5 +522,70 @@ describe('LandingPage breakdown panel (task 10)', () => {
     await userEvent.click(cards[2])
     expect(screen.getByText('Mega Cap')).toBeInTheDocument()
     expect(screen.queryByText('Growth & Margins')).not.toBeInTheDocument()
+  })
+})
+
+// Task 11: the framework section reads and writes the SAME `assessment` the
+// hero cards and every expanded breakdown panel use. There is one piece of
+// state for the concept, so these tests assert the jump in both directions —
+// hero -> framework and framework -> an already-open breakdown panel.
+describe('LandingPage framework section (task 11)', () => {
+  const detail = (c: HTMLElement) => c.querySelector<HTMLElement>('.mdetail')!
+
+  it('shows the framework panel for the assessment the hero cards select', async () => {
+    const { container } = await renderSettled()
+    expect(detail(container)).toHaveTextContent('How strong is the underlying business?')
+    expect(detail(container)).toHaveTextContent('35% of the score · 7 metrics')
+
+    await userEvent.click(container.querySelectorAll('.assess4 .it')[1])
+
+    expect(detail(container)).toHaveTextContent('How durable are its competitive advantages?')
+    expect(detail(container)).toHaveTextContent('40 of 100 points')
+    expect(detail(container)).not.toHaveTextContent('35% of the score · 7 metrics')
+  })
+
+  it('moves an already-open breakdown panel when a framework card is clicked', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      json: async () => ({ results: [BREAKDOWN_ROW], invalid: [], error: null }),
+    }))
+    const { container } = renderPage()
+    await waitFor(() => {
+      expect(screen.getByText('Apple Inc.')).toBeInTheDocument()
+    })
+    await userEvent.click(screen.getByRole('button', { name: 'AAPL' }))
+    const panel = container.querySelector<HTMLElement>('.bd')!
+    expect(within(panel).getByText('Growth & Margins')).toBeInTheDocument()
+
+    await userEvent.click(container.querySelectorAll('.mcards button')[1])
+
+    expect(within(container.querySelector<HTMLElement>('.bd')!).getByText('ROIC level')).toBeInTheDocument()
+    expect(within(container.querySelector<HTMLElement>('.bd')!).queryByText('Growth & Margins'))
+      .not.toBeInTheDocument()
+  })
+
+  it('records methodology_viewed with the assessment chosen, and only from here', async () => {
+    const { track } = await import('../lib/analytics')
+    const { container } = await renderSettled()
+    vi.mocked(track).mockClear()
+
+    // A hero card writes the same state but is not the methodology section, so
+    // it must not fire the event (spec section 9's list is closed and is about
+    // funnel steps, not every control that touches `assessment`).
+    await userEvent.click(container.querySelectorAll('.assess4 .it')[3])
+    expect(track).not.toHaveBeenCalledWith('methodology_viewed', expect.anything())
+
+    await userEvent.click(container.querySelectorAll('.mcards button')[2])
+    expect(track).toHaveBeenCalledWith('methodology_viewed', { assessment: 'Fair Value' })
+  })
+
+  it('fires nothing when a calibration row is expanded — spec section 9 excludes it', async () => {
+    const { track } = await import('../lib/analytics')
+    await renderSettled()
+    vi.mocked(track).mockClear()
+
+    await userEvent.click(screen.getByText('Tangible-ROIC (ex-goodwill)'))
+
+    expect(screen.getByText(/When it applies/)).toBeInTheDocument()
+    expect(track).not.toHaveBeenCalled()
   })
 })
