@@ -513,3 +513,105 @@ describe('/checkout route (controller addition)', () => {
     expect(screen.queryByRole('button', { name: 'Proceed to payment' })).not.toBeInTheDocument()
   })
 })
+
+/** AT MOST ONCE PER VISITOR. Paid-intent conversion is the single number this
+ *  whole fake door exists to produce, and the button stays mounted and enabled
+ *  after the click — `setClicked(true)` only reveals the disclosure beneath it.
+ *  An impatient double-click therefore posted the intent twice. Spec line 378
+ *  derives abandonment as checkout_started minus payment_button_clicked, so
+ *  repeats do not merely inflate a rate, they can drive that subtraction
+ *  NEGATIVE. At-most-once is entailed by the spec's own arithmetic.
+ *
+ *  The guard is on the FIRE, not on the button: `disabled` would take the
+ *  button out of the tab order and change what the visitor sees, and this page
+ *  already draws that line twice — Pricing's `reported` ref, LandingPage's
+ *  `opening`. Counts are asserted, never mere presence: "the event fired" is
+ *  true of three events as happily as of one. */
+describe('CheckoutPage counts intent once per visitor', () => {
+  it('posts payment_button_clicked once however often the button is pressed', async () => {
+    const track = await tracker()
+    show()
+
+    await userEvent.click(proceed())
+    await userEvent.click(proceed())
+    await userEvent.click(proceed())
+
+    expect(callsOf(track, 'payment_button_clicked')).toEqual([
+      ['payment_button_clicked', { plan: 'Pro', billing: 'annual' }],
+    ])
+  })
+
+  it('posts free_plan_clicked once however often the free button is pressed', async () => {
+    const track = await tracker()
+    show('?plan=Free&billing=monthly')
+    const free = () => screen.getByRole('button', { name: 'Create free account' })
+
+    await userEvent.click(free())
+    await userEvent.click(free())
+    await userEvent.click(free())
+
+    expect(callsOf(track, 'free_plan_clicked')).toEqual([
+      ['free_plan_clicked', { plan: 'Free', billing: 'monthly' }],
+    ])
+    expect(callsOf(track, 'payment_button_clicked')).toHaveLength(0)
+  })
+
+  // The guard may not swallow the state change it guards: the disclosure is the
+  // honesty claim the entire fake door rests on, and a visitor who clicks twice
+  // must still be looking at it — in its paid wording, with the fine print.
+  it('still shows the disclosure, in its paid wording, after repeated clicks', async () => {
+    show()
+    await userEvent.click(proceed())
+    await userEvent.click(proceed())
+
+    expect(screen.getByText(/founding list/i)).toBeInTheDocument()
+    expect(screen.getByText(/no payment was taken/i)).toBeInTheDocument()
+    expect(screen.getByText(/Pro — Annual/)).toBeInTheDocument()
+    expect(screen.getByText(/no card required/i)).toBeInTheDocument()
+    expect(screen.queryByText(/no account was created/i)).not.toBeInTheDocument()
+    expect(proceed()).toBeInTheDocument()
+  })
+
+  it('posts email_submitted once when Notify me is pressed twice on one address', async () => {
+    const track = await tracker()
+    show()
+    await userEvent.click(proceed())
+
+    const notify = screen.getByRole('button', { name: 'Notify me' })
+    await userEvent.type(screen.getByRole('textbox', { name: /optional/i }), 'a@b.com')
+    await userEvent.click(notify)
+    await userEvent.click(notify)
+
+    expect(callsOf(track, 'email_submitted')).toEqual([
+      ['email_submitted', { plan: 'Pro', billing: 'annual', email: 'a@b.com' }],
+    ])
+    expect(screen.getByText(/we[’']ll email you when early access opens/i))
+      .toBeInTheDocument()
+  })
+
+  // THE RE-ARM CASE, and the reason the email guard reads `sent` rather than a
+  // permanent latch: `onChange` already clears `sent`, so a visitor who notices
+  // a typo and corrects it gets the invitation the copy promised them. Anyone
+  // "simplifying" the guard into a once-ever flag breaks exactly this, and a
+  // fake door that silently drops the corrected address has broken the one
+  // promise it is able to keep.
+  it('re-arms the email when the address is corrected, and posts the correction', async () => {
+    const track = await tracker()
+    show()
+    await userEvent.click(proceed())
+
+    const box = screen.getByRole('textbox', { name: /optional/i })
+    const notify = screen.getByRole('button', { name: 'Notify me' })
+
+    await userEvent.type(box, 'typo@b.com')
+    await userEvent.click(notify)
+    await userEvent.clear(box)
+    await userEvent.type(box, 'fixed@b.com')
+    await userEvent.click(notify)
+
+    expect(callsOf(track, 'email_submitted')).toEqual([
+      ['email_submitted', { plan: 'Pro', billing: 'annual', email: 'typo@b.com' }],
+      ['email_submitted', { plan: 'Pro', billing: 'annual', email: 'fixed@b.com' }],
+    ])
+  })
+})

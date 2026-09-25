@@ -123,6 +123,16 @@ export default function CheckoutPage() {
   const name = plan.name
 
   function proceed() {
+    // AT MOST ONCE PER VISITOR. The button stays mounted and enabled after the
+    // click — the click only reveals the disclosure beneath it — so an
+    // impatient double-click posted the paid intent twice. Abandonment is
+    // derived as checkout_started minus payment_button_clicked (spec line 378):
+    // repeats do not merely inflate paid-intent conversion, they can drive that
+    // subtraction negative. Guarded on the fire, not with `disabled`, which
+    // would take the button out of the tab order and change what the visitor
+    // sees — the same line Pricing's `reported` ref and LandingPage's `opening`
+    // already draw.
+    if (clicked) return
     // The whole measurement: reaching this button and pressing it. Nothing is
     // charged, and no card was ever asked for.
     //
@@ -137,6 +147,12 @@ export default function CheckoutPage() {
   }
 
   function notify() {
+    // One post per address, not per press. Deliberately keyed on `sent` and not
+    // on a once-ever latch: the input's onChange clears `sent`, so a visitor who
+    // spots a typo and corrects it re-arms the event and gets the invitation the
+    // copy beside it promised, while a second press on an unchanged address
+    // posts nothing. A permanent latch here would silently drop the correction.
+    if (sent) return
     // Optional means optional: an empty field is not an error, it simply posts
     // nothing. There is no validation gate and nothing on this page waits on it
     // — spec line 13 frames the experiment as willingness to pay, "not email
