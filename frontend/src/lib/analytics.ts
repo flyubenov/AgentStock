@@ -45,9 +45,18 @@ export function visitorId(): string {
   }
 }
 
+/** The only names `track` will accept. Derived from EVENTS rather than typed
+ *  out again: analytics.test.ts pins EVENTS against the hand-transcribed spec
+ *  list, so the spec constrains the map and the map constrains every call. The
+ *  two guards are complementary — the runtime one says the map matches the
+ *  spec, this one says no caller can route around the map. Without it
+ *  `track('rage_click_v2', …)` typechecks, builds and ships, and no test that
+ *  inspects EVENTS can see it, because it never consults EVENTS. */
+export type FunnelEvent = (typeof EVENTS)[keyof typeof EVENTS]
+
 /** Fire-and-forget. Returns immediately and swallows every failure: a dead
  *  endpoint, an ad blocker or an offline browser must never break the funnel. */
-export function track(event: string, props: Record<string, unknown> = {}): void {
+export function track(event: FunnelEvent, props: Record<string, unknown> = {}): void {
   try {
     if (typeof fetch !== 'function') return
     void fetch(`${API_BASE}/api/events`, {

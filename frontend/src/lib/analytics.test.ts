@@ -1,6 +1,20 @@
 import { describe, it, expect, vi } from 'vitest'
 import { track, visitorId, EVENTS } from './analytics'
 
+/** A COMPILE-TIME assertion, deliberately not a runtime one: vitest never
+ *  typechecks this file, so this line proves nothing when the suite is green —
+ *  it does its whole job under `tsc -b --force`, which is in the gate.
+ *
+ *  `track` takes FunnelEvent, so an off-spec name is a build error and the
+ *  directive below absorbs it. Widen the parameter back to `string` and the
+ *  directive becomes unused, which is itself an error (TS2578) — that is what
+ *  holds the narrowing in place. The EVENTS assertion further down pins the map
+ *  to the spec; this pins every caller to the map. Neither substitutes for the
+ *  other: `track('rage_click_v2')` consults EVENTS not at all, and left the
+ *  whole suite green before the parameter was narrowed. */
+// @ts-expect-error 'rage_click_v2' is not one of spec section 9's event names.
+void (() => track('rage_click_v2'))
+
 /** Spec section 9's event list, hand-transcribed from
  *  docs/superpowers/specs/2026-09-23-intrinsica-fake-door-design.md — the
  *  funnel sentence, plus `free_plan_clicked`, which that section names
