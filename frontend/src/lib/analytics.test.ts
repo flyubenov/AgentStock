@@ -1,6 +1,65 @@
 import { describe, it, expect, vi } from 'vitest'
 import { track, visitorId, EVENTS } from './analytics'
 
+/** Spec section 9's event list, hand-transcribed from
+ *  docs/superpowers/specs/2026-09-23-intrinsica-fake-door-design.md — the
+ *  funnel sentence, plus `free_plan_clicked`, which that section names
+ *  separately as its own event excluded from paid-intent conversion.
+ *
+ *  Transcribed and NOT imported from `./analytics`. An expectation derived from
+ *  the constant under test compares the module to itself and passes whatever it
+ *  contains, which is a failure mode this branch has shipped before. These
+ *  eleven strings are the spec's, typed out; if the two lists disagree, one of
+ *  the two documents is wrong and a human has to say which. */
+const SPEC_EVENTS = [
+  'page_view',
+  'analysis_started',
+  'analysis_completed',
+  'breakdown_opened',
+  'methodology_viewed',
+  'pricing_viewed',
+  'plan_selected',
+  'checkout_started',
+  'payment_button_clicked',
+  'email_submitted',
+  'free_plan_clicked',
+]
+
+/** THE LIST IS CLOSED — spec section 9 says so in as many words: "this list is
+ *  the whole of it — there is no blanket click or scroll tracking", and names
+ *  scroll depth, nav clicks, hovers, tooltip opens, calibration expands,
+ *  breakdown tab switches and the billing toggle as deliberately uninstrumented.
+ *  On a page with no accounts, every extra event is a privacy liability with no
+ *  payoff, so the closure is the point and not a formality.
+ *
+ *  Nothing pinned it. funnel.test.tsx has its own copy of this list, but it
+ *  compares it only against the events that reach the wire during the three
+ *  journeys that file walks — so a twelfth event added to the map and fired
+ *  from an interaction nobody walks is invisible there. `track('rage_click_v2')`
+ *  planted in LandingPage's breakdown toggle left funnel.test.tsx 7/7 green.
+ *
+ *  This assertion is about the MAP, not about any journey, which is why it
+ *  lives here beside the module it constrains rather than in the funnel file:
+ *  it holds without rendering anything, and it cannot be weakened by a journey
+ *  that stops exercising some step. */
+describe('EVENTS', () => {
+  it('is exactly spec section 9 list, in both directions', () => {
+    const inCode: string[] = Object.values(EVENTS)
+
+    expect(inCode.filter(e => !SPEC_EVENTS.includes(e)),
+           'fired by the code, absent from spec section 9 — the list is closed')
+      .toEqual([])
+    expect(SPEC_EVENTS.filter(e => !inCode.includes(e)),
+           'named by spec section 9, missing from EVENTS — the funnel has a hole')
+      .toEqual([])
+    // Sorted arrays rather than Sets: set equality would hide two keys that had
+    // drifted onto the same name, which loses a funnel step just as silently as
+    // deleting one.
+    expect([...inCode].sort(), 'EVENTS and spec section 9 hold the same names')
+      .toEqual([...SPEC_EVENTS].sort())
+  })
+})
+
 describe('visitorId', () => {
   it('is stable across calls', () => {
     expect(visitorId()).toBe(visitorId())
