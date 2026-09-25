@@ -409,6 +409,83 @@ describe('LandingPage compare chip (controller addition 2)', () => {
   })
 })
 
+// Fix round 16d: `analysis_completed` was the only event on the branch whose
+// PROPS nothing asserted — it appears elsewhere in event-NAME lists only
+// (funnel.test.tsx, analytics.test.ts), so stripping it to
+// `track(EVENTS.analysisCompleted)` left all 297 tests green. It also fired
+// without `source`, while `analysis_started` four lines above carried it, so
+// every page load emitted an unattributable completion: the mount auto-run is
+// marketing, not visitor work, and could not be filtered out of the
+// started -> completed step.
+describe('LandingPage analysis_completed props (fix round 16d)', () => {
+  const completions = (track: unknown) =>
+    vi.mocked(track as (...a: unknown[]) => void).mock.calls
+      .filter(c => c[0] === 'analysis_completed')
+      .map(c => c[1] as Record<string, unknown>)
+
+  it('stamps the mount sample and a typed run apart, on identical counts', async () => {
+    const { track } = await import('../lib/analytics')
+    // One row for BOTH runs on purpose. `count` is the only other prop that
+    // could conceivably attribute a completion, and this is the ordinary case
+    // where it cannot: sample AAPL is 1 and a typed single ticker is 1. If
+    // `source` is dropped, the two payloads below become indistinguishable —
+    // which is the whole defect.
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      json: async () => ({ results: [compareRow('AAPL')], invalid: [], error: null }),
+    }))
+    await renderSettled()
+
+    await userEvent.type(screen.getByRole('textbox'), 'NVDA')
+    await userEvent.click(screen.getByRole('button', { name: 'Analyze →' }))
+    await waitFor(() => {
+      expect(completions(track)).toHaveLength(2)
+    })
+
+    const [sample, typed] = completions(track)
+    // Exact key sets, both ways: a prop silently dropped fails here, and so
+    // does an unplanned prop appearing. `duration_ms` is a clock reading, so
+    // its VALUE is pinned by type and range below rather than by a literal —
+    // everything else is pinned exactly.
+    expect(Object.keys(sample).sort()).toEqual(['count', 'duration_ms', 'source'])
+    expect(Object.keys(typed).sort()).toEqual(['count', 'duration_ms', 'source'])
+
+    expect(sample.source).toBe('sample')
+    expect(typed.source).toBe('typed')
+    // Stated as its own assertion rather than left implicit: the two runs agree
+    // on `count`, so `source` is doing the attributing and nothing else can.
+    expect(typed.count).toBe(sample.count)
+    expect(sample.count).toBe(1)
+
+    for (const props of [sample, typed]) {
+      expect(typeof props.duration_ms).toBe('number')
+      expect(Number.isFinite(props.duration_ms as number)).toBe(true)
+      expect(props.duration_ms as number).toBeGreaterThanOrEqual(0)
+    }
+  })
+
+  // The compare chip runs three tickers AS A SAMPLE. Without `source` this
+  // completion is the one most easily mistaken for a visitor's own multi-ticker
+  // run, and its duration is a cold three-engine fetch that would otherwise be
+  // averaged in with warm cached AAPL.
+  it('stamps the three-ticker compare chip as a sample, not as visitor work', async () => {
+    const { track } = await import('../lib/analytics')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      json: async () => COMPARE_RESULTS(),
+    }))
+    await renderSettled()
+    vi.mocked(track).mockClear()
+
+    await userEvent.click(screen.getByRole('button', { name: /compare/i }))
+    await waitFor(() => {
+      expect(completions(track)).toHaveLength(1)
+    })
+
+    expect(completions(track)[0]).toMatchObject({ source: 'sample', count: 3 })
+    expect(Object.keys(completions(track)[0]).sort())
+      .toEqual(['count', 'duration_ms', 'source'])
+  })
+})
+
 // Fix round 1: `track` used to be called from inside the setOpen updater.
 // React requires updaters to be pure and StrictMode (main.tsx) deliberately
 // double-invokes them, so breakdown_opened fired twice per expand in

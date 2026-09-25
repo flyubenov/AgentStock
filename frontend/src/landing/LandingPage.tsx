@@ -137,8 +137,16 @@ export default function LandingPage() {
         recordRun()
         setExhausted(!canAnalyze())
       }
+      // `source` rides the completion for the same reason it rides
+      // analysis_started (Task 8d): the mount auto-run below fires one of
+      // these on every single page load, and nothing else in the payload can
+      // tell it from a visitor's own run — sample AAPL is count 1 and a typed
+      // single ticker is count 1, and the compare chip's three tickers are a
+      // sample too. Without it the started -> completed step reads ~100% for
+      // everyone and duration_ms averages a warm cached AAPL against cold
+      // multi-ticker work. It is already in scope and already tested above.
       track(EVENTS.analysisCompleted, { duration_ms: Date.now() - started,
-                                        count: results.length })
+                                        count: results.length, source })
     } catch (err) {
       // A raw AbortError (or any other exception) must never reach the DOM as
       // its own text — both branches below are fixed, reader-facing copy.
