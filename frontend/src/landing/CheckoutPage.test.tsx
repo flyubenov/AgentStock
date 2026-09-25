@@ -164,10 +164,39 @@ describe('CheckoutPage', () => {
 
     expect(screen.getByText(/no account was created/i)).toBeInTheDocument()
     expect(callsOf(track, 'free_plan_clicked'))
-      .toEqual([['free_plan_clicked', { plan: 'Free', billing: 'monthly' }]])
+      .toEqual([['free_plan_clicked',
+                 { plan: 'Free', billing: 'monthly', source: 'checkout' }]])
     expect(callsOf(track, 'payment_button_clicked')).toHaveLength(0)
     expect(callsOf(track, 'checkout_started'))
       .toEqual([['checkout_started', { plan: 'Free', billing: 'monthly' }]])
+  })
+
+  /** Task 16c. This button is the SECOND of the two sites that fire
+   *  free_plan_clicked; the pricing CTA on the landing page is the first, and
+   *  it stamps `source: 'pricing'`. With both carrying only { plan, billing }
+   *  the two funnel stages incremented one undifferentiated counter, so free
+   *  drop-off — clicked Free, then confirmed — was not derivable from the data
+   *  at all. `source` is the disambiguation Task 8d already used for
+   *  analysis_started; a new event name is not available, spec section 9's list
+   *  being closed.
+   *
+   *  payment_button_clicked, the paid branch of this same handler, is
+   *  deliberately left unstamped: it fires from here and nowhere else, and the
+   *  paid funnel's stages are already distinct event names. The tests below pin
+   *  its props exactly, so a stamp added there fails rather than drifts in. */
+  it('stamps a Free confirm with the checkout as its source', async () => {
+    const track = await tracker()
+    show('?plan=Free&billing=annual')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Create free account' }))
+
+    expect(callsOf(track, 'free_plan_clicked')).toEqual([
+      ['free_plan_clicked', { plan: 'Free', billing: 'annual', source: 'checkout' }],
+    ])
+    // The mis-stamp, not just the missing one: 'pricing' posted from here would
+    // book a confirm as a CTA click and invert the drop-off it exists to serve.
+    expect(callsOf(track, 'free_plan_clicked')[0][1])
+      .not.toMatchObject({ source: 'pricing' })
   })
 
   // Placement is the whole point. Asking for an email while the visitor still
@@ -551,7 +580,7 @@ describe('CheckoutPage counts intent once per visitor', () => {
     await userEvent.click(free())
 
     expect(callsOf(track, 'free_plan_clicked')).toEqual([
-      ['free_plan_clicked', { plan: 'Free', billing: 'monthly' }],
+      ['free_plan_clicked', { plan: 'Free', billing: 'monthly', source: 'checkout' }],
     ])
     expect(callsOf(track, 'payment_button_clicked')).toHaveLength(0)
   })

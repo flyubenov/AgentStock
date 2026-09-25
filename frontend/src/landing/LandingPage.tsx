@@ -15,7 +15,9 @@ import { API_BASE } from '../lib/api'
 import { canAnalyze, recordRun } from './demoLimit'
 import { FRAMEWORK } from './content/framework'
 import type { Billing } from './content/plans'
-import type { AnalyzeResponse, AnalyzeSource, AssessmentId, TickerPayload } from './types'
+import type {
+  AnalyzeResponse, AnalyzeSource, AssessmentId, FreeClickSource, TickerPayload,
+} from './types'
 
 const SAMPLE = 'AAPL'
 
@@ -57,8 +59,24 @@ export default function LandingPage() {
   // carries the same props but never rides plan_selected, and nothing here lets
   // it be counted as one.
   const choosePlan = useCallback((plan: string, b: Billing) => {
-    track(plan === 'Free' ? EVENTS.freePlanClicked : EVENTS.planSelected,
-          { plan, billing: b })
+    if (plan === 'Free') {
+      // `source` because free_plan_clicked ALSO fires from the checkout's
+      // confirm button with the same plan and billing. Without it the two
+      // funnel stages increment one undifferentiated counter and free drop-off
+      // — of those who clicked Free here, how many confirmed there — is not
+      // derivable at all. Spec section 9's list is closed, so this is a prop on
+      // the existing event and not a second event name; analysis_started makes
+      // the identical move with AnalyzeSource. Written as an if/else rather
+      // than the previous ternary because the two branches no longer post the
+      // same props, and a ternary that hides that is how they drifted.
+      track(EVENTS.freePlanClicked,
+            { plan, billing: b, source: 'pricing' satisfies FreeClickSource })
+    } else {
+      // Deliberately unstamped: plan_selected fires here and nowhere else, and
+      // the paid stages are already separate names (plan_selected, then
+      // payment_button_clicked). A constant prop would add no information.
+      track(EVENTS.planSelected, { plan, billing: b })
+    }
     navigate(`/checkout?plan=${encodeURIComponent(plan)}&billing=${b}`)
   }, [navigate])
 

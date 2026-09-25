@@ -246,13 +246,23 @@ describe('the fake-door funnel, end to end', () => {
     expect(names()).not.toContain('plan_selected')
 
     // Both ends of the free walk fire free_plan_clicked — the pricing CTA and
-    // the checkout confirm — with identical props, so the event name alone does
-    // not tell the two stages apart. checkout_started, which fires between them,
-    // is what separates them; pinned here so that stops being an accident.
-    expect(names().filter(n => n === 'free_plan_clicked')).toHaveLength(2)
-    for (const call of seen.filter(e => e.event === 'free_plan_clicked')) {
-      expect(call.props).toEqual({ plan: 'Free', billing: 'annual' })
-    }
+    // the checkout confirm. They used to carry IDENTICAL props, so the two
+    // funnel stages incremented one undifferentiated counter and free drop-off
+    // (clicked Free, then confirmed) could not be computed from the wire at
+    // all. `source` separates them (Task 16c, the same move Task 8d made for
+    // analysis_started). Asserted here rather than only in the two component
+    // tests because this is the only place that walks BOTH ends in one journey
+    // — the component tests each see one site and so cannot tell whether the
+    // two stamps differ.
+    const freeClicks = seen.filter(e => e.event === 'free_plan_clicked')
+    expect(freeClicks).toHaveLength(2)
+    expect(freeClicks.map(c => c.props)).toEqual([
+      { plan: 'Free', billing: 'annual', source: 'pricing' },
+      { plan: 'Free', billing: 'annual', source: 'checkout' },
+    ])
+    // Stated as the property that matters, so a future third fire site cannot
+    // satisfy the pair above by reusing a stamp: every fire is distinguishable.
+    expect(new Set(freeClicks.map(c => c.props.source)).size).toBe(freeClicks.length)
 
     // THE ABANDONMENT TRAP, pinned end to end. Abandonment is derived as
     // checkout_started − payment_button_clicked (spec line 378). Free routes

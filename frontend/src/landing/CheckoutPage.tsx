@@ -4,6 +4,7 @@ import './theme.css'
 import { PERIODS, PLANS, totalFor, type Billing } from './content/plans'
 import { MAX_TICKERS } from './components/Hero'
 import { track, EVENTS } from '../lib/analytics'
+import type { FreeClickSource } from './types'
 
 /** The last step of the fake door (spec section 6), and the one page on the site
  *  that must be structurally incapable of taking money.
@@ -141,8 +142,20 @@ export default function CheckoutPage() {
     // from paid-intent conversion (spec lines 299-300, and the comment on EVENTS
     // itself). LandingPage draws the same line on the CTA that sent the visitor
     // here; this is the second half of it.
-    track(free ? EVENTS.freePlanClicked : EVENTS.paymentButtonClicked,
-          { plan: name, billing })
+    if (free) {
+      // `source` because free_plan_clicked fires from LandingPage's pricing CTA
+      // too, with the same plan and billing — this is the SECOND of its two
+      // sites. Undistinguished, the two stages share one counter and free
+      // drop-off (clicked Free, then confirmed here) cannot be computed, which
+      // is the Free funnel's only drop-off number. A third event name is not
+      // available: spec section 9's list is closed.
+      track(EVENTS.freePlanClicked,
+            { plan: name, billing, source: 'checkout' satisfies FreeClickSource })
+    } else {
+      // Deliberately unstamped: this is payment_button_clicked's only fire
+      // site, and it is already a distinct name from plan_selected upstream.
+      track(EVENTS.paymentButtonClicked, { plan: name, billing })
+    }
     setClicked(true)
   }
 

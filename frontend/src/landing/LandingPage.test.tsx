@@ -659,11 +659,46 @@ describe('LandingPage pricing section (task 13)', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Start free' }))
 
-    expect(track).toHaveBeenCalledWith('free_plan_clicked', { plan: 'Free', billing: 'annual' })
+    expect(track).toHaveBeenCalledWith('free_plan_clicked',
+      { plan: 'Free', billing: 'annual', source: 'pricing' })
     expect(track).not.toHaveBeenCalledWith('plan_selected', expect.anything())
-    // Nor may it carry a prop that would let it be re-counted as paid intent.
+    // Nor may it carry a prop that would let it be re-counted as paid intent:
+    // `source` says WHERE the free click happened, never that it was a purchase.
     const call = vi.mocked(track).mock.calls.find(c => c[0] === 'free_plan_clicked')!
-    expect(Object.keys(call[1] as object).sort()).toEqual(['billing', 'plan'])
+    expect(Object.keys(call[1] as object).sort()).toEqual(['billing', 'plan', 'source'])
+  })
+
+  /** Task 16c. free_plan_clicked fires from TWO places — this CTA and the
+   *  checkout's confirm button — and both used to carry only { plan, billing },
+   *  so the two fires were indistinguishable on the wire. The cost is not a
+   *  doubled count (which is at least visible); it is that free drop-off —
+   *  of the visitors who clicked Free here, how many went on to confirm there —
+   *  cannot be computed at all, and it is the only drop-off number the Free
+   *  funnel has. `source` is the same disambiguation Task 8d gave
+   *  analysis_started for the same reason. A second event name is NOT the fix:
+   *  spec section 9's list is closed.
+   *
+   *  plan_selected, the paid CTA on this very line, deliberately does NOT carry
+   *  it: it fires from one site only, and the paid funnel's two stages are
+   *  already separate event names (plan_selected, then payment_button_clicked).
+   *  A prop that can only ever hold one value carries no information and would
+   *  invite the false inference that a `source: 'checkout'` plan_selected
+   *  exists. The test above pins plan_selected's props exactly, so adding one
+   *  there fails loudly rather than silently. */
+  it('stamps a Free click with the pricing CTA as its source', async () => {
+    const { track } = await import('../lib/analytics')
+    await renderSettled()
+    vi.mocked(track).mockClear()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Start free' }))
+
+    const free = vi.mocked(track).mock.calls.filter(c => c[0] === 'free_plan_clicked')
+    expect(free).toHaveLength(1)
+    expect(free[0][1]).toEqual({ plan: 'Free', billing: 'annual', source: 'pricing' })
+    // Asserted as a mis-stamp, not merely as a missing stamp: 'checkout' here
+    // would report a confirm that never happened, which is worse than no prop.
+    expect(track).not.toHaveBeenCalledWith('free_plan_clicked',
+      expect.objectContaining({ source: 'checkout' }))
   })
 
   // Spec section 9: the billing toggle is deliberately uninstrumented. It still

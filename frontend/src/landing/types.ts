@@ -85,3 +85,17 @@ export type AssessmentId = 0 | 1 | 2 | 3
  *  that consumes an allowance (see demoLimit.ts). Declared here so the page and
  *  the Hero that calls it cannot drift apart. */
 export type AnalyzeSource = 'sample' | 'typed'
+
+/** Which of the two sites fired `free_plan_clicked`. The event is the only one
+ *  on the site that fires from two places — the pricing CTA and the checkout's
+ *  confirm button — and spec section 9's event list is closed, so the stages are
+ *  told apart by a prop rather than by a second name (the same move
+ *  `analysis_started` makes with AnalyzeSource above). Declared here because two
+ *  separate files have to spell these two words identically or the free funnel
+ *  silently splits into three buckets.
+ *
+ *  Only free_plan_clicked carries it. plan_selected and payment_button_clicked
+ *  each fire from exactly one site, and the paid funnel's stages are already
+ *  distinct event names; a prop that can hold only one value would carry no
+ *  information and would imply a fire site that does not exist. */
+export type FreeClickSource = 'pricing' | 'checkout'
