@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { DEMO_RUN_LIMIT, DEMO_WINDOW_DAYS } from '../demoLimit'
-import type { AssessmentId } from '../types'
+import type { AnalyzeSource, AssessmentId } from '../types'
 
 // The demo/UX pre-check only. The server (backend/routers/landing.py MAX_TICKERS)
 // is the source of truth for the real cap — this value and its message can drift
@@ -11,7 +11,7 @@ export const MAX_TICKERS = 3
 // Fixed compare trio. All three are seeded into the server cache at startup (see
 // backend), so a chip run resolves from cache and feels instant. Read from this
 // one exported constant rather than re-typed anywhere else.
-export const COMPARE_TICKERS = ['AAPL', 'MSFT', 'NVDA']
+export const COMPARE_TICKERS = ['AAPL', 'MSFT', 'NVDA'] as const
 
 export const ASSESSMENTS = [
   { name: 'Quality', color: 'var(--q)',
@@ -28,8 +28,11 @@ interface Props {
   /** Called for both a typed submission ('typed') and the compare chip
    *  ('sample') — the source travels through to analysis_started and to the
    *  no-account demo limit, which only 'typed' runs consume. */
-  onAnalyze: (tickers: string[], source: 'typed' | 'sample') => void
+  onAnalyze: (tickers: string[], source: AnalyzeSource) => void
   onSelectAssessment: (id: AssessmentId) => void
+  /** True while an analysis is in flight. Disables BOTH the Analyze button
+   *  and the compare chip: concurrent chip clicks would each fire their own
+   *  analysis_started, inflating the very metric the chip exists to measure. */
   busy: boolean
   /** True once this browser has used up its free demo runs (frontend/src/
    *  landing/demoLimit.ts). Replaces the ticker input/button with a short
@@ -124,7 +127,7 @@ export default function Hero({ onAnalyze, onSelectAssessment, busy, exhausted }:
               this must keep working after the wall above appears. */}
           <div className="an-chips">
             <span>Or try:</span>
-            <button type="button" className="chip" onClick={runCompare}>
+            <button type="button" className="chip" onClick={runCompare} disabled={busy}>
               Compare {COMPARE_TICKERS.join(' · ')}
             </button>
           </div>

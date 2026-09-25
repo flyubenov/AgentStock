@@ -78,3 +78,10 @@ export interface AnalyzeResponse {
 
 /** The four assessments, in page order. Index doubles as the framework tab id. */
 export type AssessmentId = 0 | 1 | 2 | 3
+
+/** Where an analyze run came from. 'sample' is the mount auto-run and the
+ *  compare chip — served from cache, marketing content, never counted against
+ *  the demo limit. 'typed' is a visitor's own analysis and is the only source
+ *  that consumes an allowance (see demoLimit.ts). Declared here so the page and
+ *  the Hero that calls it cannot drift apart. */
+export type AnalyzeSource = 'sample' | 'typed'

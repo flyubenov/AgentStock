@@ -89,10 +89,99 @@ describe('ResultGrid', () => {
       row({ ticker: 'MSFT', quality: { score: 9.5, fundamentals_composite: 9.5, profile_label: null, categories: [] } }),
     ]
     const { container } = render1(rows)
-    expect(container.querySelectorAll('.best').length).toBeGreaterThan(0)
     const msftRow = screen.getByText('MSFT').closest('tr')!
     expect(within(msftRow).getByText('9.5')).toHaveClass('best')
     const aaplRow = screen.getByText('AAPL').closest('tr')!
     expect(within(aaplRow).getByText('8.0')).not.toHaveClass('best')
+    // Quality is the only column these two rows differ in, so it is the only
+    // cell that may carry the highlight — the shared moat/gap/ratio columns
+    // must stay plain (see the tie test below).
+    expect(container.querySelectorAll('.best')).toHaveLength(1)
+  })
+
+  // --- Fix round 1: ties are not standouts ---
+  it('highlights nothing in a column where every row shows the same value', () => {
+    // Identical rows apart from the ticker: max === every value, so an
+    // equality test alone would paint the entire grid "best", which reads as
+    // "all best" rather than "no standout".
+    const { container } = render1([row({ ticker: 'AAPL' }), row({ ticker: 'MSFT' })])
+    expect(container.querySelector('.best')).not.toBeInTheDocument()
+  })
+
+  it('still highlights the shared leader when only some rows tie at the top', () => {
+    const q = (score: number) => ({ score, fundamentals_composite: score,
+                                    profile_label: null, categories: [] })
+    render1([
+      row({ ticker: 'AAPL', quality: q(9.5) }),
+      row({ ticker: 'MSFT', quality: q(9.5) }),
+      row({ ticker: 'NVDA', quality: q(7.0) }),
+    ])
+    for (const t of ['AAPL', 'MSFT']) {
+      expect(within(screen.getByText(t).closest('tr')!).getByText('9.5')).toHaveClass('best')
+    }
+    expect(within(screen.getByText('NVDA').closest('tr')!).getByText('7.0'))
+      .not.toHaveClass('best')
+  })
+
+  it('does not call a lone value best when the other rows have no value at all', () => {
+    const { container } = render1([
+      row({ ticker: 'AAPL', moat: { score: 90, gated: false, excluded: [], factors: [] } }),
+      row({ ticker: 'MSFT', moat: null }),
+    ])
+    expect(within(screen.getByText('AAPL').closest('tr')!).getByText('90'))
+      .not.toHaveClass('best')
+    expect(container.querySelector('.best')).not.toBeInTheDocument()
+  })
+
+  // --- Fix round 1: the row must be operable without a mouse ---
+  it('exposes each row as a named, expandable control', () => {
+    render1([row()])
+    const control = screen.getByRole('button', { name: 'AAPL' })
+    expect(control).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('reports the open state on the row control', () => {
+    render1([row()], { AAPL: true })
+    expect(screen.getByRole('button', { name: 'AAPL' })).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('expands a row from the keyboard with Enter and with Space', async () => {
+    const onToggle = vi.fn()
+    render(<ResultGrid rows={[row()]} open={{}} onToggle={onToggle}
+                       renderBreakdown={() => <div>BREAKDOWN</div>} />)
+    await userEvent.tab()
+    expect(screen.getByRole('button', { name: 'AAPL' })).toHaveFocus()
+
+    await userEvent.keyboard('{Enter}')
+    expect(onToggle).toHaveBeenCalledWith('AAPL')
+    expect(onToggle).toHaveBeenCalledTimes(1)
+
+    await userEvent.keyboard(' ')
+    expect(onToggle).toHaveBeenCalledTimes(2)
+  })
+
+  it('toggles once, not twice, when the ticker itself is clicked', async () => {
+    // The row control sits inside the row's own onClick. Without
+    // stopPropagation both handlers fire and the row opens and shuts again.
+    const onToggle = vi.fn()
+    render(<ResultGrid rows={[row()]} open={{}} onToggle={onToggle}
+                       renderBreakdown={() => <div>BREAKDOWN</div>} />)
+    await userEvent.click(screen.getByRole('button', { name: 'AAPL' }))
+    expect(onToggle).toHaveBeenCalledTimes(1)
+  })
+
+  it('still toggles from anywhere else in the row', async () => {
+    const onToggle = vi.fn()
+    render(<ResultGrid rows={[row()]} open={{}} onToggle={onToggle}
+                       renderBreakdown={() => <div>BREAKDOWN</div>} />)
+    await userEvent.click(screen.getByText('Apple Inc.'))
+    expect(onToggle).toHaveBeenCalledTimes(1)
+    expect(onToggle).toHaveBeenCalledWith('AAPL')
+  })
+
+  it('keeps the caret out of the accessibility tree', () => {
+    const { container } = render1([row()])
+    const caret = container.querySelector('td.ex span')!
+    expect(caret).toHaveAttribute('aria-hidden', 'true')
   })
 })

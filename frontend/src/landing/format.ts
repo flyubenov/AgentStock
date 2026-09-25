@@ -16,7 +16,13 @@ export function num(v: number | null, dp = 1): string {
 
 export function pct(v: number | null): string {
   if (!finite(v)) return DASH
-  return `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`
+  // The sign comes from the ROUNDED value, not the raw one: -0.04 rounds to
+  // 0.0, and "-0.0%" reads as a bug on a page whose whole pitch is that every
+  // number is checkable. Anything that rounds to zero prints unsigned.
+  const text = v.toFixed(1)
+  // Number('-0.0') is -0, and -0 === 0, so this catches both signed zeroes.
+  if (Number(text) === 0) return '0.0%'
+  return `${Number(text) > 0 ? '+' : ''}${text}%`
 }
 
 /** Spec section 5.2: >= +10% green, 0..+10% blue, -10..0 amber, < -10% red. */

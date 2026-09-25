@@ -32,4 +32,29 @@ describe('formatters', () => {
     expect(gapClass(-18)).toBe('gap-neg')
     expect(gapClass(null)).toBe('gap-none')
   })
+
+  // Fix round 1: gapClass leans on the same finite() guard the formatters use,
+  // but only its null case was ever exercised. A non-finite gap must never band
+  // a cell as if it were a real number.
+  it('bands a non-finite gap as absent, never as a direction', () => {
+    expect(gapClass(NaN)).toBe('gap-none')
+    expect(gapClass(Infinity)).toBe('gap-none')
+    expect(gapClass(-Infinity)).toBe('gap-none')
+  })
+
+  // Fix round 1: a value that rounds to zero must not carry a sign. "-0.0%"
+  // reads as a bug on a page that promises every number is checkable. Nothing
+  // pinned pct(0) === '+0.0%' before this, so zero is now unsigned in both
+  // directions rather than positive-by-default.
+  it('never prints a signed zero', () => {
+    expect(pct(-0.04)).toBe('0.0%')
+    expect(pct(0.04)).toBe('0.0%')
+    expect(pct(0)).toBe('0.0%')
+    expect(pct(-0)).toBe('0.0%')
+  })
+
+  it('still signs a value that survives rounding', () => {
+    expect(pct(0.05)).toBe('+0.1%')
+    expect(pct(-0.06)).toBe('-0.1%')
+  })
 })

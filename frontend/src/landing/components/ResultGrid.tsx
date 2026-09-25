@@ -22,12 +22,16 @@ const HEAD: { label: string; unit?: string }[] = [
   { label: '' },
 ]
 
-/** The highest finite value across a column, or null when every row lacks it.
- *  Never invents a "best" from a single value — callers only use this in
+/** The highest finite value across a column, or null when there is nothing to
+ *  single out. A column needs at least two DISTINCT finite values before any
+ *  cell in it can be "best": when every row shows the same number, highlighting
+ *  all of them reads as "all best" rather than "no standout", and a lone value
+ *  among em dashes has nothing to be better than. Callers only use this in
  *  compare mode (more than one row). */
 function bestOf(values: (number | null)[]): number | null {
   const finite = values.filter((v): v is number => typeof v === 'number' && Number.isFinite(v))
-  return finite.length ? Math.max(...finite) : null
+  if (new Set(finite).size < 2) return null
+  return Math.max(...finite)
 }
 
 export default function ResultGrid({ rows, open, onToggle, renderBreakdown }: Props) {
@@ -70,7 +74,22 @@ export default function ResultGrid({ rows, open, onToggle, renderBreakdown }: Pr
                 <tr className={isOpen ? 'row open' : 'row'}
                     onClick={() => onToggle(r.ticker)}>
                   <td className="co">
-                    <b>{r.ticker}</b>
+                    {/* The whole row stays clickable for a mouse, but the
+                        keyboard and screen-reader affordance is a real <button>
+                        in the first cell rather than a role on the <tr>: a row
+                        carrying role="button" stops being a row for assistive
+                        technology and takes the cells with it. The button gets
+                        Enter/Space and a focus ring for free, and its own click
+                        is stopped from bubbling so a mouse click on the ticker
+                        toggles once, not twice. */}
+                    <button
+                      type="button"
+                      className="rowx"
+                      aria-expanded={isOpen}
+                      onClick={e => { e.stopPropagation(); onToggle(r.ticker) }}
+                    >
+                      <b>{r.ticker}</b>
+                    </button>
                     <span className="cn">{r.company_name ?? ''}</span>
                   </td>
                   <td className={isBest(quality, bestQuality) ? 'best' : undefined}>
@@ -89,7 +108,10 @@ export default function ResultGrid({ rows, open, onToggle, renderBreakdown }: Pr
                   <td className={isBest(rr, bestRR) ? 'best' : undefined}>
                     {num(rr, 1)}
                   </td>
-                  <td className="ex">{isOpen ? '▴' : '▾'}</td>
+                  {/* Decoration only: the expanded/collapsed state is already
+                      announced by the row button's aria-expanded, so the caret
+                      would just add an unnamed glyph to the accessibility tree. */}
+                  <td className="ex"><span aria-hidden="true">{isOpen ? '▴' : '▾'}</span></td>
                 </tr>
                 {isOpen && (
                   <tr className="exp">

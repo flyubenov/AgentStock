@@ -1,3 +1,4 @@
+import { StrictMode } from 'react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, act, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -279,27 +280,44 @@ describe('LandingPage demo limit — only a successful typed run counts (fix rou
 // analyze() path as the button, tagged 'sample', rendering into the same
 // ResultGrid this task wires up. Assertions are on rendered output (the DOM the
 // real ResultGrid produces), never on the fetch mock echoing itself.
-function compareRow(ticker: string, qualityScore: number) {
+// Every highlighted column carries DISTINCT values, and the winner is a
+// different row in three of the four — a fixture where all three tickers share
+// a moat, a gap and a ratio (as this one first did) cannot tell a working
+// best-in-column highlight from a broken one.
+const COMPARE_FIXTURE = {
+  AAPL: { quality: 8.0, moat: 81, gap: 5, ratio: 2.4, value: 110 },
+  MSFT: { quality: 9.5, moat: 72, gap: -3, ratio: 0.8, value: 120 },
+  NVDA: { quality: 7.0, moat: 45, gap: 12, ratio: 1.1, value: 130 },
+}
+
+function compareRow(ticker: keyof typeof COMPARE_FIXTURE, over: { company_name?: string } = {}) {
+  const f = COMPARE_FIXTURE[ticker]
   return {
     ticker, company_name: `${ticker} Inc.`, price: 100,
-    quality: { score: qualityScore, profile_label: null, categories: [] },
-    moat: { score: 50, gated: false, excluded: [], factors: [] },
-    fair_value: { value: 110, gap_pct: 5, type_label: null, methods: [] },
-    reward_risk: { ratio: 1.2, tier: null, reward_score: 1, risk_score: 1, reward: [], risk: [] },
+    quality: { score: f.quality, fundamentals_composite: f.quality,
+               profile_label: null, categories: [] },
+    moat: { score: f.moat, gated: false, excluded: [], factors: [] },
+    fair_value: { value: f.value, gap_pct: f.gap, type_label: null, methods: [] },
+    reward_risk: { ratio: f.ratio, tier: null, reward_score: 1, risk_score: 1,
+                   reward: [], risk: [] },
     calibrations: [], errors: [],
+    ...over,
   }
 }
+
+const COMPARE_RESULTS = () => ({
+  results: [compareRow('AAPL'), compareRow('MSFT'), compareRow('NVDA')],
+  invalid: [], error: null,
+})
 
 describe('LandingPage compare chip (controller addition 2)', () => {
   it('fills the input, analyzes the fixed trio as a sample run, and renders all three rows with the best-in-column highlight', async () => {
     const { track } = await import('../lib/analytics')
+    // The mount's sample run uses the default empty-results stub, so the grid
+    // is empty until the chip runs — every row asserted below is the chip's.
     await renderSettled()
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      json: async () => ({
-        results: [compareRow('AAPL', 8), compareRow('MSFT', 9.5), compareRow('NVDA', 7)],
-        invalid: [], error: null,
-      }),
-    }))
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ json: async () => COMPARE_RESULTS() }))
+    vi.mocked(track).mockClear()
 
     await userEvent.click(screen.getByRole('button', { name: /Compare/ }))
 
@@ -312,17 +330,32 @@ describe('LandingPage compare chip (controller addition 2)', () => {
     expect(track).toHaveBeenCalledWith('analysis_started',
       { tickers: ['AAPL', 'MSFT', 'NVDA'], count: 3, source: 'sample' })
 
+    // A different row wins quality, moat and the fair-value gap, so a
+    // highlight stuck on one row — or on all of them — fails here.
     const grid = screen.getByText('MSFT').closest('table')!
-    expect(within(grid).getByText('9.5')).toHaveClass('best')
+    const rowOf = (t: string) => within(grid).getByText(t).closest('tr')!
+    expect(within(rowOf('MSFT')).getByText('9.5')).toHaveClass('best')
+    expect(within(rowOf('AAPL')).getByText('81')).toHaveClass('best')
+    expect(within(rowOf('NVDA')).getByText('+12.0%')).toHaveClass('best')
+    expect(within(rowOf('AAPL')).getByText('2.4')).toHaveClass('best')
+    expect(within(rowOf('AAPL')).getByText('8.0')).not.toHaveClass('best')
+    expect(within(rowOf('NVDA')).getByText('45')).not.toHaveClass('best')
+    expect(grid.querySelectorAll('.best')).toHaveLength(4)
   })
 
   it('keeps working after the typed allowance is exhausted, and never consumes it', async () => {
+    const { track } = await import('../lib/analytics')
     localStorage.setItem('intrinsica_demo_runs', JSON.stringify({
       count: 5, windowStart: Date.now(),
     }))
+    // The mount auto-run is NOT gated on `exhausted`, so it puts its own row in
+    // the grid before the chip is ever clicked. Give it a fixture the chip's
+    // rows cannot be confused with, and wait for it — otherwise every
+    // assertion below would still pass with the chip's onClick deleted, which
+    // is exactly how the previous version of this test passed vacuously.
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       json: async () => ({
-        results: [compareRow('AAPL', 8), compareRow('MSFT', 9.5), compareRow('NVDA', 7)],
+        results: [compareRow('AAPL', { company_name: 'Mount Sample Only Inc.' })],
         invalid: [], error: null,
       }),
     }))
@@ -330,15 +363,73 @@ describe('LandingPage compare chip (controller addition 2)', () => {
     await waitFor(() => {
       expect(screen.getByText(/see the plans/i)).toBeInTheDocument()
     })
+    await waitFor(() => {
+      expect(screen.getByText('Mount Sample Only Inc.')).toBeInTheDocument()
+    })
     // The wall replaced the input/button, but the chip must still be present.
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ json: async () => COMPARE_RESULTS() }))
+    vi.mocked(track).mockClear()
 
     await userEvent.click(screen.getByRole('button', { name: /Compare/ }))
     await waitFor(() => {
       expect(screen.getByText('MSFT')).toBeInTheDocument()
     })
+    // The chip's own run replaced the mount's single row with its three.
+    expect(screen.queryByText('Mount Sample Only Inc.')).not.toBeInTheDocument()
+    expect(screen.getByText('NVDA')).toBeInTheDocument()
+    expect(track).toHaveBeenCalledWith('analysis_started',
+      { tickers: ['AAPL', 'MSFT', 'NVDA'], count: 3, source: 'sample' })
     expect(screen.getByText(/see the plans/i)).toBeInTheDocument()
     expect(JSON.parse(localStorage.getItem('intrinsica_demo_runs')!).count).toBe(5)
+  })
+})
+
+// Fix round 1: `track` used to be called from inside the setOpen updater.
+// React requires updaters to be pure and StrictMode (main.tsx) deliberately
+// double-invokes them, so breakdown_opened fired twice per expand in
+// development. This is the only render in the suite wrapped in StrictMode —
+// without it the assertion below cannot observe the defect at all.
+describe('LandingPage breakdown analytics under StrictMode (fix round 1)', () => {
+  const opens = (track: unknown) =>
+    vi.mocked(track as (...a: unknown[]) => void).mock.calls
+      .filter(c => c[0] === 'breakdown_opened')
+
+  it('fires breakdown_opened exactly once per expand', async () => {
+    const { track } = await import('../lib/analytics')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      json: async () => ({ results: [compareRow('AAPL')], invalid: [], error: null }),
+    }))
+    render(<StrictMode><MemoryRouter><LandingPage /></MemoryRouter></StrictMode>)
+    await waitFor(() => {
+      expect(screen.getByText('AAPL Inc.')).toBeInTheDocument()
+    })
+    vi.mocked(track).mockClear()
+
+    await userEvent.click(screen.getByRole('button', { name: 'AAPL' }))
+
+    expect(opens(track)).toEqual([['breakdown_opened', { ticker: 'AAPL' }]])
+  })
+
+  it('fires nothing when the row is collapsed again', async () => {
+    const { track } = await import('../lib/analytics')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      json: async () => ({ results: [compareRow('AAPL')], invalid: [], error: null }),
+    }))
+    render(<StrictMode><MemoryRouter><LandingPage /></MemoryRouter></StrictMode>)
+    await waitFor(() => {
+      expect(screen.getByText('AAPL Inc.')).toBeInTheDocument()
+    })
+    vi.mocked(track).mockClear()
+
+    const control = screen.getByRole('button', { name: 'AAPL' })
+    await userEvent.click(control)
+    expect(control).toHaveAttribute('aria-expanded', 'true')
+    await userEvent.click(control)
+    expect(control).toHaveAttribute('aria-expanded', 'false')
+
+    expect(opens(track)).toHaveLength(1)
   })
 })
 

@@ -7,13 +7,7 @@ import SiteFooter from './components/SiteFooter'
 import { track, EVENTS } from '../lib/analytics'
 import { API_BASE } from '../lib/api'
 import { canAnalyze, recordRun } from './demoLimit'
-import type { AnalyzeResponse, AssessmentId, TickerPayload } from './types'
-
-/** 'sample' is the mount auto-run (and, from Task 9, the compare chip) — served
- *  from cache, marketing content, never counted against the demo limit.
- *  'typed' is a visitor's own analysis and is the only source that consumes an
- *  allowance (see demoLimit.ts). */
-type AnalyzeSource = 'sample' | 'typed'
+import type { AnalyzeResponse, AnalyzeSource, AssessmentId, TickerPayload } from './types'
 
 const SAMPLE = 'AAPL'
 
@@ -38,13 +32,17 @@ export default function LandingPage() {
   const [exhausted, setExhausted] = useState(() => !canAnalyze())
   const [open, setOpen] = useState<Record<string, boolean>>({})
 
+  // The analytics call must stay OUTSIDE the updater. React requires state
+  // updaters to be pure and deliberately double-invokes them under StrictMode
+  // (main.tsx wraps the app in it), so tracking from inside would fire
+  // breakdown_opened twice per expand in development. The transition is
+  // computed from the current `open` — which is therefore a dependency — and
+  // the event is emitted once, beside the state change rather than within it.
   const toggle = useCallback((ticker: string) => {
-    setOpen(prev => {
-      const next = { ...prev, [ticker]: !prev[ticker] }
-      if (next[ticker]) track(EVENTS.breakdownOpened, { ticker })
-      return next
-    })
-  }, [])
+    const opening = !open[ticker]
+    setOpen(prev => ({ ...prev, [ticker]: !prev[ticker] }))
+    if (opening) track(EVENTS.breakdownOpened, { ticker })
+  }, [open])
 
   const analyze = useCallback(async (tickers: string[], source: AnalyzeSource) => {
     setBusy(true)

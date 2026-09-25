@@ -97,10 +97,12 @@
  * allowance runs out (Task 8d/9 handoff). */
 .intrinsica .an-chips { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   margin-top: 14px; font-size: 13px; color: var(--mute); }
-.intrinsica .chip { background: #fff; border: 1px solid var(--line); border-radius: 999px;
+.intrinsica .chip { background: var(--bg); border: 1px solid var(--line); border-radius: 999px;
   padding: 6px 14px; font-size: 13px; font-family: var(--fb); color: var(--dim);
   cursor: pointer; }
 .intrinsica .chip:hover { border-color: var(--accent); color: var(--text); }
+.intrinsica .chip:disabled { opacity: 0.6; cursor: not-allowed; border-color: var(--line);
+  color: var(--dim); }
 
 /* Results grid (style B / Institutional): values only, units in the header. */
 .intrinsica .tB { overflow-x: auto; }
@@ -116,8 +118,14 @@
 .intrinsica .g tr.row { cursor: pointer; }
 .intrinsica .g tr.row:hover { background: var(--stage); }
 .intrinsica .g tr.row.open { background: var(--accent-soft); }
-.intrinsica .g td.co { display: flex; flex-direction: column; gap: 2px; }
-.intrinsica .g td.co .cn { font-size: 12px; color: var(--mute); }
+.intrinsica .g td.co b, .intrinsica .g td.co .cn { display: block; }
+.intrinsica .g td.co .cn { font-size: 12px; color: var(--mute); margin-top: 2px; }
+/* The row's keyboard affordance: a real button that looks like the plain ticker
+   text it replaced (Fix round 1). */
+.intrinsica .g td.co .rowx { display: block; background: none; border: 0; padding: 0;
+  margin: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.intrinsica .g td.co .rowx:focus-visible { outline: 2px solid var(--accent);
+  outline-offset: 2px; border-radius: 3px; }
 .intrinsica .g td.ex { color: var(--mute); text-align: right; }
 .intrinsica .g tr.exp td { background: var(--stage); cursor: default; padding: 0; }
 /* Best-in-column highlight (blue), compare mode only — no stars. */

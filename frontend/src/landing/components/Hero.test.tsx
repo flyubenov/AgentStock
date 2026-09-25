@@ -102,6 +102,28 @@ describe('Hero', () => {
       expect(onAnalyze).toHaveBeenCalledWith(COMPARE_TICKERS, 'sample')
     })
 
+    // Fix round 1: the chip had no busy guard while its sibling Analyze button
+    // did. Repeated clicks fire concurrent analyze() calls, each emitting its
+    // own analysis_started{source:'sample'} — inflating exactly the metric the
+    // chip exists to produce.
+    it('is disabled while an analysis is already running', async () => {
+      const onAnalyze = vi.fn()
+      render(<Hero onAnalyze={onAnalyze} onSelectAssessment={noop} busy={true} exhausted={false} />)
+      const chip = screen.getByRole('button', { name: /Compare/ })
+      expect(chip).toBeDisabled()
+      await userEvent.click(chip)
+      expect(onAnalyze).not.toHaveBeenCalled()
+    })
+
+    it('is disabled while busy even behind the exhausted wall, where it is the only control', async () => {
+      const onAnalyze = vi.fn()
+      render(<Hero onAnalyze={onAnalyze} onSelectAssessment={noop} busy={true} exhausted={true} />)
+      const chip = screen.getByRole('button', { name: /Compare/ })
+      expect(chip).toBeDisabled()
+      await userEvent.click(chip)
+      expect(onAnalyze).not.toHaveBeenCalled()
+    })
+
     it('does not use the internal word signal in the chip copy', () => {
       const { container } = render(
         <Hero onAnalyze={noop} onSelectAssessment={noop} busy={false} exhausted={false} />)
