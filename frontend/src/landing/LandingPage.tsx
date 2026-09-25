@@ -5,6 +5,8 @@ import Hero from './components/Hero'
 import ResultGrid from './components/ResultGrid'
 import Breakdown from './components/Breakdown'
 import Framework from './components/Framework'
+import Why from './components/Why'
+import Workflow from './components/Workflow'
 import SiteFooter from './components/SiteFooter'
 import { track, EVENTS } from '../lib/analytics'
 import { API_BASE } from '../lib/api'
@@ -171,8 +173,11 @@ export default function LandingPage() {
             track(EVENTS.methodologyViewed, { assessment: FRAMEWORK[id].name })
           }}
         />
-        {/* The why, workflow and pricing sections mount here in the tasks that
-            follow. */}
+        {/* Both are content-only and prop-less: nothing in either reads or
+            writes the page's `assessment`, so neither is wired to it. */}
+        <Why />
+        <Workflow />
+        {/* The pricing section mounts here in the task that follows. */}
       </main>
       <SiteFooter />
     </div>

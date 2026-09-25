@@ -314,3 +314,41 @@
   .intrinsica .ovcard, .intrinsica .mdetail { padding: 20px 16px; }
   .intrinsica .stitle { font-size: 23px; }
 }
+
+/* "Why Intrinsica" (spec 5.5) and the workflow (spec 5.6). Both reuse the card
+ * vocabulary the framework section already established — token border, 12px
+ * radius, --bg fill — so the page reads as one system rather than three card
+ * designs in a row. Every colour is a token declared at the top of this file;
+ * nothing below introduces a literal. */
+.intrinsica .why-lead { max-width: 860px; }
+.intrinsica .why-lead + .why-lead { margin-top: 14px; }
+.intrinsica .why-row { margin-top: 30px; }
+.intrinsica .why-lbl { font-family: var(--fh); font-weight: 600; font-size: 12px;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--mute);
+  padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.intrinsica .diff-grid { display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 12px; margin-top: 14px; }
+.intrinsica .diff { background: var(--bg); border: 1px solid var(--line);
+  border-radius: 12px; padding: 18px 16px; }
+.intrinsica .diff h4 { margin: 0 0 7px; font-size: 14px; font-weight: 600;
+  color: var(--text); }
+.intrinsica .diff p { margin: 0; font-size: 13px; line-height: 1.6; color: var(--mute); }
+
+.intrinsica .workflow { display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 12px; margin-top: 22px; }
+.intrinsica .wf { background: var(--bg); border: 1px solid var(--line);
+  border-radius: 12px; padding: 18px 16px; }
+/* The mono face is the same one the framework cards use for their scale pills:
+   a small machine-set label, not a heading. */
+.intrinsica .wf .step { font-family: var(--fm); font-size: 11px; font-weight: 500;
+  letter-spacing: 0.06em; color: var(--accent); }
+.intrinsica .wf h4 { margin: 8px 0 7px; font-size: 14px; font-weight: 600;
+  color: var(--text); }
+.intrinsica .wf p { margin: 0; font-size: 13px; line-height: 1.6; color: var(--mute); }
+
+@media (max-width: 860px) {
+  .intrinsica .diff-grid, .intrinsica .workflow { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 700px) {
+  .intrinsica .diff-grid, .intrinsica .workflow { grid-template-columns: 1fr; }
+}

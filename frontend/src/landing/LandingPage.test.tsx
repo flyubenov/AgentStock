@@ -56,6 +56,24 @@ describe('LandingPage shell', () => {
     }
   })
 
+  // The nav test above only proves the links exist. This proves they land
+  // somewhere: every anchor the nav offers has a section to scroll to, and the
+  // page is assembled in the reading order the spec lays out — methodology,
+  // then why, then the workflow. A section built but never mounted, or mounted
+  // in the wrong place, fails here rather than in a screenshot.
+  it('mounts the why and workflow sections, in order, after the framework', async () => {
+    const { container } = await renderSettled()
+    const ids = Array.from(container.querySelectorAll('main section[id]'))
+      .map(s => s.id)
+    expect(ids).toContain('how')
+    expect(ids).toContain('why')
+    expect(ids).toContain('workflow')
+    expect(ids.indexOf('how')).toBeLessThan(ids.indexOf('why'))
+    expect(ids.indexOf('why')).toBeLessThan(ids.indexOf('workflow'))
+    expect(screen.getByText('Trust the analysis')).toBeInTheDocument()
+    expect(screen.getByText('Analyze → Compare → Watch → Monitor')).toBeInTheDocument()
+  })
+
   it('scopes its own light theme instead of changing the global dark one', async () => {
     const { container } = await renderSettled()
     expect(container.querySelector('.intrinsica')).toBeInTheDocument()
