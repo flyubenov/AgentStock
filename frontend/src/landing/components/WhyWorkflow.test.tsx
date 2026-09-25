@@ -27,6 +27,16 @@ const STEP_TITLES = [
   'Monitor & automate',
 ]
 
+/** Pricing copy must not leak into the why/workflow sections (spec 5.5: "No plan
+ *  pill on this row"), and the pricing section now sits one section below.
+ *
+ *  The price branch is `\$\s*\d`, NOT a `\b`-wrapped `\$`. `\b` is a boundary
+ *  between a word and a non-word character, and `$` is itself a non-word
+ *  character — so `/\b\$\b/` only ever matches a `$` with word characters on
+ *  BOTH sides, which a real price like "$49/mo" never has. That branch was inert;
+ *  the other four carried the guard on their own. */
+const PLAN_COPY = /(\bUnlimited\b|\bPro\b|\bFree\b|per month|\$\s*\d)/
+
 describe('Why Intrinsica', () => {
   it('anchors the section the nav points at', () => {
     const { container } = render(<Why />)
@@ -80,9 +90,26 @@ describe('Why Intrinsica', () => {
     const { container } = render(<Why />)
     const scale = Array.from(container.querySelectorAll<HTMLElement>('.why-row'))
       .find(r => r.querySelector('.why-lbl')?.textContent === 'Put it to work at scale')!
+    // Without this, a renamed row label makes `.find()` return undefined and
+    // `within(undefined)` throws a TypeError from deep inside testing-library
+    // instead of failing here, readably, on the thing that actually changed.
+    expect(scale).toBeDefined()
     expect(within(scale).getByText('Re-evaluate whole watchlists')).toBeInTheDocument()
     expect(scale.querySelector('.pill')).toBeNull()
-    expect(scale.textContent).not.toMatch(/\b(Unlimited|Pro|Free|per month|\$)\b/)
+    expect(scale.textContent).not.toMatch(PLAN_COPY)
+  })
+
+  // The guard above can only ever prove an absence, so this proves the guard
+  // itself still has teeth — specifically the price branch, which was inert
+  // before (see PLAN_COPY). A bare dollar amount is the shape pricing copy
+  // actually takes, and the old `/\b\$\b/` branch did not match it.
+  it('has a plan-copy guard that catches a bare dollar amount', () => {
+    expect(PLAN_COPY.test('Starting at $49/mo')).toBe(true)
+    expect(PLAN_COPY.test('$0')).toBe(true)
+    expect(PLAN_COPY.test('$ 18.00')).toBe(true)
+    expect(/\b(Unlimited|Pro|Free|per month|\$)\b/.test('Starting at $49/mo')).toBe(false)
+    // Still no false positive on the prose these two sections are made of.
+    expect(PLAN_COPY.test('Rank a shortlist side by side, computed in parallel.')).toBe(false)
   })
 })
 
