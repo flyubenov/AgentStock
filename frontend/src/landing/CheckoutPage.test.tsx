@@ -193,10 +193,21 @@ describe('CheckoutPage', () => {
     expect(callsOf(track, 'free_plan_clicked')).toEqual([
       ['free_plan_clicked', { plan: 'Free', billing: 'annual', source: 'checkout' }],
     ])
-    // The mis-stamp, not just the missing one: 'pricing' posted from here would
-    // book a confirm as a CTA click and invert the drop-off it exists to serve.
-    expect(callsOf(track, 'free_plan_clicked')[0][1])
-      .not.toMatchObject({ source: 'pricing' })
+    // What used to sit here was `.not.toMatchObject({ source: 'pricing' })`,
+    // which could not fail on its own: the toEqual above already pins `source`
+    // to 'checkout' exactly, so no mutation reaches the negative without
+    // breaking the line above it first. It read as coverage of the mis-stamp
+    // and was none.
+    //
+    // This pins what that line only gestured at, and can fail while the
+    // assertion above still passes: the entire event stream this journey
+    // produces, in order. A second free_plan_clicked, a plan_selected
+    // manufactured out of the confirm (it belongs to the pricing CTA and to
+    // nothing else), a payment_button_clicked leaking into the free branch, or
+    // the checkout_started that carries the whole Free funnel going missing —
+    // each one breaks this and only this.
+    expect(track.mock.calls.map(c => c[0]))
+      .toEqual(['checkout_started', 'free_plan_clicked'])
   })
 
   // Placement is the whole point. Asking for an email while the visitor still
