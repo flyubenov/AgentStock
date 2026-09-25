@@ -1,7 +1,19 @@
 # Intrinsica Fake-Door Landing Page — Design Spec
 
-- **Date:** 2026-09-23
-- **Status:** Design approved by the user (mock `full-page-v21.html`); spec awaiting review → implementation plan.
+- **Date:** 2026-09-23 (corrected 2026-09-25 after implementation)
+- **Status:** **IMPLEMENTED** on branch `01-fake-door-test`. Design approved by the user
+  (mock `full-page-v21.html`).
+
+> ⚠ **Two things in §9 were wrong and are corrected inline below.** The shipped code is
+> the source of truth where they disagree.
+>
+> 1. **Abandonment must be filtered to `plan != 'Free'`.** Computed globally as written,
+>    it counts every completed Free journey as an abandonment.
+> 2. **Three events gained a `source` prop** (`analysis_started`, `analysis_completed`,
+>    `free_plan_clicked`) because each was firing from two places into one counter. The
+>    event list itself did not grow — it is still closed, and now enforced at build time.
+>
+> Full decision record: <https://claude.ai/artifact/QrzYRX1oAr6kYzAcENbkn2>
 - **Author:** f_lub (with Claude)
 - **Branch:** `01-fake-door-test`
 - **Source material:** `MonetizationPlan/Agent_Stock_Smoke_Fake_Test_Monetization_Plan.md`, `MonetizationPlan/FreeProUnlimited.md`, `MonetizationPlan/NewPlatformName-Branding-Positioning.txt`
@@ -344,10 +356,35 @@ separately-rounded headline that could disagree with its own breakdown.
 
 One event per funnel step, each carrying `visitor_id` and a timestamp:
 
-`page_view` → `analysis_started` (tickers, count) → `analysis_completed` (duration) →
-`breakdown_opened` (ticker, assessment tab) → `methodology_viewed` (assessment) →
-`pricing_viewed` → `plan_selected` (plan, billing) → `checkout_started` (plan, billing) →
-**`payment_button_clicked`** (plan, billing) → `email_submitted` (optional).
+`page_view` → `analysis_started` (tickers, count, source) → `analysis_completed`
+(duration_ms, count, source) → `breakdown_opened` (ticker, assessment tab) →
+`methodology_viewed` (assessment) → `pricing_viewed` → `plan_selected` (plan, billing) →
+`checkout_started` (plan, billing) → **`payment_button_clicked`** (plan, billing) →
+`email_submitted` (optional).
+
+> **CORRECTION (post-implementation, 2026-09-25) — `source` props added; the event list
+> itself did NOT grow.** Three events gained a `source` prop during implementation, each
+> because one event name was firing from two places and collapsing distinguishable things
+> into one counter. A prop on an existing event is the sanctioned move here; a new event
+> is not.
+>
+> - `analysis_started` and `analysis_completed` carry **`source: 'sample' | 'typed'`**.
+>   The page auto-runs a marquee analysis on mount and the compare chip runs three fixed
+>   tickers; neither is the visitor's own work. Without this prop every page load emits an
+>   analysis nobody asked for, the started→completed step reads ~100% for everyone, and
+>   `duration_ms` averages a warm cached lookup against cold multi-ticker runs. `count`
+>   does **not** disambiguate them — the sample is one ticker and so is a typed
+>   single-ticker run.
+> - `free_plan_clicked` carries **`source: 'pricing' | 'checkout'`**. It fires from the
+>   pricing CTA *and* the checkout confirm — two different funnel stages. Without this
+>   prop, free-path drop-off cannot be computed at all.
+>
+> **`source` carries different vocabularies on different events**, so never pivot on
+> `source` alone; group by `(event, source)`.
+>
+> The closed list is now enforced two ways: `analytics.test.ts` pins `Object.values(EVENTS)`
+> against a hand-transcribed copy of the list below, and `track()` takes a narrowed
+> `FunnelEvent` type so an off-spec event name fails the **build**, not just a test.
 
 - **Primary metric:** unique visitors reaching `payment_button_clicked` ÷ unique visitors.
 - **`free_plan_clicked` is a separate event** and is excluded from that ratio.
@@ -377,6 +414,23 @@ SQLite table behind the same endpoint — the route and payload stay unchanged e
 
 Abandonment is **derived**, not logged: `checkout_started` minus `payment_button_clicked` for
 the same `visitor_id` is the final-step drop-off, so both events must fire reliably.
+
+> **CORRECTION (post-implementation, 2026-09-25) — this formula is wrong computed globally.**
+>
+> Filter to **`plan != 'Free'`**. The Free path routes through the *same* checkout screen,
+> so it fires `checkout_started` — but on the click it fires `free_plan_clicked`, never
+> `payment_button_clicked`. Subtracting globally therefore counts **every completed Free
+> journey as an abandonment**, which produces a plausible-looking wrong number rather than
+> an obviously broken one.
+>
+> This is why `checkout_started` carries `plan` on every path that fires it. Do **not**
+> "fix" it by adding an event (§9's list is closed) or by dropping `checkout_started` for
+> Free (that loses the Free funnel entirely).
+>
+> Related: **nothing de-duplicates server-side.** `backend/routers/events.py` appends one
+> row per event, so "de-duplicate server-side by `visitor_id`" above is an instruction
+> about how to **count** when analysing the sheet, not a description of what the endpoint
+> does. Count distinct `visitor_id`; the primary metric is unique *visitors*, not events.
 
 ## 10. Demo limits and abuse
 

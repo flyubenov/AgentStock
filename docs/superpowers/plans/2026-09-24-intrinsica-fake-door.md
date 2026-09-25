@@ -1,5 +1,28 @@
 # Intrinsica Fake-Door Landing Page Implementation Plan
 
+> ## ⚠ THIS PLAN HAS BEEN EXECUTED — AND IT CONTAINED DEFECTS
+>
+> Implemented 2026-09-24/25 on branch `01-fake-door-test`. **The shipped code is the
+> source of truth, not this document.** Five code sketches below were wrong and are
+> marked inline with `CORRECTION (post-implementation)` blocks. Do not copy a code block
+> from this plan without reading the correction that follows it:
+>
+> | Where | Defect |
+> |---|---|
+> | Task 11, Step 9 (`toggle`) | `track` called **inside** the `setOpen` updater → fired twice per expand under StrictMode; also missing the spec's `assessment` prop |
+> | Task 14, `CheckoutPage` | `params.get('plan') ?? 'Pro'` — unvalidated; renders a live payment button for a plan nobody chose and echoes arbitrary query text into the honesty copy |
+> | Task 16, order test | `indexOf`-only ordering — **passes when the event never fired** |
+> | Task 16, `noPaymentInput` | blacklist misses address and name fields, the page's own stated requirement |
+> | Task 16, failing-endpoint test | `vi.fn` stub marks the rejection handled, erasing the signal; an `async` stub can never reach the `try/catch` |
+>
+> **Also note:** three tasks were authored during execution and appear nowhere below —
+> **8b** (two-speed server-side cache), **8c** (yfinance info-cache TTL) and **8d** (the
+> 5-analysis demo limit). Their only written requirement is the briefs in
+> `.superpowers/sdd/2026-09-24-intrinsica-fake-door/`.
+>
+> Full decision record, including why each correction was made:
+> <https://claude.ai/artifact/QrzYRX1oAr6kYzAcENbkn2>
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Ship a public smoke-test funnel that runs a real four-assessment analysis on visitor-chosen tickers, presents the plans, and measures how many visitors click "Proceed to payment" — a button that never charges and discloses honestly.
@@ -2325,13 +2348,28 @@ In `frontend/src/landing/LandingPage.tsx`, add the open-row state and render the
   const [open, setOpen] = useState<Record<string, boolean>>({})
 
   const toggle = useCallback((ticker: string) => {
-    setOpen(prev => {
-      const next = { ...prev, [ticker]: !prev[ticker] }
-      if (next[ticker]) track(EVENTS.breakdownOpened, { ticker })
-      return next
-    })
-  }, [])
+    const opening = !open[ticker]
+    setOpen(prev => ({ ...prev, [ticker]: !prev[ticker] }))
+    if (opening) {
+      track(EVENTS.breakdownOpened, { ticker, assessment: FRAMEWORK[assessment].name })
+    }
+  }, [open, assessment])
 ```
+
+> **CORRECTION (post-implementation, 2026-09-25).** The code above is the corrected
+> form. As originally written this block had **two** defects:
+>
+> 1. **`track` was called inside the `setOpen` updater.** React StrictMode invokes
+>    updaters twice in development, so `breakdown_opened` fired **twice per expand**.
+>    An updater must be pure. Compute the transition from current state *before*
+>    `setOpen` and fire the event beside it, never within it.
+> 2. **The `assessment` prop was missing.** Spec §9 names this event as
+>    `breakdown_opened (ticker, assessment tab)`. Send the tab's display name
+>    (`FRAMEWORK[assessment].name`), never the `AssessmentId` index — that is an
+>    internal identifier.
+>
+> Shipped as `LandingPage.tsx:113`. Defect 1 was caught in this task's review;
+> defect 2 survived to the final whole-branch review.
 
 and inside `<main>`, after `<Hero ... />`:
 
@@ -3985,7 +4023,7 @@ import { track, EVENTS } from '../lib/analytics'
 
 export default function CheckoutPage() {
   const [params] = useSearchParams()
-  const plan = params.get('plan') ?? 'Pro'
+  const plan = params.get('plan') ?? 'Pro'   // ⚠ SEE CORRECTION BELOW — DO NOT SHIP
   const billing = (params.get('billing') === 'monthly' ? 'monthly' : 'annual') as Billing
   const free = plan === 'Free'
 
@@ -4093,6 +4131,37 @@ export default function CheckoutPage() {
   )
 }
 ```
+
+> **CORRECTION (post-implementation, 2026-09-25) — the most serious defect in this plan.**
+>
+> `const plan = params.get('plan') ?? 'Pro'` takes an unvalidated URL parameter and uses
+> it directly. Two ways it fails, both user-visible on the one page that must never
+> overstate what it is:
+>
+> - **`/checkout` with no `plan` at all** silently becomes Pro, rendering a live
+>   "Proceed to payment" button for a plan the visitor never chose, and counting a
+>   `checkout_started` for it.
+> - **`/checkout?plan=Bogus`** renders `Bogus` straight back into the page, including
+>   into the honesty copy: *"We've recorded your request for **Bogus — Annual**"*. That
+>   is a false statement about a transaction, produced from the query string.
+>
+> **What shipped instead** (`CheckoutPage.tsx:78`): resolve the parameter against `PLANS`
+> and treat "not one of ours" as its own state.
+>
+> ```tsx
+> const plan = PLANS.find(p => p.name === params.get('plan'))   // undefined if unknown
+> const billing: Billing = params.get('billing') === 'monthly' ? 'monthly' : 'annual'
+> const free = plan?.name === 'Free'
+> ```
+>
+> When `plan` is undefined the page renders a **"No plan selected"** state: no payment
+> button, no disclosure, and **no `checkout_started` event** — counting it would inflate
+> the denominator of the derived abandonment rate with visitors who were never given
+> anything to abandon. The rest of the block above still assumes `plan` is a string, so
+> take the shipped file as the reference rather than patching this sketch.
+>
+> The same rule covers `billing`: anything that is not a period we sell falls back to
+> annual, which is what the pricing cards open on.
 
 Add `freePlanClicked: 'free_plan_clicked'` to the test's analytics mock so the free path resolves.
 
@@ -4243,7 +4312,11 @@ describe('the fake-door funnel', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Proceed to payment' }))
 
     const names = seen.map(e => e.event)
-    expect(names.filter(n => n === 'payment_button_clicked')).toHaveLength(1)
+    // Presence FIRST, then exactly-once, then order — see correction note below.
+    for (const ev of ['plan_selected', 'checkout_started', 'payment_button_clicked']) {
+      expect(names, `funnel is missing ${ev}`).toContain(ev)
+      expect(names.filter(n => n === ev), `${ev} fired more than once`).toHaveLength(1)
+    }
     expect(names.indexOf('plan_selected')).toBeLessThan(names.indexOf('checkout_started'))
     expect(names.indexOf('checkout_started'))
       .toBeLessThan(names.indexOf('payment_button_clicked'))
@@ -4251,6 +4324,31 @@ describe('the fake-door funnel', () => {
     const click = seen.find(e => e.event === 'payment_button_clicked')!
     expect(click.props).toEqual({ plan: 'Pro', billing: 'annual' })
   })
+```
+
+> **CORRECTION (post-implementation, 2026-09-25) — a vacuous order assertion.**
+>
+> The three `toContain` / `toHaveLength(1)` lines above were **added** by this
+> correction. As originally written this test asserted order with `indexOf` alone:
+>
+> ```ts
+> expect(names.indexOf('plan_selected')).toBeLessThan(names.indexOf('checkout_started'))
+> ```
+>
+> `Array.indexOf` returns `-1` for an absent element, so **the assertion passes when the
+> first event never fired at all** (`-1 < 2`), and fails misleadingly when the *second*
+> is absent (`4 < -1`). An order assertion alone cannot tell "A came before B" from
+> "A never happened". Suppressing `plan_selected` leaves this chain green.
+>
+> Assert **presence, then exactly-once, then order.** Verified by mutation: with the
+> presence checks in place, suppressing any one funnel event fails the test; without
+> them, it passes with the event entirely absent.
+>
+> This is a general rule for this codebase, not a one-off: `indexOf`-based ordering is
+> only non-vacuous when presence is separately asserted. Read the surrounding lines
+> before judging any such assertion — grepping for the pattern produces false positives.
+
+```tsx
 
   it('keeps a free click out of the paid funnel', async () => {
     const seen = captureEvents()
@@ -4278,6 +4376,7 @@ describe('the fake-door funnel', () => {
       }
       expect(container.textContent).not.toMatch(/card number|cvc|cvv|expiry date/i)
     }
+    // ⚠ BLACKLIST ONLY — misses address and name fields. See correction below.
 
     noPaymentInput()
     await userEvent.click(screen.getByRole('button', { name: 'Choose Unlimited' }))
@@ -4304,10 +4403,48 @@ describe('the fake-door funnel', () => {
 })
 ```
 
+> **CORRECTION (post-implementation, 2026-09-25) — two more defects in the sketch above.**
+>
+> **1. `noPaymentInput` is a blacklist, and blacklists get outflanked.** `PAYMENT_WORDS`
+> covers card / CVC / expiry / bank but has no `address`, `postal`, `zip` or name term,
+> and `text` is an allowed input type. Verified by planting
+> `<input type="text" placeholder="Billing address" />` and `"Full name"` on the landing
+> page: **this test passes.** The page's own claim is "no card, payment, **address or
+> name** input anywhere in the DOM", so the guard did not cover its own requirement.
+>
+> What shipped is a **whitelist**: assert the inputs present are exactly the sanctioned
+> ones, by count *and* identity — one `#analyze` ticker box on the landing page, zero on
+> the checkout before the click, `input#co-email` after it. Match by where an input lives
+> (container + id), not by words in its placeholder, so rewording copy cannot widen the
+> whitelist. Keep the word sweep as a second, independent layer for payment surfaces
+> built from non-input elements, and check identity words (address / street / postal /
+> name) against `placeholder`, `aria-label`, `name`, `autocomplete` and the associated
+> `<label>` only — **never `outerHTML`**, where a bare `name` term matches every
+> `name="…"` attribute in the document.
+>
+> **2. The `vi.fn` stub erases the signal this test exists to catch.** Two problems:
+>
+> - `vi.fn` wraps the call and attaches its own handler to the returned promise, which
+>   marks the rejection **handled**. So if `track` lost its `.catch(() => {})`, the
+>   resulting unhandled rejection would be invisible and the test would still pass. Use a
+>   **plain (non-`vi.fn`) rejecting stub** and assert against a
+>   `process.on('unhandledRejection')` guard.
+> - An `async` stub cannot throw **synchronously**, so it never reaches `track`'s
+>   `try/catch` at all. A separate test needs
+>   `() => { throw new Error('blocked') }` — not `async` — to exercise that path.
+>
+> Verified by mutation: with the corrected tests, dropping `track`'s `.catch` fails with
+> six unhandled rejections against zero, and dropping its `try/catch` fails outright.
+> Against the sketch above, **both mutations pass silently** — they were the only
+> zero-failure mutants found in the entire branch's mutation sweep, and neither was on
+> the controller's mutant list. The lesson generalises: *a mutation sweep is only as good
+> as the mutants someone thought to write.*
+
 - [ ] **Step 2: Run it**
 
 Run: `cd frontend && npm test -- src/landing/funnel.test.tsx`
 Expected: 4 passed. A failure here is a real funnel defect — fix the page, not the test.
+(Shipped as 7 tests after the corrections above; see `frontend/src/landing/funnel.test.tsx`.)
 
 - [ ] **Step 3: Run everything**
 
