@@ -45,13 +45,35 @@ def _ok_run(ticker: str, price: float = 100.0, fair_value: float = 110.0) -> dic
 
 def _failed_run(ticker: str) -> dict:
     """What _run_one_guarded actually returns for a dead ticker or a Yahoo outage --
-    it does not raise, it completes with a status="failed" dump and fv_failed=True."""
+    it does not raise, it completes with a status="failed" dump and fv_failed=True,
+    and (the genuine-failure case) no current_price: the ticker never resolved at
+    all, so there is no price -- batch.py's own words for this discriminator."""
     return {
         "result": {
             "ticker": ticker, "company_name": None, "current_price": None,
             "stock_type": None, "fair_value": None, "price_vs_fair_value_pct": None,
             "fair_value_breakdown": {}, "status": "failed",
             "errors": ["yfinance data unavailable"], "screener": None, "risk_reward": None,
+        },
+        "fv_failed": True,
+    }
+
+
+def _declined_run(ticker: str, price: float = 42.0) -> dict:
+    """What _run_one_guarded returns for a real company one of valuation/engine.py's
+    guards declined to value (pre-profit guard / sub-floor EV-Sales guard /
+    non-positive-composite clamp): fv_failed=True and status="failed", but with a
+    real current_price, company_name, screener and risk_reward attached -- this is
+    NOT a "no data" failure, and must not be negative-cached like one."""
+    return {
+        "result": {
+            "ticker": ticker, "company_name": f"{ticker} Inc.", "current_price": price,
+            "stock_type": "PRE_PROFIT", "fair_value": None, "price_vs_fair_value_pct": None,
+            "fair_value_breakdown": {}, "status": "failed",
+            "errors": ["pre-profit: growth insufficient to support a valuation"],
+            "screener": {"ticker": ticker, "quality_score": 62.0, "status": "completed"},
+            "risk_reward": {"ticker": ticker, "ratio": 1.1, "tier": "Balanced",
+                             "metric_scores": {}, "status": "completed", "errors": []},
         },
         "fv_failed": True,
     }
@@ -346,27 +368,60 @@ async def test_successive_fast_refreshes_are_not_memoized():
     assert first_refresh["current_price"] != second_refresh["current_price"]
 
 
-# --- 12 (fix round 2, finding 1). A failed run is not pinned for the slow TTL ---
-async def test_a_failed_run_is_retried_after_the_fast_ttl_not_pinned_for_three_days(monkeypatch):
+# --- 12 (fix round 2, finding 1). A *genuine* no-data failure is not pinned for the
+# slow TTL -- current_price is None, so it's retried on SLOW_NEGATIVE_TTL instead. ---
+async def test_a_genuine_failure_is_retried_after_the_slow_negative_ttl_not_three_days(monkeypatch):
     run = AsyncMock(side_effect=lambda t: _failed_run(t))
     fake_time = [0.0]
     monkeypatch.setattr(cache, "_now", lambda: fake_time[0])
 
     with _patched(run=run):
         first = await cache.get_analysis("DEAD")
-        # Still inside the negative-cache window (the fast TTL) -- must not retry yet.
-        fake_time[0] += cache.FAST_TTL - 1
+        # Still inside the negative-cache window -- must not retry yet.
+        fake_time[0] += cache.SLOW_NEGATIVE_TTL - 1
         await cache.get_analysis("DEAD")
         assert run.await_count == 1
 
-        # Past the fast TTL, nowhere near the full 3-day slow TTL -- a failed result
-        # must be retried here, not left pinned as truth until SLOW_TTL elapses.
+        # Past the negative TTL, nowhere near the full 3-day slow TTL -- a genuine
+        # failure must be retried here, not left pinned as truth until SLOW_TTL.
         fake_time[0] += 2
         second = await cache.get_analysis("DEAD")
 
     assert run.await_count == 2
     assert first["status"] == "failed"
     assert second["status"] == "failed"
+
+
+# --- 12b (fix round 3, finding 1). A *declined-but-real* ticker (fv_failed=True, but
+# current_price populated -- a legitimate valuation guard, not a data failure) keeps
+# the full SLOW_TTL, not the negative cache. ---
+async def test_a_declined_but_real_ticker_keeps_the_full_slow_ttl(monkeypatch):
+    run = AsyncMock(side_effect=lambda t: _declined_run(t, price=42.0))
+    fake_time = [0.0]
+    monkeypatch.setattr(cache, "_now", lambda: fake_time[0])
+
+    # quote pinned to the same 42.0: this test is about the *slow* layer's negative
+    # cache, not the fast layer's own (separately tested) refresh cadence.
+    with _patched(run=run, quote=AsyncMock(return_value=42.0)):
+        first = await cache.get_analysis("PREPROFIT")
+        # Well past what the negative cache would allow, still short of SLOW_TTL --
+        # a decline that cannot change until the fundamentals do must NOT re-run here.
+        fake_time[0] += cache.SLOW_NEGATIVE_TTL * 10
+        second = await cache.get_analysis("PREPROFIT")
+        assert run.await_count == 1
+
+        # Past the full SLOW_TTL, it does retry, same as any other cached result.
+        fake_time[0] += cache.SLOW_TTL
+        await cache.get_analysis("PREPROFIT")
+
+    assert run.await_count == 2
+    assert first["status"] == "failed"
+    assert first["current_price"] == 42.0
+    assert second["current_price"] == 42.0
+    # The screener/risk_reward attached to a legitimate decline must still be served,
+    # not discarded because the fair-value leg alone reports "failed".
+    assert first["screener"] is not None
+    assert first["risk_reward"] is not None
 
 
 # --- 13 (fix round 2, finding 3). A fast-refresh failure serves stale even if its own

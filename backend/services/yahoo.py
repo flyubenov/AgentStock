@@ -63,10 +63,10 @@ async def fetch_quote(ticker: str) -> float | None:
     calls within a process's lifetime -- unlike fetch_ticker_info above.
 
     Deliberately NOT memoized (contrast _fetch_sync's @lru_cache, "cached per ticker
-    per process"): this exists specifically so the landing cache's 15-minute
-    fast-layer refresh (backend/landing/cache.py) gets a genuinely fresh price on
-    every call, instead of the same frozen dict _fetch_sync's cache would otherwise
-    hand back for the rest of the process's life -- do not add an lru_cache here, that
+    per process"): this exists specifically so the landing cache's fast-layer refresh
+    (backend/landing/cache.py, LANDING_FAST_TTL) gets a genuinely fresh price on every
+    call, instead of the same frozen dict _fetch_sync's cache would otherwise hand
+    back for the rest of the process's life -- do not add an lru_cache here, that
     would silently turn the fast layer back into a no-op in any warm instance.
 
     yfinance's Ticker.fast_info was evaluated as the cheap-quote path first, but in

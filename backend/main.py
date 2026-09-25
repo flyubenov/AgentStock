@@ -1,6 +1,6 @@
 import asyncio
 import os
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -35,6 +35,11 @@ async def lifespan(app: FastAPI):
     yield
     if _seed_task is not None and not _seed_task.done():
         _seed_task.cancel()
+        # Await it: a cancelled-but-never-awaited task can log "Task was destroyed
+        # but it is pending" once the loop tears down. The CancelledError this raises
+        # is the expected, successful outcome of the cancel() above, not a failure.
+        with suppress(asyncio.CancelledError):
+            await _seed_task
 
 
 app = FastAPI(title="Intrinsica", lifespan=lifespan)

@@ -29,6 +29,14 @@ SLOW_TTL = float(os.getenv("LANDING_SLOW_TTL", "259200"))   # 3 days
 # 1 hour, not 15 minutes: the core assessments move on earnings, not intraday, and
 # Yahoo is not licensed for commercial use -- every avoided call reduces exposure.
 FAST_TTL = float(os.getenv("LANDING_FAST_TTL", "3600"))
+# A true slow-layer failure (see _populate_slow's "failed" discriminator -- a dead
+# ticker or a Yahoo outage, never a legitimate decline) is retried on this cadence
+# instead of the full SLOW_TTL. Deliberately its own constant, not a reuse of
+# FAST_TTL: that reuse once meant a fast-TTL tuning change (900 -> 3600) silently
+# quadrupled this window too, as an unintended side effect. 900s (15 minutes) is
+# a reasonable "is Yahoo back yet / was this a blip" cadence -- frequent enough to
+# recover quickly from a transient outage, far short of hammering.
+SLOW_NEGATIVE_TTL = float(os.getenv("LANDING_SLOW_NEGATIVE_TTL", "900"))
 # A failed fast refresh (Yahoo hiccup, rate limit) keeps serving the stale price/R-R
 # per the degradation rule below, but must not sit at the *old* timestamp -- that
 # would leave it permanently "expired", so every subsequent view would re-attempt the
@@ -42,6 +50,15 @@ FAST_NEGATIVE_TTL = float(os.getenv("LANDING_FAST_NEGATIVE_TTL", "60"))
 # services/yahoo.py for why that matters -- and the per-ticker lock is held across
 # this await, so an unbounded call would queue every concurrent viewer of that ticker
 # behind one stuck socket. A few seconds is plenty for a quote.
+#
+# What this does NOT fix: fetch_quote runs on yf_pool's fixed-size ThreadPoolExecutor
+# (services/yf_pool.py), and asyncio.wait_for can only abandon *our* await on that
+# future -- it cannot cancel a thread that is already mid-call inside yfinance's
+# blocking retry/backoff. A genuinely stalled quote still occupies one of that pool's
+# eight worker threads for the whole rate-limit retry loop, regardless of this
+# timeout; this constant only stops the lock (and every viewer queued behind it) from
+# waiting on it too. That pool-level exposure is a separate, larger issue than this
+# task's scope and is recorded for the final review, not fixed here.
 FAST_REFRESH_TIMEOUT = float(os.getenv("LANDING_FAST_REFRESH_TIMEOUT", "5"))
 
 # A crawler hitting this public, unauthenticated endpoint with fresh tickers must not
@@ -71,10 +88,16 @@ _now = time.monotonic
 #   that side-fetch itself failed -- the main slow-layer result still stands, but a
 #   fast refresh degrades to "no cached inputs to refresh from" until the next slow
 #   repopulation.
-#   "failed" is True when _run_one_guarded itself completed but declined the ticker
-#   (fv_failed) -- a dead ticker or a Yahoo outage does not raise, it returns a
-#   status="failed" dump, and that must not be pinned as truth for a full 3 days (see
-#   get_analysis: a failed slow entry is retried after FAST_TTL, not SLOW_TTL).
+#   "failed" is True only for a *true* failure -- status == "failed" AND
+#   current_price is None (no data at all: the ticker never resolved). This is
+#   deliberately narrower than _run_one_guarded's own fv_failed: three legitimate
+#   fair-value declines (valuation/engine.py's pre-profit guard, sub-floor EV/Sales
+#   guard, and non-positive-composite clamp) also return status="failed" but with a
+#   real company_name/current_price/screener/risk_reward attached -- batch.py's own
+#   Sheets-upsert gate draws the same line for the same reason. A declined-but-real
+#   ticker's decline doesn't change until the fundamentals do, so it gets the full
+#   SLOW_TTL like any other result; only a genuine no-data failure gets the short
+#   SLOW_NEGATIVE_TTL (see get_analysis).
 #
 # Fast layer entry:  {"price": float | None, "rr": <RiskRewardResult dump> | None,
 #                      "ts": float, "failed": bool}
@@ -176,17 +199,29 @@ async def _populate_slow(key: str, ts: float) -> dict:
     side-fetch degrades to inputs=None (the main result still stands); a failure of
     _run_one_guarded itself propagates -- there is no result to cache at all.
 
-    fv_failed is carried through as "failed" so get_analysis can give a declined
-    ticker (dead symbol, Yahoo outage) a short negative-cache life instead of pinning
-    a blank, error-shaped payload for the full 3-day slow TTL -- before this cache
-    existed, every page view simply retried."""
+    A true no-data failure (status="failed" and no current_price -- the ticker never
+    resolved) is carried through as "failed" so get_analysis can give it a short
+    negative-cache life instead of pinning a blank, error-shaped payload for the full
+    3-day slow TTL -- before this cache existed, every page view simply retried.
+
+    This is NOT the same test as _run_one_guarded's own fv_failed: fv_failed is true
+    for three legitimate fair-value declines too (valuation/engine.py's pre-profit
+    guard, sub-floor EV/Sales guard, non-positive-composite clamp), each of which
+    still carries a real current_price/company_name/screener/risk_reward. Those are
+    real tickers whose decline won't change until the fundamentals do -- pinning them
+    to a negative TTL would re-run three engines and up to three Sheets upserts every
+    SLOW_NEGATIVE_TTL, forever, for a result that cannot change until SLOW_TTL's own
+    horizon anyway. batch.py's own Sheets-upsert gate (`fv_res.status != "failed" or
+    fv_res.current_price is not None`) draws exactly this line for the same reason;
+    this mirrors it."""
     run_out, inputs_or_exc = await asyncio.gather(
         _run_one_guarded(key), fetch_risk_reward_inputs(key), return_exceptions=True)
     if isinstance(run_out, Exception):
         raise run_out
     inputs = None if isinstance(inputs_or_exc, Exception) else inputs_or_exc
-    return {"result": run_out["result"], "inputs": inputs, "ts": ts,
-            "failed": bool(run_out.get("fv_failed"))}
+    result = run_out["result"]
+    truly_failed = result.get("status") == "failed" and result.get("current_price") is None
+    return {"result": result, "inputs": inputs, "ts": ts, "failed": truly_failed}
 
 
 async def _refresh_fast(slow_entry: dict) -> tuple[float | None, dict | None]:
@@ -197,9 +232,10 @@ async def _refresh_fast(slow_entry: dict) -> tuple[float | None, dict | None]:
 
     Uses services.yahoo.fetch_quote, not fetch_ticker_info: fetch_ticker_info's
     underlying fetch is @lru_cache'd forever per process (see its docstring), so a
-    15-minute-or-however-long refresh built on it would silently keep re-deriving from
-    the exact same frozen price for the life of a warm instance -- a real bug this
-    cache shipped with once already. fetch_quote is the same single yfinance call,
+    fast-layer refresh built on it would silently keep re-deriving from the exact
+    same frozen price for the life of a warm instance, no matter how short FAST_TTL
+    is set to -- a real bug this cache shipped with once already. fetch_quote is the
+    same single yfinance call,
     deliberately left unmemoized for exactly this caller. The caller wraps this whole
     call in asyncio.wait_for -- fetch_quote's own yf.Ticker().info accepts no timeout,
     and the per-ticker lock is held across this await."""
@@ -236,7 +272,7 @@ async def get_analysis(ticker: str) -> dict:
 
             slow = _slow.get(key)
             just_refreshed_slow = False
-            slow_ttl = FAST_TTL if (slow is not None and slow.get("failed")) else SLOW_TTL
+            slow_ttl = SLOW_NEGATIVE_TTL if (slow is not None and slow.get("failed")) else SLOW_TTL
             if slow is None or (now - slow["ts"]) >= slow_ttl:
                 try:
                     slow = await _populate_slow(key, now)
@@ -281,6 +317,7 @@ async def get_analysis(ticker: str) -> dict:
                                     "ts": now, "failed": True}
                             _fast[key] = fast
                             _touch(_fast, key)
+                            _evict(_fast)
                         else:
                             dump = slow["result"]
                             fast = {"price": dump.get("current_price"),
