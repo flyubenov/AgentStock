@@ -21,6 +21,14 @@ import ts from 'typescript'
  *  next person to delete the documentation. So the text below is extracted
  *  first, and only string literals, template chunks and JSX text survive it. */
 
+/** THE BOUNDARY: this glob is rooted at `src/landing/` and does not follow
+ *  landing copy that is placed outside it. A shared component under
+ *  `src/components/`, or a rendered string in `src/App.tsx`, escapes this lint
+ *  entirely — and the 13-path assertion below would not notice, because it
+ *  checks that known paths are present, not that no copy lives elsewhere. That
+ *  is correct today (`src/App.tsx` carries only route paths, and every landing
+ *  surface lives under this directory); anyone adding a landing surface outside
+ *  `src/landing/` must widen this glob or the copy ships unlinted. */
 const files = import.meta.glob('./**/*.{ts,tsx}', {
   eager: true,
   query: '?raw',
@@ -110,6 +118,18 @@ const trips = (pattern: RegExp, source: string, file = 'probe.tsx') =>
 
 const BANNED_WORD = /signal/i
 const BANNED_RATIO = /Risk\s*[/-]\s*Reward/i
+/** The same ban in the other direction. Deliberately HYPHEN-ONLY, and
+ *  deliberately not `[/-]`: the sanctioned house label is `Reward / Risk`
+ *  (framework.ts, Breakdown.tsx) and `Reward ÷ Risk`, so a slash or a division
+ *  sign between those two words is the correct copy, not an offence. What is
+ *  banned is the hyphenated compound `Reward-Risk` / `Reward - Risk`, which
+ *  BANNED_RATIO above cannot see because it is anchored Risk-first.
+ *
+ *  The trailing word boundary keeps `Risk-Favored` and `Reward-Favored` (framework.ts:146,
+ *  a spec 5.4 sanctioned band) out of it: matching requires the two words to be
+ *  adjacent across nothing but a hyphen and space, which a band listing
+ *  `1.3–2.0× Reward-Favored, … 0.5–0.8× Risk-Favored` never is. */
+const BANNED_REVERSED = /Reward\s*-\s*Risk\b/i
 const BANNED_ABBREV = /\bR\s*[/-]\s*R\b/
 const CLASSIFIER_CODE = /\b[A-Z]{3,}_[A-Z]{3,}\b/
 const VALUE_RANGE = /fair[- ]value range|value range/i
@@ -127,8 +147,12 @@ const WORDED_CUTOFF =
   /\b(above|below|over|under|at least|no more than)\s+[\d.]+\s*%?\s*(scores?|earns?|gets?|points?)\b/i
 
 describe('copy guard — the files it scans', () => {
+  // Pinned, not `> 5`: the named-path test below already supersedes a loose
+  // lower bound for the 13 copy-bearing surfaces, so the only thing a bound can
+  // still add is visibility of a file deleted from OUTSIDE that list
+  // (demoLimit.ts, format.ts, types.ts). An exact count makes that loud.
   it('finds landing sources to check', () => {
-    expect(sources.length).toBeGreaterThan(5)
+    expect(sources.length).toBe(16)
   })
 
   // A glob that silently matched nothing passes every guard below, for ever.
@@ -173,6 +197,8 @@ describe('copy guard — banned vocabulary', () => {
   it('never says "Risk/Reward" — the ratio is reward over risk', () => {
     expect(offenders(BANNED_RATIO)).toEqual([])
     expect(offenders(BANNED_ABBREV)).toEqual([])
+    // Both orders are banned, so both are run over the live copy.
+    expect(offenders(BANNED_REVERSED)).toEqual([])
   })
 
   it('leaks no internal classifier code', () => {
@@ -215,6 +241,18 @@ describe('copy guard — it bites', () => {
     expect(trips(BANNED_RATIO, 'const x = "Risk/Reward"')).toBe(true)
     expect(trips(BANNED_RATIO, 'const C = () => <span>Risk - Reward</span>')).toBe(true)
     expect(trips(BANNED_ABBREV, 'const x = "the R/R ratio"')).toBe(true)
+  })
+
+  // The gap BANNED_RATIO left open: it is anchored Risk-first, so the reverse
+  // hyphenated compound sailed through. This is the file whose whole purpose is
+  // catching copy in components with no test of their own, so a banned
+  // `Reward-Risk` in SiteFooter.tsx — the very file used to prove this guard
+  // works — would have shipped green.
+  it('catches the reverse hyphenated compound the Risk-first pattern misses', () => {
+    expect(trips(BANNED_REVERSED, 'const x = "Reward-Risk"')).toBe(true)
+    expect(trips(BANNED_REVERSED, 'const C = () => <span>Reward - Risk</span>')).toBe(true)
+    // Proof the two patterns are not the same pattern: the old one is blind here.
+    expect(trips(BANNED_RATIO, 'const x = "Reward-Risk"')).toBe(false)
   })
 
   it('catches a leaked classifier code in rendered copy', () => {
@@ -282,12 +320,20 @@ describe('copy guard — it does not bite code or comments', () => {
       'roughly 80+ reads as a wide moat, 60–79 established, 40–59 narrow, below 40 little or none.',
       'Reward ÷ risk, clamped to 0.2–5.0×. Roughly: 2.0× and above is Asymmetric Upside, 1.3–2.0× Reward-Favored, 0.8–1.3× Balanced, 0.5–0.8× Risk-Favored, below that a Value Trap.',
       'ratio · 0.2–5.0×',
+      // The two house labels themselves, verbatim from framework.ts:129 and
+      // Breakdown.tsx:194. Slash and division sign are the SANCTIONED forms.
+      'Reward / Risk',
+      'Reward ÷ Risk · range 0.2×–5.0× · higher is better —',
     ]) {
       const source = `export const note = ${JSON.stringify(band)}`
       expect(trips(OPERATOR_CUTOFF, source), band).toBe(false)
       expect(trips(WORDED_CUTOFF, source), band).toBe(false)
       expect(trips(BANNED_RATIO, source), band).toBe(false)
       expect(trips(BANNED_ABBREV, source), band).toBe(false)
+      // The reverse pattern must be as blind to sanctioned copy as the forward
+      // one. `Reward-Favored` and `Risk-Favored` sit in the same sentence as
+      // each other in the band above; a looser pattern would join them.
+      expect(trips(BANNED_REVERSED, source), band).toBe(false)
     }
   })
 })
