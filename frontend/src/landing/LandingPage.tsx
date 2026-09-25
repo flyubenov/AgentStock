@@ -39,10 +39,6 @@ export default function LandingPage() {
   const analyze = useCallback(async (tickers: string[], source: AnalyzeSource) => {
     setBusy(true)
     setNotice(null)
-    if (source === 'typed') {
-      recordRun()
-      setExhausted(!canAnalyze())
-    }
     track(EVENTS.analysisStarted, { tickers, count: tickers.length, source })
     const started = Date.now()
     const controller = new AbortController()
@@ -68,6 +64,18 @@ export default function LandingPage() {
       if (body.error) setNotice(body.error)
       else if (body.invalid.length) setNotice(`Not recognised: ${body.invalid.join(', ')}`)
       setRows(results)
+      // The allowance means "a run the visitor got value from" — distinct from
+      // analysis_started above, which means "a run was attempted" and fires
+      // unconditionally. Only count a typed run once it actually produced at
+      // least one row: a partial success (one bad ticker, others rendered) still
+      // showed the visitor something and counts; a server error (over the cap,
+      // empty input — no engines ran) or an all-invalid response (no rows) does
+      // not. A thrown/aborted fetch never reaches here at all, so it can't count
+      // either — see the catch block below.
+      if (source === 'typed' && !body.error && results.length > 0) {
+        recordRun()
+        setExhausted(!canAnalyze())
+      }
       track(EVENTS.analysisCompleted, { duration_ms: Date.now() - started,
                                         count: results.length })
     } catch (err) {

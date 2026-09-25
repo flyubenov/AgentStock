@@ -3,6 +3,7 @@ import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import LandingPage, { FETCH_TIMEOUT_MS } from './LandingPage'
+import { runsUsed } from './demoLimit'
 import Layout from '../components/Layout'
 
 vi.mock('../lib/analytics', () => ({
@@ -164,6 +165,12 @@ describe('LandingPage demo limit (controller addition)', () => {
     localStorage.setItem('intrinsica_demo_runs', JSON.stringify({
       count: 4, windowStart: Date.now(),
     }))
+    // The typed run below must actually produce a row to count (fix round 1) —
+    // the default beforeEach mock returns empty results, which would no longer
+    // be recorded.
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      json: async () => ({ results: [{ ticker: 'NVDA' }], invalid: [], error: null }),
+    }))
     await renderSettled()
 
     await userEvent.type(screen.getByRole('textbox'), 'NVDA')
@@ -198,6 +205,72 @@ describe('LandingPage demo limit (controller addition)', () => {
       expect(track).toHaveBeenCalledWith('analysis_started',
         { tickers: ['AAPL'], count: 1, source: 'sample' })
     })
+  })
+})
+
+// Fix round 1: a typed run must only consume an allowance once it actually
+// produced something the visitor could see. analysis_started (asserted above)
+// still fires unconditionally — it means "attempted", not "counted". These
+// tests assert on the real counter (runsUsed(), backed by the same localStorage
+// key demoLimit.ts reads) rather than a mock of it.
+describe('LandingPage demo limit — only a successful typed run counts (fix round 1)', () => {
+  it('does not count a typed run when the fetch throws', async () => {
+    await renderSettled()
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')))
+
+    await userEvent.type(screen.getByRole('textbox'), 'NVDA')
+    await userEvent.click(screen.getByRole('button', { name: 'Analyze →' }))
+    await waitFor(() => {
+      expect(screen.getByText('The analysis could not be reached. Please try again.'))
+        .toBeInTheDocument()
+    })
+
+    expect(runsUsed()).toBe(0)
+  })
+
+  it('does not count a typed run when the server returns an error (over the cap, empty input)', async () => {
+    await renderSettled()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      json: async () => ({ results: [], invalid: [], error: 'Over the free demo cap.' }),
+    }))
+
+    await userEvent.type(screen.getByRole('textbox'), 'NVDA')
+    await userEvent.click(screen.getByRole('button', { name: 'Analyze →' }))
+    await waitFor(() => {
+      expect(screen.getByText('Over the free demo cap.')).toBeInTheDocument()
+    })
+
+    expect(runsUsed()).toBe(0)
+  })
+
+  it('does not count a typed run when every ticker came back invalid', async () => {
+    await renderSettled()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      json: async () => ({ results: [], invalid: ['ZZZZ'], error: null }),
+    }))
+
+    await userEvent.type(screen.getByRole('textbox'), 'ZZZZ')
+    await userEvent.click(screen.getByRole('button', { name: 'Analyze →' }))
+    await waitFor(() => {
+      expect(screen.getByText('Not recognised: ZZZZ')).toBeInTheDocument()
+    })
+
+    expect(runsUsed()).toBe(0)
+  })
+
+  it('counts a typed run on a partial success — one bad ticker, one rendered result', async () => {
+    await renderSettled()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      json: async () => ({ results: [{ ticker: 'NVDA' }], invalid: ['ZZZZ'], error: null }),
+    }))
+
+    await userEvent.type(screen.getByRole('textbox'), 'NVDA, ZZZZ')
+    await userEvent.click(screen.getByRole('button', { name: 'Analyze →' }))
+    await waitFor(() => {
+      expect(screen.getByText('Not recognised: ZZZZ')).toBeInTheDocument()
+    })
+
+    expect(runsUsed()).toBe(1)
   })
 })
 
