@@ -42,7 +42,7 @@ async def analyze(req: LandingAnalyzeRequest):
     # and price/Reward-Risk from a shorter one (LANDING_FAST_TTL). On this public,
     # unauthenticated endpoint a hung yfinance call must never hold a worker open
     # indefinitely, on either path: a cold/expired slow fill still goes through
-    # _run_one_guarded's own asyncio.wait_for, and cache.py wraps its own fast-layer
+    # _run_one_readonly's own asyncio.wait_for, and cache.py wraps its own fast-layer
     # quote refresh in a short asyncio.wait_for of its own. Either one timing out
     # raises, which the exception branch below degrades to a per-ticker error instead
     # of wedging the whole request.

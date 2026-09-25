@@ -7,7 +7,7 @@ import time
 from collections import OrderedDict
 from datetime import datetime, timezone
 
-from orchestrator.batch import _run_one_guarded
+from orchestrator.batch import _run_one_readonly
 from services.yahoo import fetch_quote
 from risk_reward.data import fetch_risk_reward_inputs
 from risk_reward.scoring import build_metric_scores, aggregate
@@ -82,7 +82,7 @@ _now = time.monotonic
 # Slow layer entry:  {"result": <_run_one-shaped dump>, "inputs": RiskRewardInputs | None,
 #                      "ts": float, "failed": bool}
 #   "inputs" is the RiskRewardInputs snapshot fetched alongside the same
-#   _run_one_guarded run, kept so a fast refresh can recompute Reward/Risk from a
+#   _run_one_readonly run, kept so a fast refresh can recompute Reward/Risk from a
 #   fresh price without re-fetching price history / the income statement (the
 #   expensive two-thirds of risk_reward.data.fetch_risk_reward_inputs). None when
 #   that side-fetch itself failed -- the main slow-layer result still stands, but a
@@ -197,7 +197,7 @@ async def _populate_slow(key: str, ts: float) -> dict:
     upserts) and, alongside it, fetch a fresh RiskRewardInputs snapshot to seed
     future fast-layer refreshes from. The two run concurrently. A failure of the
     side-fetch degrades to inputs=None (the main result still stands); a failure of
-    _run_one_guarded itself propagates -- there is no result to cache at all.
+    _run_one_readonly itself propagates -- there is no result to cache at all.
 
     A true no-data failure (status="failed" and no current_price -- the ticker never
     resolved) is carried through as "failed" so get_analysis can give it a short
@@ -215,7 +215,7 @@ async def _populate_slow(key: str, ts: float) -> dict:
     fv_res.current_price is not None`) draws exactly this line for the same reason;
     this mirrors it."""
     run_out, inputs_or_exc = await asyncio.gather(
-        _run_one_guarded(key), fetch_risk_reward_inputs(key), return_exceptions=True)
+        _run_one_readonly(key), fetch_risk_reward_inputs(key), return_exceptions=True)
     if isinstance(run_out, Exception):
         raise run_out
     inputs = None if isinstance(inputs_or_exc, Exception) else inputs_or_exc

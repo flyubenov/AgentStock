@@ -98,7 +98,7 @@ def _patched(run=None, inputs_fetch=None, quote=None):
     quote = quote if quote is not None else AsyncMock(return_value=100.0)
     return patch.multiple(
         cache,
-        _run_one_guarded=run,
+        _run_one_readonly=run,
         fetch_risk_reward_inputs=inputs_fetch,
         fetch_quote=quote,
     )
