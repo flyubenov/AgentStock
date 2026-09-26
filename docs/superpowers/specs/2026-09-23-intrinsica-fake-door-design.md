@@ -188,15 +188,18 @@ a wall of text. The highlights were cut: determinism, calibrations and parallel 
 already said in 5.5 Why Intrinsica, and the sector and company-type weighting are in each
 detail panel.*
 
-**Overview card**, two columns (one on a phone):
+**Overview card**, one column *(option B, user decision 2026-09-27 — the judgment note moved
+from a side box into the text, and its original wording was restored)*:
 
-- Left: "Four separate engines turn the latest fundamentals into four scores, using explicit
-  formulas and **N data-triggered calibrations**. Same data, same score." — N is the live
-  count of calibrations, never a hand-written number. Beneath it: "Click an assessment for
-  every category, weight and calibration."
-- Right, a highlighted note *(variant E)*: **"A methodology, not a measurement."** Quality,
-  Moat and Reward/Risk have no single correct formula. Intrinsica's weights are its
-  judgment — all on the page, so you can disagree.
+1. Lead: "Four separate engines turn the latest fundamentals into four scores, using explicit
+   formulas and **N data-triggered calibrations**. Same data, same score." — N is the live
+   count of calibrations, never a hand-written number.
+2. Second paragraph, bold opener *(variant E)*: **"A methodology, not a measurement."**
+   Quality, Moat and Reward/Risk have no single correct formula. Intrinsica assembles the
+   fundamentals that bear on each, weights them and turns them into a score, so companies can
+   be compared on the same scale. Every input and weight is on the page, so you can see
+   exactly how a score was reached, and disagree with it.
+3. Closing line: "Click an assessment for every category, weight and calibration."
 
 **Assessment tabs.** One box: a row of four tabs (dot + name only; 2×2 on a phone) forms
 the top edge of the detail panel, like the result breakdown's tabs. The selected tab is
@@ -435,8 +438,8 @@ One event per funnel step, each carrying `visitor_id` and a timestamp:
 - **`free_plan_clicked` is a separate event** and is excluded from that ratio.
 - **`watchlist_clicked` (ticker)** *(added 2026-09-26, user decision — the list grows by
   this one event)*: the star beside each ticker in the results grid. Watchlists are not
-  built; the click answers with a toast — "{TICKER} not saved — watchlists come with an
-  Intrinsica account, and Free includes one. See plans →" — that stays 10 s or until
+  built; the click answers with a toast — "Watchlists require an Intrinsica account. Start with
+  Free. See plans →" (the ticker rides on the event, not in the copy) — that stays 10 s or until
   dismissed. The star carries no lock icon, on purpose: a lock would suppress the very
   clicks this measures. Outside the paid funnel, like `free_plan_clicked`.
 - Secondary: plan mix, billing mix, methodology engagement before conversion, drop-off per step.

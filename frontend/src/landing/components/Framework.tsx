@@ -60,16 +60,15 @@ export default function Framework({ tab, onTab }: {
         <div className="ovcard">
           <div className="kicker">The framework</div>
           <h2 className="stitle">How Intrinsica works</h2>
-          <div className="ovsplit">
-            <div>
-              <p className="ssub">
-                {OVERVIEW.lead.before}{' '}
-                <b>{CALIBRATIONS.length} {OVERVIEW.lead.bold}</b>. {OVERVIEW.lead.after}
-              </p>
-              <p className="ovtail">{OVERVIEW.tail}</p>
-            </div>
-            <p className="judg"><b>{OVERVIEW.judgment.title}</b> {OVERVIEW.judgment.body}</p>
-          </div>
+          <p className="ssub">
+            {OVERVIEW.lead.before}{' '}
+            <b>{CALIBRATIONS.length} {OVERVIEW.lead.bold}</b>. {OVERVIEW.lead.after}
+          </p>
+          {/* The judgment note is the overview's second paragraph, not a side box
+              (option B, user decision 2026-09-27): what the engines do, then what
+              kind of thing their scores are. */}
+          <p className="ssub judg"><b>{OVERVIEW.judgment.title}</b> {OVERVIEW.judgment.body}</p>
+          <p className="ovtail">{OVERVIEW.tail}</p>
         </div>
 
         {/* Variant D3: the four assessments are tabs joined to the top of the detail

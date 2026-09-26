@@ -6,11 +6,10 @@ import WatchToast, { WATCH_TOAST_MS } from './WatchToast'
 describe('WatchToast', () => {
   afterEach(() => { vi.useRealTimers() })
 
-  it('says the ticker was not saved, that Free includes a watchlist, and links to the plans', () => {
-    render(<WatchToast ticker="MSFT" onClose={vi.fn()} />)
+  it('says a watchlist needs an account, points to Free, and links to the plans', () => {
+    render(<WatchToast onClose={vi.fn()} />)
     const toast = screen.getByRole('status')
-    expect(toast).toHaveTextContent('MSFT not saved')
-    expect(toast).toHaveTextContent(/Free\s+includes one/)
+    expect(toast).toHaveTextContent('Watchlists require an Intrinsica account. Start with Free.')
     expect(screen.getByRole('link', { name: 'See plans →' })).toHaveAttribute('href', '#pricing')
     // A fake door never claims a watchlist or an account now exists.
     expect(toast).not.toHaveTextContent(/added|saved to|created|your watchlist/i)
@@ -19,7 +18,7 @@ describe('WatchToast', () => {
   it('closes itself after ten seconds, not before', async () => {
     vi.useFakeTimers()
     const onClose = vi.fn()
-    render(<WatchToast ticker="AAPL" onClose={onClose} />)
+    render(<WatchToast onClose={onClose} />)
     expect(WATCH_TOAST_MS).toBe(10_000)
     await act(async () => { await vi.advanceTimersByTimeAsync(WATCH_TOAST_MS - 100) })
     expect(onClose).not.toHaveBeenCalled()
@@ -29,7 +28,7 @@ describe('WatchToast', () => {
 
   it('closes on the dismiss button and on the plans link', async () => {
     const onClose = vi.fn()
-    render(<WatchToast ticker="AAPL" onClose={onClose} />)
+    render(<WatchToast onClose={onClose} />)
     await userEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
     await userEvent.click(screen.getByRole('link', { name: 'See plans →' }))
     expect(onClose).toHaveBeenCalledTimes(2)

@@ -147,8 +147,9 @@ export const FRAMEWORK: AssessmentContent[] = [
   },
 ]
 
-/** The framework section's overview card (variant D3, user decision 2026-09-26): two
- *  sentences and the judgment note, side by side. The rest of the "how" lives in the
+/** The framework section's overview card (variant D3, user decision 2026-09-26): a
+ *  two-sentence lead, then the judgment note as a second paragraph (option B,
+ *  2026-09-27 — its original, fuller wording restored). The rest of the "how" lives in the
  *  tabbed detail panel beneath it, so the card does not repeat it. The calibration
  *  count in the lead is rendered from CALIBRATIONS.length, never written here. */
 export const OVERVIEW = {
@@ -162,7 +163,7 @@ export const OVERVIEW = {
    *  own methodology, and the page's transparency is what makes that honest. */
   judgment: {
     title: 'A methodology, not a measurement.',
-    body: 'Quality, Moat and Reward/Risk have no single correct formula. Intrinsica’s weights are its judgment — all on the page, so you can disagree.',
+    body: 'Quality, Moat and Reward/Risk have no single correct formula. Intrinsica assembles the fundamentals that bear on each, weights them and turns them into a score, so companies can be compared on the same scale. Every input and weight is on the page, so you can see exactly how a score was reached, and disagree with it.',
   },
   tail: 'Click an assessment for every category, weight and calibration.',
 }

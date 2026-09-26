@@ -11,8 +11,8 @@ const show = (tab: AssessmentId = 0, onTab = vi.fn()) =>
   render(<Framework tab={tab} onTab={onTab} />)
 
 describe('Framework — overview card', () => {
-  // Variant D3 (user decision): the overview is two sentences beside the judgment
-  // note; the four highlights it used to carry are gone, not moved.
+  // Variant D3 (user decision): a two-sentence lead, then the judgment note; the
+  // four highlights it used to carry are gone, not moved.
   it('shows the short lead, with the real calibration count, and the closing line', () => {
     const { container } = show()
     const lead = container.querySelector('.ovcard .ssub')!
@@ -270,13 +270,17 @@ describe('Framework — page rules', () => {
   })
 
   // Variant E (user decision): three of the four assessments are judgments, and
-  // the overview card says so, beside the lead (variant D3).
+  // the overview card says so — as its second paragraph, in the original wording
+  // (option B, 2026-09-27).
   it('says plainly that the scores are a methodology, not a measurement', () => {
     const { container } = show(0)
     const note = container.querySelector('.ovcard .judg')!
     expect(note).toHaveTextContent('A methodology, not a measurement.')
     expect(note).toHaveTextContent(/Quality, Moat and Reward\/Risk have no single correct formula/)
-    expect(note).toHaveTextContent(/all on the page, so you can disagree/)
-    expect(container.querySelector('.ovcard .ovsplit > .judg')).toBe(note)
+    expect(note).toHaveTextContent(/assembles the fundamentals that bear on each/)
+    expect(note).toHaveTextContent(/see exactly how a score was reached, and disagree with it\./)
+    const order = Array.from(container.querySelectorAll('.ovcard > p')).map(p => p.className)
+    expect(order).toEqual(['ssub', 'ssub judg', 'ovtail'])
+    expect(container.querySelector('.ovsplit')).toBeNull()
   })
 })

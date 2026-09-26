@@ -424,10 +424,10 @@ describe('LandingPage compare chip (controller addition 2)', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Add NVDA to a watchlist' }))
     expect(track).toHaveBeenCalledWith('watchlist_clicked', { ticker: 'NVDA' })
-    expect(screen.getByRole('status')).toHaveTextContent('NVDA not saved')
+    expect(screen.getByRole('status')).toHaveTextContent('Watchlists require an Intrinsica account. Start with Free.')
     await userEvent.click(screen.getByRole('button', { name: 'Add MSFT to a watchlist' }))
+    expect(track).toHaveBeenCalledWith('watchlist_clicked', { ticker: 'MSFT' })
     expect(screen.getAllByRole('status')).toHaveLength(1)
-    expect(screen.getByRole('status')).toHaveTextContent('MSFT not saved')
     await userEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })

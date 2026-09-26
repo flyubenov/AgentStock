@@ -36,12 +36,13 @@ export default function LandingPage() {
   const [busy, setBusy] = useState(false)
   // The tickers of the run in flight, for the live strip and the button count.
   const [pending, setPending] = useState<string[]>([])
-  // The watchlist toast: which ticker's star was clicked, and a counter that
-  // re-keys the toast so a second click restarts its timer.
-  const [watch, setWatch] = useState<{ ticker: string; n: number } | null>(null)
+  // The watchlist toast: null when hidden, otherwise a click counter that re-keys
+  // the toast so a second click restarts its timer. The clicked ticker goes on the
+  // event only — the toast's copy does not name it.
+  const [watch, setWatch] = useState<number | null>(null)
   const watchFor = useCallback((ticker: string) => {
     track(EVENTS.watchlistClicked, { ticker })
-    setWatch(w => ({ ticker, n: (w?.n ?? 0) + 1 }))
+    setWatch(w => (w ?? 0) + 1)
   }, [])
   const closeWatch = useCallback(() => setWatch(null), [])
   const [notice, setNotice] = useState<string | null>(null)
@@ -296,7 +297,7 @@ export default function LandingPage() {
           onView={reportPricingView}
         />
       </main>
-      {watch && <WatchToast key={watch.n} ticker={watch.ticker} onClose={closeWatch} />}
+      {watch !== null && <WatchToast key={watch} onClose={closeWatch} />}
       <SiteFooter />
     </div>
   )

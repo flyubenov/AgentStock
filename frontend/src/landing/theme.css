@@ -220,16 +220,10 @@
 
 /* how it works (Option A) */
 .intrinsica .ovcard { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); padding: 26px 28px; box-shadow: var(--sh); }
-/* overview as two columns: lead + tail beside the judgment note (variant D3) */
-.intrinsica .ovsplit { display: grid; grid-template-columns: 1.35fr 1fr; gap: 26px; align-items: start; margin-top: 4px; }
-.intrinsica .ovsplit .ssub { font-size: 15.5px; }
-.intrinsica .ovsplit .ssub b { color: var(--text); }
-.intrinsica .ovsplit .judg { margin-top: 0; }
-.intrinsica .judg { margin-top: 18px; padding: 14px 16px; border-radius: 12px; background: var(--accent-soft); font-size: 13.5px;
-  color: var(--dim); line-height: 1.55; }
-.intrinsica .judg b { color: var(--text); }
+/* overview: the lead, then the judgment note as a second paragraph (variant D3, option B) */
+.intrinsica .ovcard .ssub b { color: var(--text); }
+.intrinsica .ovcard .ssub.judg { margin-top: 12px; }
 .intrinsica .ovtail { margin-top: 16px; font-size: 13px; color: var(--mute); }
-@media (max-width: 760px) { .intrinsica .ovsplit { grid-template-columns: 1fr; gap: 16px; } }
 /* assessment tabs joined to the top of the detail panel (variant D3) */
 .intrinsica .mbox { margin-top: 18px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); box-shadow: var(--sh); overflow: hidden; }
 .intrinsica .mcards { display: grid; grid-template-columns: repeat(4, 1fr); background: var(--bg2); border-bottom: 1px solid var(--border); }
