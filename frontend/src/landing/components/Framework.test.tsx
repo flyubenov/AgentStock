@@ -11,11 +11,16 @@ const show = (tab: AssessmentId = 0, onTab = vi.fn()) =>
   render(<Framework tab={tab} onTab={onTab} />)
 
 describe('Framework — overview card', () => {
-  it('shows the overview highlights and the closing line', () => {
-    show()
-    expect(screen.getByText(/Scored for its sector\./)).toBeInTheDocument()
-    expect(screen.getByText(/Built to run in parallel\./)).toBeInTheDocument()
-    expect(screen.getByText(/Click any assessment below/)).toBeInTheDocument()
+  // Variant D3 (user decision): the overview is two sentences beside the judgment
+  // note; the four highlights it used to carry are gone, not moved.
+  it('shows the short lead, with the real calibration count, and the closing line', () => {
+    const { container } = show()
+    const lead = container.querySelector('.ovcard .ssub')!
+    expect(lead).toHaveTextContent(/Four separate engines turn the latest fundamentals into four scores/)
+    expect(lead.querySelector('b')).toHaveTextContent(`${CALIBRATIONS.length} data-triggered calibrations`)
+    expect(lead).toHaveTextContent(/Same data, same score\./)
+    expect(screen.getByText(/Click an assessment for every category/)).toBeInTheDocument()
+    expect(container.querySelector('.ovpts')).not.toBeInTheDocument()
   })
 
   it('anchors the section the nav points at', () => {
@@ -25,6 +30,17 @@ describe('Framework — overview card', () => {
 })
 
 describe('Framework — assessment cards', () => {
+  // D3: a tab is the name alone — the question, scale, weights and counts are
+  // all in the panel, and the question is said once, in the panel's header.
+  it('labels each tab with the assessment name only, and puts its question in the panel', () => {
+    const { container } = show(1)
+    for (const b of container.querySelectorAll('.mcards button')) {
+      expect(FRAMEWORK.map(a => a.name)).toContain(b.textContent)
+    }
+    expect(container.querySelector('.mdetail .d-q')).toHaveTextContent(FRAMEWORK[1].question)
+    expect(container.querySelector('.mbox .mcards + .mdetail')).toBeInTheDocument()
+  })
+
   it('offers a card per assessment, in the shared assessment order', () => {
     const { container } = show()
     const labels = Array.from(container.querySelectorAll('.mcards .cn'))
@@ -254,15 +270,13 @@ describe('Framework — page rules', () => {
   })
 
   // Variant E (user decision): three of the four assessments are judgments, and
-  // the overview card says so, between the four highlights and the closing line.
+  // the overview card says so, beside the lead (variant D3).
   it('says plainly that the scores are a methodology, not a measurement', () => {
     const { container } = show(0)
     const note = container.querySelector('.ovcard .judg')!
     expect(note).toHaveTextContent('A methodology, not a measurement.')
     expect(note).toHaveTextContent(/Quality, Moat and Reward\/Risk have no single correct formula/)
-    expect(note).toHaveTextContent(/disagree with it/)
-    const order = Array.from(container.querySelectorAll('.ovcard .ovpts, .ovcard .judg, .ovcard .ovtail'))
-      .map(e => e.className)
-    expect(order).toEqual(['ovpts', 'judg', 'ovtail'])
+    expect(note).toHaveTextContent(/all on the page, so you can disagree/)
+    expect(container.querySelector('.ovcard .ovsplit > .judg')).toBe(note)
   })
 })

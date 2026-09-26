@@ -4,6 +4,7 @@ import './theme.css'
 import Nav from './components/Nav'
 import Hero from './components/Hero'
 import ResultGrid, { RunBar } from './components/ResultGrid'
+import WatchToast from './components/WatchToast'
 import Breakdown from './components/Breakdown'
 import Framework from './components/Framework'
 import Why from './components/Why'
@@ -33,6 +34,16 @@ export const FETCH_TIMEOUT_MS = 150_000
 export default function LandingPage() {
   const [rows, setRows] = useState<TickerPayload[]>([])
   const [busy, setBusy] = useState(false)
+  // The tickers of the run in flight, for the live strip and the button count.
+  const [pending, setPending] = useState<string[]>([])
+  // The watchlist toast: which ticker's star was clicked, and a counter that
+  // re-keys the toast so a second click restarts its timer.
+  const [watch, setWatch] = useState<{ ticker: string; n: number } | null>(null)
+  const watchFor = useCallback((ticker: string) => {
+    track(EVENTS.watchlistClicked, { ticker })
+    setWatch(w => ({ ticker, n: (w?.n ?? 0) + 1 }))
+  }, [])
+  const closeWatch = useCallback(() => setWatch(null), [])
   const [notice, setNotice] = useState<string | null>(null)
   const [assessment, setAssessment] = useState<AssessmentId>(0)
   // Whether this browser has used up its free demo runs. Checked once at mount
@@ -126,6 +137,7 @@ export default function LandingPage() {
 
   const analyze = useCallback(async (tickers: string[], source: AnalyzeSource) => {
     setBusy(true)
+    setPending(tickers)
     setNotice(null)
     track(EVENTS.analysisStarted, { tickers, count: tickers.length, source })
     const started = Date.now()
@@ -187,6 +199,7 @@ export default function LandingPage() {
     } finally {
       clearTimeout(timeoutId)
       setBusy(false)
+      setPending([])
     }
   }, [])
 
@@ -225,30 +238,30 @@ export default function LandingPage() {
           onAnalyze={analyze}
           onSelectAssessment={setAssessment}
           busy={busy}
+          busyCount={pending.length}
           exhausted={exhausted}
         />
         {notice && <p className="notice container">{notice}</p>}
         <section className="section" id="result">
           <div className="container">
-            <RunBar rows={rows} ms={lastMs} />
-            <ResultGrid
-              rows={rows}
-              open={effectiveOpen}
-              onToggle={toggle}
-              // One `assessment` for the whole page: the hero's assessment
-              // cards, every expanded row's breakdown and (from Task 11) the
-              // framework tabs all read and write this single value, so opening
-              // "Moat" anywhere opens it everywhere.
-              renderBreakdown={r => (
-                <Breakdown row={r} tab={assessment} onTab={setAssessment} />
-              )}
-            />
-            <p className="free-note">
-              <b>Everything here is the real analysis — full depth, nothing blurred.</b>{' '}
-              The demo is open to everyone: up to 3 tickers per run, no account needed.
-              At launch the <b>Free</b> plan keeps that depth with about 5 analyses a
-              month; <b>Pro</b> removes the cap and adds the research workflow.
-            </p>
+            <RunBar rows={rows} ms={lastMs} pending={pending} />
+            {/* The previous result dims while a new run is in flight, so it
+                cannot be mistaken for the answer to the new request. */}
+            <div className={busy && rows.length ? 'stale' : undefined} aria-busy={busy}>
+              <ResultGrid
+                rows={rows}
+                open={effectiveOpen}
+                onToggle={toggle}
+                onWatch={watchFor}
+                // One `assessment` for the whole page: the hero's assessment
+                // cards, every expanded row's breakdown and (from Task 11) the
+                // framework tabs all read and write this single value, so opening
+                // "Moat" anywhere opens it everywhere.
+                renderBreakdown={r => (
+                  <Breakdown row={r} tab={assessment} onTab={setAssessment} />
+                )}
+              />
+            </div>
           </div>
         </section>
         {/* The framework tabs are the third reader of the page's single
@@ -283,6 +296,7 @@ export default function LandingPage() {
           onView={reportPricingView}
         />
       </main>
+      {watch && <WatchToast key={watch.n} ticker={watch.ticker} onClose={closeWatch} />}
       <SiteFooter />
     </div>
   )

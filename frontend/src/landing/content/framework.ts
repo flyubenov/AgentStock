@@ -147,22 +147,24 @@ export const FRAMEWORK: AssessmentContent[] = [
   },
 ]
 
+/** The framework section's overview card (variant D3, user decision 2026-09-26): two
+ *  sentences and the judgment note, side by side. The rest of the "how" lives in the
+ *  tabbed detail panel beneath it, so the card does not repeat it. The calibration
+ *  count in the lead is rendered from CALIBRATIONS.length, never written here. */
 export const OVERVIEW = {
-  lead: 'Four independent engines read the latest fundamentals and score the company live. They stay separate — no single blended rating — because whether a business is good and whether its price is fair are different questions. The calculations are explicit formulas rather than an AI opinion: the same company on the same data always returns the same result.',
-  points: [
-    { title: 'Scored for its sector.', body: 'Quality category weights shift with the company profile, so a software business is not judged by the standards of a REIT or a bank.' },
-    { title: 'Valued for its type.', body: 'The company is classified first, and that decides which of nine valuation methods carry weight — cash-flow models for a mega cap, price / book and residual income for a lender, net asset value for an asset-heavy name.' },
-    { title: 'Calibrated for distortions.', body: 'Data-triggered adjustments handle acquisition goodwill, amortization-depressed earnings, heavy capex, cyclicals and pre-profit growth. Every calibration that fires is named on the result, with the reason.' },
-    { title: 'Built to run in parallel.', body: 'One ticker or a hundred are computed concurrently — the same engine behind a single lookup, a watchlist re-run and a screen across the universe.' },
-  ],
+  lead: {
+    before: 'Four separate engines turn the latest fundamentals into four scores, using explicit formulas and',
+    bold: 'data-triggered calibrations',
+    after: 'Same data, same score.',
+  },
   /** Said plainly because it is true: three of the four assessments are judgments,
    *  not quantities with a correct value. Intrinsica's scores are the product of its
    *  own methodology, and the page's transparency is what makes that honest. */
   judgment: {
     title: 'A methodology, not a measurement.',
-    body: 'Quality, Moat and Reward/Risk have no single correct formula. Intrinsica assembles the fundamentals that bear on each, weights them and turns them into a score, so companies can be compared on the same scale. Every input and weight is on the page, so you can see exactly how a score was reached, and disagree with it.',
+    body: 'Quality, Moat and Reward/Risk have no single correct formula. Intrinsica’s weights are its judgment — all on the page, so you can disagree.',
   },
-  tail: 'Click any assessment below for its categories, weights and calibrations.',
+  tail: 'Click an assessment for every category, weight and calibration.',
 }
 
 /** The hero's pipeline strip: what goes in, what Intrinsica adds, what comes out.

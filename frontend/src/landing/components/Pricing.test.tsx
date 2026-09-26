@@ -137,18 +137,16 @@ describe('Pricing', () => {
   it('renders every feature bullet of every plan', () => {
     const { container } = show()
     const bullets = Array.from(container.querySelectorAll('.feature-list li'))
-    expect(bullets).toHaveLength(17)
+    expect(bullets).toHaveLength(9)
     expect(screen.getByText('Unlimited analyses — no monthly cap')).toBeInTheDocument()
-    expect(screen.getByText('Up to 3 tickers per analysis run')).toBeInTheDocument()
+    expect(screen.getByText('~5 analyses a month · up to 3 tickers per run')).toBeInTheDocument()
   })
 
   // plans.test.ts pins the order of the arrays; this pins the order the reader
   // actually sees. Without it a component that sorted or reversed `p.features`
-  // would still render all seventeen bullets, still satisfy every other
-  // assertion in this file, and still move Pro's opening line — "Everything in
-  // Free, at the same full depth, plus:" — down the card. That line is what
-  // tells a reader the upgrade buys volume and workflow rather than depth that
-  // was withheld, which is the claim this whole page exists to test.
+  // would still render all nine bullets and satisfy every other assertion here.
+  // (The slim cards dropped the "Everything in Free, plus:" openers; the section
+  // subtitle and the matrix's all-"Full" depth rows now carry that claim.)
   it('renders each card’s bullets in the order its plan declares them', () => {
     const { container } = show()
     const cards = Array.from(container.querySelectorAll<HTMLElement>('.price-card'))
@@ -158,12 +156,6 @@ describe('Pricing', () => {
         .map(li => li.textContent)
       expect(bullets).toEqual(PLANS[i].features)
     })
-    // Named explicitly, not just implied by the array equality above: if the
-    // inheritance line ever stops being first, this says why that matters.
-    expect(cards[1].querySelector('.feature-list li')?.textContent)
-      .toBe('Everything in Free (same full depth), plus:')
-    expect(cards[2].querySelector('.feature-list li')?.textContent)
-      .toBe('Everything in Pro, plus:')
   })
 
   // Nothing in the DOM ties a value to its column — the cells are rendered in
@@ -194,11 +186,10 @@ describe('Pricing', () => {
 
     expect(screen.getByText('Stocks per watchlist')).toBeInTheDocument()
     expect(screen.getByText(/Preview = the filters are visible/)).toBeInTheDocument()
-    expect(screen.getByText(/Free sells the framework/)).toBeInTheDocument()
   })
 
   // Task 9 made the results grid keyboard-operable and hover tooltips were ruled
-  // out for being keyboard-unreachable; a seventeen-row matrix read cell by cell
+  // out for being keyboard-unreachable; a sixteen-row matrix read cell by cell
   // with no row or column association is the same failure one level down. With
   // the scopes, a screen reader says "Watchlists, Pro, 5–10" instead of "5–10".
   it('associates every matrix cell with its row and its column', () => {
@@ -219,16 +210,15 @@ describe('Pricing', () => {
     }
   })
 
-  it('shows the three who-it-is-for cards above the matrix', () => {
+  // Slim pricing (user decision 2026-09-27): the who-it-is-for cards and the
+  // closing line are gone — each card's for-line now says who the plan is for.
+  it('says who each plan is for on its own card, with no separate who-cards or closing line', () => {
     const { container } = show()
-    const who = Array.from(container.querySelectorAll<HTMLElement>('.who-card'))
-    expect(who).toHaveLength(3)
-    expect(who.map(w => w.querySelector('.wtag')?.textContent))
-      .toEqual(['Free · Try', 'Pro · Depth', 'Unlimited · Scale'])
-    for (const card of who) {
-      expect((card.querySelector('.wfor')?.textContent ?? '').length)
-        .toBeGreaterThan(40)
-    }
+    const fors = Array.from(container.querySelectorAll('.price-card .pc-for')).map(e => e.textContent)
+    expect(fors).toEqual(PLANS.map(p => p.forLine))
+    for (const f of fors) expect(f).toMatch(/^For /)
+    expect(container.querySelector('.who, .who-card, .compare-note')).toBeNull()
+    expect(container).not.toHaveTextContent(/Free sells the framework/)
   })
 
   // The single hardest constraint in the project: the page must be structurally

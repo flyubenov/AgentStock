@@ -31,7 +31,7 @@ const TRUST: Card[] = [
 
 const SCALE: Card[] = [
   { icon: '⚡', title: 'Re-evaluate whole watchlists',
-    body: 'Run 25, 50 or 100+ stocks in parallel — every holding re-scored on fresh fundamentals in seconds.' },
+    body: 'Submit 25, 50 or 100+ stocks in one run — results stream in as each finishes.' },
   { icon: '🧭', title: 'Discover what fits your criteria',
     body: 'Screen hundreds of stocks by Quality, Moat, Fair Value and Reward/Risk — e.g. “Moat 80+ and trading below fair value”.' },
   { icon: '🔔', title: 'Automated monitoring',

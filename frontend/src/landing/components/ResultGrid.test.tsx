@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { afterEach, describe, it, expect, vi } from 'vitest'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import ResultGrid, { RunBar } from './ResultGrid'
 import type { TickerPayload } from '../types'
@@ -186,6 +186,27 @@ describe('ResultGrid', () => {
   })
 })
 
+describe('ResultGrid — watchlist star', () => {
+  const noop = () => null
+  it('offers an unlocked star beside every ticker that reports the ticker, without opening the row', async () => {
+    const onWatch = vi.fn(), onToggle = vi.fn()
+    render(<ResultGrid rows={[row(), row({ ticker: 'MSFT' })]} open={{}} onToggle={onToggle}
+                       renderBreakdown={noop} onWatch={onWatch} />)
+    const star = screen.getByRole('button', { name: 'Add MSFT to a watchlist' })
+    expect(star).toHaveTextContent('☆')
+    expect(star).not.toHaveTextContent('🔒')
+    await userEvent.click(star)
+    expect(onWatch).toHaveBeenCalledWith('MSFT')
+    expect(onToggle).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Add AAPL to a watchlist' })).toBeInTheDocument()
+  })
+
+  it('shows no star when the page does not ask for one', () => {
+    render(<ResultGrid rows={[row()]} open={{}} onToggle={noop} renderBreakdown={noop} />)
+    expect(screen.queryByRole('button', { name: /watchlist/ })).not.toBeInTheDocument()
+  })
+})
+
 describe('RunBar', () => {
   it('reports each ticker, the count and the time when more than one ran', () => {
     const { container } = render(
@@ -205,5 +226,31 @@ describe('RunBar', () => {
   it('stays out of the way for a single ticker', () => {
     const { container } = render(<RunBar rows={[row()]} ms={500} />)
     expect(container).toBeEmptyDOMElement()
+  })
+
+  // Loading variant E (user decision): a multi-ticker run in flight shows the strip
+  // at once, live, over whatever the previous result was. It never marks a ticker
+  // done — the backend answers all of them in one response.
+  describe('while a run is in flight', () => {
+    afterEach(() => { vi.useRealTimers() })
+
+    it('says it is computing, names every pending ticker and counts the time up', async () => {
+      vi.useFakeTimers()
+      const { container } = render(
+        <RunBar rows={[row()]} ms={500} pending={['AAPL', 'MSFT', 'NVDA']} />)
+      const bar = screen.getByRole('status')
+      expect(bar).toHaveTextContent('Computing in parallel:')
+      for (const t of ['AAPL', 'MSFT', 'NVDA']) expect(bar).toHaveTextContent(t)
+      expect(bar).toHaveTextContent('3 tickers · 0.0s')
+      expect(container.querySelectorAll('.mini.ind')).toHaveLength(3)
+      expect(screen.queryByLabelText('done')).not.toBeInTheDocument()
+      await act(async () => { await vi.advanceTimersByTimeAsync(1250) })
+      expect(bar).toHaveTextContent('3 tickers · 1.2s')
+    })
+
+    it('shows nothing live for a single pending ticker — the button covers that', () => {
+      const { container } = render(<RunBar rows={[]} ms={null} pending={['AAPL']} />)
+      expect(container).toBeEmptyDOMElement()
+    })
   })
 })

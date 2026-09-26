@@ -120,6 +120,14 @@ Results **always render as the grid**, including for a single ticker (one row,
 auto-expanded). Above it, when more than one ticker ran, a parallel-run bar
 ("Computed in parallel: AAPL ✓ AMD ✓ … · 3 tickers · 2.1s").
 
+**While a run is in flight** *(added 2026-09-26, user decision, loading variant E)*: the
+Analyze button shows a spinner and the count ("Analyzing 3…"; "Analyzing…" for one); for
+more than one ticker the parallel-run bar appears at once as "Computing in parallel: AAPL ·
+MSFT · NVDA" with a sweeping bar per ticker and an elapsed-time counter, then settles into
+the result above; the previous result is dimmed until the new one lands. No ticker is shown
+as done before the others — the endpoint answers all of them in one response. Reduced
+motion stops the spinner and sweep.
+
 **Grid columns (style B · Institutional — chosen over Terminal and Scorecard):**
 
 `Company | Quality /10 | Moat /100 | Fair Value | % vs Price | Price | Reward/Risk × | (expand)`
@@ -131,9 +139,10 @@ auto-expanded). Above it, when more than one ticker ran, a parallel-run bar
 - Best-in-column highlight (blue) in compare mode only; no stars; cells top-aligned.
 - Clicking a row expands the **breakdown** inline (§5.3). No "rows are expandable" hint text.
 
-Below the grid, the **free-note** states the demo reality honestly: everything shown is the
-real analysis at full depth; the demo is open to everyone at up to 3 tickers per run with no
-account; at launch Free keeps that depth at about 5 analyses a month, and Pro removes the cap.
+~~Below the grid, a **free-note** …~~ *Removed 2026-09-26 (user decision).* It was
+inaccurate — it called the demo open with no account but never mentioned the 5-run limit,
+and presented that demo limit as the Free plan's monthly allowance — and every true part of
+it is already said by the pricing matrix and the demo-limit message.
 
 ### 5.3 Breakdown (inside an expanded row)
 
@@ -169,38 +178,37 @@ and the breakdown can never disagree, because the grid does not carry numbers of
 
 ### 5.4 "How Intrinsica works" (the framework)
 
-One consolidated section — overview card → four clickable assessment cards → detail panel —
-replacing the previously overlapping why / how / methodology / calibration sections.
+One consolidated section — overview card → four assessment tabs joined to one detail
+panel — replacing the previously overlapping why / how / methodology / calibration sections.
 
-**Overview card.** Lead paragraph: four independent engines read the latest fundamentals and
-score the company live; they stay separate, with no single blended rating, because whether a
-business is good and whether its price is fair are different questions; the calculations are
-explicit formulas rather than an AI opinion, so the same company on the same data always
-returns the same result. Then a 2×2 highlight grid:
+*Revised 2026-09-26, user decision, variant D3. The original overview — a lead paragraph
+plus a 2×2 grid of highlights "Scored for its sector / Valued for its type / Calibrated for
+distortions / Built to run in parallel" — and the four question-and-scale cards were judged
+a wall of text. The highlights were cut: determinism, calibrations and parallel scale are
+already said in 5.5 Why Intrinsica, and the sector and company-type weighting are in each
+detail panel.*
 
-- **Scored for its sector.** Quality category weights shift with the company profile, so a
-  software business is not judged by the standards of a REIT or a bank.
-- **Valued for its type.** The company is classified first, and that decides which of nine
-  valuation methods carry weight.
-- **Calibrated for distortions.** Acquisition goodwill, amortization-depressed earnings, heavy
-  capex, cyclicals and pre-profit growth — every calibration that fires is named on the
-  result, with the reason.
-- **Built to run in parallel.** One ticker or a hundred are computed concurrently — the same
-  engine behind a single lookup, a watchlist re-run and a universe screen.
+**Overview card**, two columns (one on a phone):
 
-Then a highlighted note *(added 2026-09-26, user decision, variant E)*: **"A methodology,
-not a measurement."** Quality, Moat and Reward/Risk have no single correct formula.
-Intrinsica assembles the fundamentals that bear on each, weights them and turns them into
-a score, so companies can be compared on the same scale. Every input and weight is on the
-page, so you can see exactly how a score was reached, and disagree with it.
+- Left: "Four separate engines turn the latest fundamentals into four scores, using explicit
+  formulas and **N data-triggered calibrations**. Same data, same score." — N is the live
+  count of calibrations, never a hand-written number. Beneath it: "Click an assessment for
+  every category, weight and calibration."
+- Right, a highlighted note *(variant E)*: **"A methodology, not a measurement."** Quality,
+  Moat and Reward/Risk have no single correct formula. Intrinsica's weights are its
+  judgment — all on the page, so you can disagree.
 
-Closing line: "Click any assessment below for its categories, weights and calibrations."
+**Assessment tabs.** One box: a row of four tabs (dot + name only; 2×2 on a phone) forms
+the top edge of the detail panel, like the result breakdown's tabs. The selected tab is
+underlined in the accent colour. The question, scale, weights and counts are not repeated
+on the tabs — they are in the panel.
 
 **Detail panel** — one per assessment, and **identical in shape across all four** (this
 consistency is a requirement; they had drifted):
 
 1. Name + **scale** pill (`0–10 · sector-aware`, `0–100`, `$ per share`, `ratio · 0.2–5.0×`).
-2. The question, then a one-line "what it measures".
+2. The question (the only place in this section it appears), then a one-line "what it
+   measures".
 3. **Categories**, each with a weight / points pill, its metric list, and a two-line pair:
    green **Scores high:** … / amber **Scores low:** … in plain sentences. Fair Value uses
    **Weighted up / Weighted down**; the Reward/Risk risk category is titled
@@ -224,7 +232,9 @@ Then two labelled rows of three cards:
 
 - **Trust the analysis** — Deterministic & reproducible · Transparent to the last detail ·
   Calibrated for real companies.
-- **Put it to work at scale** — Re-evaluate whole watchlists (25 / 50 / 100+ in parallel) ·
+- **Put it to work at scale** — Re-evaluate whole watchlists ("Submit 25, 50 or 100+ stocks in
+  one run — results stream in as each finishes"; *revised 2026-09-27 — the old "in parallel …
+  in seconds" was untrue, see 5.7*) ·
   Discover what fits your criteria (screen on the four assessments) · Automated monitoring
   ("What changed?" when an assessment crosses your threshold). *No plan pill on this row.*
 
@@ -237,7 +247,7 @@ Then two labelled rows of three cards:
    screening the universe on the four assessments. (Discover is folded in here; it is not its
    own step.)
 2. **Compare** — rank stocks side by side, computed in parallel.
-3. **Watch & re-evaluate** — save watchlists and re-score them in one bulk, parallel run.
+3. **Watch & re-evaluate** — save watchlists and re-score a whole list in one run.
 4. **Monitor & automate** — scheduled re-checks, alerts and "What changed?" when scores move.
 
 ### 5.7 Pricing
@@ -246,33 +256,42 @@ Billing toggle (**Annual**, default, tagged "save ~17%" / **Monthly**). Prices d
 **effective-monthly, AlphaSpread-style**: the big number is the discounted monthly rate when
 billed annually, with the annual total beneath.
 
-| | Free · Try Intrinsica | **Pro · Deep Stock Analysis** (featured) | Unlimited · Discover, Monitor & Automate at Scale |
+| | Free · Try Intrinsica | **Pro · Deep Stock Analysis** (featured) | Unlimited · Discover & Automate at Scale |
 |---|---|---|---|
 | Annual | $0/mo — "No card, ever" | **$18.00/mo** · billed annually · $216/yr · save 18% | **$25.00/mo** · billed annually · $300/yr · save 17% |
 | Monthly | $0 | $21.99/mo | $29.99/mo |
-| For | Full-depth analysis, small volume. | Unlimited analysis & your research workflow. | Automated, systematic research across your universe. |
+| For | For the curious investor judging the framework on stocks they already know. | For the serious individual investor researching the stocks they care about. | For investors scanning & monitoring a whole universe or portfolio. |
 | CTA | Start free | Choose Pro | Choose Unlimited |
 
 Cards are equal height with the button pinned to the bottom. Pro carries the subtle
 `featured` highlight (no "most popular" text).
 
-**Canonical plan matrix** — the "Compare plans" table, preceded by three who-it's-for cards
-(Free · Try = experience the framework; Pro · Depth = deep individual research;
-Unlimited · Scale = systematic & automated):
+*Slimmed 2026-09-27 (user decision).* Each card lists **three** features:
+Free — "Every analysis complete — nothing blurred" · "~5 analyses a month · up to 3 tickers
+per run" · "1 watchlist of 5 · 6 months of score history"; Pro — "Unlimited analyses — no
+monthly cap" · "Up to 10 tickers per run · side-by-side breakdown of 3" · "Watchlists, ~2
+years of history, alerts & exports"; Unlimited — "Bulk runs — 100+ tickers in one run,
+results stream in as each finishes" · "Screen hundreds of stocks on all four scores" · "Automated monitoring, unlimited
+alerts & 'What Changed?'". The "For" line is the who-it's-for line; the Unlimited title
+dropped "Monitor" (automated monitoring is part of "Automate") so it fits one line. The
+cards share one set of rows, so for-lines, prices, features and buttons stay level across
+all three even when a title wraps.
+
+**Canonical plan matrix** — the "Compare plans" table. *(The three who-it's-for cards that
+preceded it were removed 2026-09-27; their "who" line moved onto the plan cards.)*
 
 | Feature | Free | Pro | Unlimited |
 |---|---|---|---|
 | Full-depth analysis (Quality · Moat · Fair Value · Reward/Risk) | Full | Full | Full |
 | Breakdown, methodology & calibrations | Full | Full | Full |
 | Analyses per month | ~5 | Unlimited | Unlimited |
-| Tickers per analysis run *(one results grid, ranked side by side)* | 3 | 10 | 100+ (bulk) |
+| Tickers per run *(how many you can enter in one go; re-checking a watchlist always runs the whole list)* | 3 | 10 | 100+ (bulk) |
 | Side-by-side breakdown *(full factor tables of 3 companies in one view)* | — | Up to 3 | Up to 3 |
 | Watchlists | 1 | 5–10 | Unlimited |
 | Stocks per watchlist | 5 | 50 | Unlimited |
 | Portfolio analysis | — | Basic | Advanced |
 | Score history | 6 months | ~2 years | Full history |
 | Score-history charts | 6 months | Yes | Advanced |
-| Bulk / parallel analysis | — | — | Yes |
 | Discovery — screen on the four assessments *(Preview = filters visible, running them locked)* | Preview | Preview | Full |
 | Full stock universe | Preview | Preview | Yes |
 | Score-change alerts *(told when a score crosses a threshold you set)* | — | 10–20 | Unlimited |
@@ -280,12 +299,22 @@ Unlimited · Scale = systematic & automated):
 | "What Changed?" *(which factor moved a score, this run versus the last)* | — | — | Yes |
 | Exports | — | CSV / PDF | Bulk |
 
-Closing line: "Free sells the framework · Pro sells depth & unlimited use · Unlimited sells
-scale, discovery & automation."
+~~Closing line: "Free sells the framework · …"~~ *Removed 2026-09-27 (user decision).*
 
-Two deliberate resolutions are encoded in this table:
+Three deliberate resolutions are encoded in this table:
 
-- **Compare is split in two.** "Tickers per analysis run" is the results grid (3 / 10 / 100+).
+- **Tickers per run is the only run-size limit; parallelism is never sold** *(user decision
+  2026-09-27)*. The analyst engine (`orchestrator/batch.py`) analyzes **3 tickers at a time**
+  through a rolling worker pool (`RECALC_CONCURRENCY=3`, with pacing), because more trips
+  the data source's per-IP rate limit and slows the whole run. That is a server setting
+  shared by every plan, so the former "Bulk / parallel analysis — / — / Yes" row — which
+  implied Unlimited runs 100+ at once — was removed. What plans differ in is how many
+  tickers you can submit in one run. **Re-checking a saved watchlist runs the whole list,
+  whatever the per-run cap** (option (a)), so Pro's 50-stock watchlists are not split into
+  10-ticker runs. "Computed in parallel" stays as an engine claim (several tickers at a
+  time, three engines inside each), true for the demo's 3. A faster queue could become a
+  paid lever once a licensed data provider allows more simultaneous requests.
+- **Compare is split in two.** "Tickers per run" is the results grid (3 / 10 / 100+).
   "Side-by-side breakdown" is a separate view **capped at 3 by screen width**, Pro and above.
   This replaces the undeliverable "5–10 side by side".
 - **Free is labelled honestly.** It is *not* "the full product, capped" — every analysis is
@@ -404,6 +433,12 @@ One event per funnel step, each carrying `visitor_id` and a timestamp:
 
 - **Primary metric:** unique visitors reaching `payment_button_clicked` ÷ unique visitors.
 - **`free_plan_clicked` is a separate event** and is excluded from that ratio.
+- **`watchlist_clicked` (ticker)** *(added 2026-09-26, user decision — the list grows by
+  this one event)*: the star beside each ticker in the results grid. Watchlists are not
+  built; the click answers with a toast — "{TICKER} not saved — watchlists come with an
+  Intrinsica account, and Free includes one. See plans →" — that stays 10 s or until
+  dismissed. The star carries no lock icon, on purpose: a lock would suppress the very
+  clicks this measures. Outside the paid funnel, like `free_plan_clicked`.
 - Secondary: plan mix, billing mix, methodology engagement before conversion, drop-off per step.
 - De-duplicate server-side by `visitor_id`; `localStorage` is a convenience, never the source
   of truth.

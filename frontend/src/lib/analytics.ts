@@ -17,6 +17,10 @@ export const EVENTS = Object.freeze({
   /** Kept apart from the paid funnel on purpose — never counted in paid-intent
    *  conversion. */
   freePlanClicked: 'free_plan_clicked',
+  /** The locked "add to watchlist" star on a result row (user decision 2026-09-26):
+   *  interest in a paid-workflow feature, outside the paid funnel like the free
+   *  plan click. Carries the ticker. */
+  watchlistClicked: 'watchlist_clicked',
 })
 
 const KEY = 'intrinsica_vid'

@@ -20,6 +20,7 @@ vi.mock('../lib/analytics', () => ({
     pricingViewed: 'pricing_viewed',
     planSelected: 'plan_selected',
     freePlanClicked: 'free_plan_clicked',
+    watchlistClicked: 'watchlist_clicked',
   },
 }))
 
@@ -412,6 +413,50 @@ describe('LandingPage compare chip (controller addition 2)', () => {
       { tickers: ['AAPL', 'MSFT', 'NVDA'], count: 3, source: 'sample' })
     expect(screen.getByText(/see the plans/i)).toBeInTheDocument()
     expect(JSON.parse(localStorage.getItem('intrinsica_demo_runs')!).count).toBe(5)
+  })
+  it('answers a watchlist star with the toast and records which ticker', async () => {
+    const { track } = await import('../lib/analytics')
+    await renderSettled()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ json: async () => COMPARE_RESULTS() }))
+    await userEvent.click(screen.getByRole('button', { name: /Compare/ }))
+    await waitFor(() => { expect(within(gridOf()).getByText('NVDA')).toBeInTheDocument() })
+    vi.mocked(track).mockClear()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add NVDA to a watchlist' }))
+    expect(track).toHaveBeenCalledWith('watchlist_clicked', { ticker: 'NVDA' })
+    expect(screen.getByRole('status')).toHaveTextContent('NVDA not saved')
+    await userEvent.click(screen.getByRole('button', { name: 'Add MSFT to a watchlist' }))
+    expect(screen.getAllByRole('status')).toHaveLength(1)
+    expect(screen.getByRole('status')).toHaveTextContent('MSFT not saved')
+    await userEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  // Loading variant E (user decision 2026-09-26): from the click until the answer,
+  // the button spins with the count, the live strip names the pending trio, and
+  // the previous result is dimmed; all three clear when the rows land.
+  it('shows the run in flight — button, live strip, dimmed old result — then settles', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      json: async () => ({ results: [compareRow('AAPL', { company_name: 'Old Result Inc.' })],
+                           invalid: [], error: null }),
+    }))
+    await renderSettled()
+    await waitFor(() => { expect(screen.getByText('Old Result Inc.')).toBeInTheDocument() })
+
+    let answer!: (v: unknown) => void
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(r => { answer = r })))
+    await userEvent.click(screen.getByRole('button', { name: /Compare/ }))
+
+    expect(screen.getByRole('button', { name: 'Analyzing 3…' })).toBeDisabled()
+    expect(screen.getByRole('status')).toHaveTextContent(/Computing in parallel:.*AAPL.*MSFT.*NVDA/)
+    expect(gridOf().closest('.stale')).not.toBeNull()
+
+    await act(async () => { answer({ json: async () => COMPARE_RESULTS() }) })
+    await waitFor(() => { expect(within(gridOf()).getByText('NVDA')).toBeInTheDocument() })
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(screen.getByText(/Computed in parallel/)).toBeInTheDocument()
+    expect(gridOf().closest('.stale')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Analyze →' })).toBeEnabled()
   })
 })
 

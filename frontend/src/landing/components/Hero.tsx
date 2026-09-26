@@ -35,6 +35,9 @@ interface Props {
    *  and the compare chip: concurrent chip clicks would each fire their own
    *  analysis_started, inflating the very metric the chip exists to measure. */
   busy: boolean
+  /** How many tickers the in-flight run covers; the busy button says so
+   *  ("Analyzing 3…"). Loading variant E, user decision 2026-09-26. */
+  busyCount?: number
   /** True once this browser has used up its free demo runs (frontend/src/
    *  landing/demoLimit.ts). Replaces the ticker input/button with a short
    *  message pointing at pricing — sample and compare-chip runs are unaffected,
@@ -42,7 +45,7 @@ interface Props {
   exhausted: boolean
 }
 
-export default function Hero({ onAnalyze, onSelectAssessment, busy, exhausted }: Props) {
+export default function Hero({ onAnalyze, onSelectAssessment, busy, busyCount = 0, exhausted }: Props) {
   const [value, setValue] = useState('')
   const [error, setError] = useState<string | null>(null)
 
@@ -113,8 +116,8 @@ export default function Hero({ onAnalyze, onSelectAssessment, busy, exhausted }:
         <div className="analyzer" id="analyze">
           {exhausted ? (
             <p className="an-wall">
-              You've used all {DEMO_RUN_LIMIT} free analyses this browser gets in a
-              rolling {DEMO_WINDOW_DAYS}-day window. <a href="#pricing">See the plans</a> to
+              You've used all {DEMO_RUN_LIMIT} free analyses in a rolling{' '}
+              {DEMO_WINDOW_DAYS}-day window. <a href="#pricing">See the plans</a> to
               keep analyzing.
             </p>
           ) : (
@@ -130,7 +133,10 @@ export default function Hero({ onAnalyze, onSelectAssessment, busy, exhausted }:
                   />
                 </div>
                 <button className="an-btn" type="button" onClick={submit} disabled={busy}>
-                  {busy ? 'Analyzing…' : 'Analyze →'}
+                  {busy
+                    ? <><span className="spin" aria-hidden="true" />
+                        {busyCount > 1 ? `Analyzing ${busyCount}…` : 'Analyzing…'}</>
+                    : 'Analyze →'}
                 </button>
               </div>
               {error && <p className="an-error">{error}</p>}

@@ -14,9 +14,9 @@ interface Step {
 
 const STEPS: Step[] = [
   { title: 'Analyze or discover',
-    body: 'Start from tickers you already follow — or find new ones by screening the universe on the four assessments. Either way you get the full breakdown.' },
+    body: 'Start from tickers you follow — or find new ones by screening on Quality, Moat, Fair Value and Reward/Risk.' },
   { title: 'Compare', body: 'Rank stocks side by side, computed in parallel.' },
-  { title: 'Watch & re-evaluate', body: 'Save watchlists and re-score them in one bulk, parallel run.' },
+  { title: 'Watch & re-evaluate', body: 'Save watchlists and re-score a whole list in one run.' },
   { title: 'Monitor & automate', body: 'Scheduled re-checks, alerts and “What changed?” when scores move.' },
 ]
 

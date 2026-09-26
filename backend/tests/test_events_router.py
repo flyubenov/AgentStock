@@ -94,7 +94,7 @@ def test_the_backend_allowlist_is_exactly_the_frontend_event_list():
     block = src[src.index("export const EVENTS"):]
     block = block[:block.index("})")]
     names = set(re.findall(r"^\s*\w+:\s*'([a-z_]+)'", block, re.M))
-    assert len(names) == 11
+    assert len(names) == 12  # 11 original + watchlist_clicked (user decision 2026-09-26)
     assert names == events_router.FUNNEL_EVENTS
 
 

@@ -60,87 +60,94 @@ export default function Framework({ tab, onTab }: {
         <div className="ovcard">
           <div className="kicker">The framework</div>
           <h2 className="stitle">How Intrinsica works</h2>
-          <p className="ssub">{OVERVIEW.lead}</p>
-          <div className="ovpts">
-            {OVERVIEW.points.map(p => (
-              <div key={p.title}><b>{p.title}</b> {p.body}</div>
+          <div className="ovsplit">
+            <div>
+              <p className="ssub">
+                {OVERVIEW.lead.before}{' '}
+                <b>{CALIBRATIONS.length} {OVERVIEW.lead.bold}</b>. {OVERVIEW.lead.after}
+              </p>
+              <p className="ovtail">{OVERVIEW.tail}</p>
+            </div>
+            <p className="judg"><b>{OVERVIEW.judgment.title}</b> {OVERVIEW.judgment.body}</p>
+          </div>
+        </div>
+
+        {/* Variant D3: the four assessments are tabs joined to the top of the detail
+            panel, one box, like a result's breakdown. A tab carries only the name —
+            the question, scale, weights and counts are all in the panel below it. */}
+        <div className="mbox">
+
+          {/* Plain buttons with aria-pressed rather than a real tablist, for the
+              same reason Breakdown's strip uses them: a tablist owes a screen
+              reader roving tabindex and arrow-key navigation, and a half-built one
+              is worse than none. These are toggle buttons and get Enter/Space and
+              a focus ring for free. */}
+          <div className="mcards">
+            {FRAMEWORK.map((x, i) => (
+              <button key={x.name} type="button"
+                      className={i === tab ? 'mcard on' : 'mcard'}
+                      aria-pressed={i === tab}
+                      onClick={() => onTab(i as AssessmentId)}>
+                <span className="cn">
+                  <span className="dot" style={{ background: x.color }} />{x.name}
+                </span>
+              </button>
             ))}
           </div>
-          <p className="judg"><b>{OVERVIEW.judgment.title}</b> {OVERVIEW.judgment.body}</p>
-          <p className="ovtail">{OVERVIEW.tail}</p>
-        </div>
 
-        {/* Plain buttons with aria-pressed rather than a real tablist, for the
-            same reason Breakdown's strip uses them: a tablist owes a screen
-            reader roving tabindex and arrow-key navigation, and a half-built one
-            is worse than none. These are toggle buttons and get Enter/Space and
-            a focus ring for free. */}
-        <div className="mcards">
-          {FRAMEWORK.map((x, i) => (
-            <button key={x.name} type="button"
-                    className={i === tab ? 'mcard on' : 'mcard'}
-                    aria-pressed={i === tab}
-                    onClick={() => onTab(i as AssessmentId)}>
-              <span className="cn">
-                <span className="dot" style={{ background: x.color }} />{x.name}
-              </span>
-              <span className="cq">{x.question}</span>
-              <span className="cs">{x.scale}</span>
-            </button>
-          ))}
-        </div>
-
-        <div className="mdetail">
-          <div className="dh">
-            <span className="dot" style={{ background: a.color }} />
-            {a.name} <span className="scale">{a.scale}</span>
-          </div>
-          <div className="d-what">{a.what}</div>
-
-          {a.groups.map(g => (
-            <div key={g.title} className="grpblock">
-              <div className="grp">{g.title}<span className="wt2">{g.weight}</span></div>
-              <div className="gmetrics">{g.metrics}</div>
-              <div className="gwhen"><b className="up">{a.hiLabel}:</b> {g.hi}</div>
-              <div className="gwhen"><b className="dn">{a.loLabel}:</b> {g.lo}</div>
+          <div className="mdetail">
+            <div className="dh">
+              <span className="dot" style={{ background: a.color }} />
+              {a.name} <span className="scale">{a.scale}</span>
             </div>
-          ))}
+            <div className="d-q">{a.question}</div>
+            <div className="d-what">{a.what}</div>
 
-          <p className="note">{a.note}</p>
+            {a.groups.map(g => (
+              <div key={g.title} className="grpblock">
+                <div className="grp">{g.title}<span className="wt2">{g.weight}</span></div>
+                <div className="gmetrics">{g.metrics}</div>
+                <div className="gwhen"><b className="up">{a.hiLabel}:</b> {g.hi}</div>
+                <div className="gwhen"><b className="dn">{a.loLabel}:</b> {g.lo}</div>
+              </div>
+            ))}
 
-          <div className="cal-wrap">
-            <div className="cal-title">
-              ◆ Calibrations for {a.name} — data-triggered, click to see when
-            </div>
-            {cals.map(c => {
-              const open = openCal === c.name
-              return (
-                <div key={c.name} className={open ? 'arow open' : 'arow'}>
-                  <button type="button" className="ah" aria-expanded={open}
-                          onClick={() => setOpenCal(open ? null : c.name)}>
-                    <span>
-                      <span className="nm">{c.name}</span>
-                      <span className="sm">{c.summary}</span>
-                    </span>
-                    <span className="chev" aria-hidden="true">▾</span>
-                  </button>
-                  {open && (
-                    <div className="ab">
-                      <div className="kv"><div className="k when">◆ When it applies</div>
-                        <p>{c.when}</p></div>
-                      <div className="kv"><div className="k">What it does</div>
-                        <p>{c.effect}</p></div>
-                      {c.example && <div className="ex"><b>Example:</b> {c.example}</div>}
-                      <div className="tags">
-                        <Tip label="Conditional" tip={TAG_TIPS.cond} className="tg cond" />
-                        {c.guarded && <Tip label="Guarded" tip={TAG_TIPS.guard} className="tg guard" />}
-                        <Tip label="Shown live" tip={TAG_TIPS.live} className="tg live" />
+            <p className="note">{a.note}</p>
+
+            <div className="cal-wrap">
+              <div className="cal-title">
+                ◆ Calibrations for {a.name} — data-triggered, click to see when
+              </div>
+              {cals.map(c => {
+                const open = openCal === c.name
+                return (
+                  <div key={c.name} className={open ? 'arow open' : 'arow'}>
+                    <button type="button" className="ah" aria-expanded={open}
+                            onClick={() => setOpenCal(open ? null : c.name)}>
+                      <span>
+                        <span className="nm">{c.name}</span>
+                        <span className="sm">{c.summary}</span>
+                      </span>
+                      <span className="chev" aria-hidden="true">▾</span>
+                    </button>
+                    {open && (
+                      <div className="ab">
+                        <div className="kv"><div className="k when">◆ When it applies</div>
+                          <p>{c.when}</p></div>
+                        <div className="kv"><div className="k">What it does</div>
+                          <p>{c.effect}</p></div>
+                        {c.example && <div className="ex"><b>Example:</b> {c.example}</div>}
+                        <div className="tags">
+                          <Tip label="Conditional" tip={TAG_TIPS.cond} className="tg cond" />
+                          {c.guarded && <Tip label="Guarded" tip={TAG_TIPS.guard} className="tg guard" />}
+                          <Tip label="Shown live" tip={TAG_TIPS.live} className="tg live" />
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </div>
       </div>

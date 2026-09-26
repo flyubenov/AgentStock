@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { PLANS, COMPARE_ROWS, PERIODS, WHO, priceFor, totalFor } from './plans'
+import { PLANS, COMPARE_ROWS, PERIODS, priceFor, totalFor } from './plans'
 import { DEMO_RUN_LIMIT } from '../demoLimit'
 import { MAX_TICKERS } from '../components/Hero'
 
@@ -17,14 +17,13 @@ const ALL_LABELS = [
   'Full-depth analysis (Quality · Moat · Fair Value · Reward/Risk)',
   'Breakdown, methodology & calibrations',
   'Analyses per month',
-  'Tickers per analysis run',
+  'Tickers per run',
   'Side-by-side breakdown',
   'Watchlists',
   'Stocks per watchlist',
   'Portfolio analysis',
   'Score history',
   'Score-history charts',
-  'Bulk / parallel analysis',
   'Discovery — screen on Quality/Moat/FV/Reward/Risk',
   'Full stock universe',
   'Score-change alerts',
@@ -59,7 +58,6 @@ const ALL_VALUES: [string, string, string][] = [
   ['—', 'Basic', 'Advanced'],
   ['6 months', '~2 years', 'Full history'],
   ['6 months', 'Yes', 'Advanced'],
-  ['—', '—', 'Yes'],
   ['Preview', 'Preview', 'Full'],
   ['Preview', 'Preview', 'Yes'],
   ['—', '10–20', 'Unlimited'],
@@ -78,48 +76,45 @@ describe('plans', () => {
     expect(PLANS.map(p => p.title)).toEqual([
       'Try Intrinsica',
       'Deep Stock Analysis',
-      'Discover, Monitor & Automate at Scale',
+      'Discover & Automate at Scale',
     ])
     expect(PLANS.map(p => p.cta)).toEqual(['Start free', 'Choose Pro', 'Choose Unlimited'])
     for (const p of PLANS) {
       expect(p.forLine.length).toBeGreaterThan(20)
-      expect(p.features.length).toBeGreaterThanOrEqual(5)
+      expect(p.features).toHaveLength(3)
       for (const f of p.features) expect(f.length).toBeGreaterThan(10)
     }
   })
 
-  // Pinned by equality, and the order is part of it: each paid plan opens with
-  // its "everything in the tier below, plus" line, and the caps that follow read
-  // as a list of what the extra money buys. A shuffled list still contains the
-  // same words and says something different.
-  it('lists each plan’s features in order', () => {
+  // Pinned by equality. Slim cards (user decision 2026-09-27): three lines each —
+  // the full allowances, and what each tier inherits from the one below, are in
+  // the compare matrix directly underneath.
+  it('lists each plan’s three features in order', () => {
     expect(PLANS[0].features).toEqual([
-      '~5 full-depth analyses / month',
-      'Every analysis complete — Quality, Moat, Fair Value & Reward/Risk with the full breakdown, nothing blurred',
-      'Up to 3 tickers per analysis run',
-      '1 watchlist, up to 5 stocks',
-      '6 months of score history (2 quarters)',
-      'Discovery: see the filters, results locked',
+      'Every analysis complete — nothing blurred',
+      '~5 analyses a month · up to 3 tickers per run',
+      '1 watchlist of 5 · 6 months of score history',
     ])
     expect(PLANS[1].features).toEqual([
-      'Everything in Free (same full depth), plus:',
       'Unlimited analyses — no monthly cap',
-      'Up to 10 tickers per analysis run · side-by-side breakdown of 3',
-      '5–10 watchlists of 50 stocks · ~2 years of score history & charts',
-      'Score-change alerts (10–20) · CSV / PDF export · basic portfolio analysis',
+      'Up to 10 tickers per run · side-by-side breakdown of 3',
+      'Watchlists, ~2 years of history, alerts & exports',
     ])
     expect(PLANS[2].features).toEqual([
-      'Everything in Pro, plus:',
-      'Bulk / parallel analysis — 25, 50, 100+ tickers in one run',
-      'Screen on Quality/Moat/FV/Reward/Risk across hundreds of stocks',
-      'Unlimited watchlists · advanced portfolio analysis',
-      'Full score-history evolution & “What Changed?”',
-      'Automated monitoring · unlimited alerts · bulk exports',
+      'Bulk runs — 100+ tickers in one run, results stream in as each finishes',
+      'Screen hundreds of stocks on all four scores',
+      'Automated monitoring, unlimited alerts & “What Changed?”',
     ])
-    // Each paid tier must open by inheriting the one below it, or the cards
-    // read as three unrelated products rather than three rungs.
-    expect(PLANS[1].features[0]).toMatch(/^Everything in Free\b/)
-    expect(PLANS[2].features[0]).toMatch(/^Everything in Pro\b/)
+  })
+
+  // The for-line is the "who it is for" line of the who-cards it replaced, so all
+  // three read as the same kind of sentence at the same place on the card.
+  it('says who each plan is for', () => {
+    expect(PLANS.map(p => p.forLine)).toEqual([
+      'For the curious investor judging the framework on stocks they already know.',
+      'For the serious individual investor researching the stocks they care about.',
+      'For investors scanning & monitoring a whole universe or portfolio.',
+    ])
   })
 
   it('shows the effective monthly price on annual billing', () => {
@@ -213,15 +208,26 @@ describe('plans', () => {
     }
   })
 
-  it('carries all seventeen compare rows, in spec order, with the split compare feature', () => {
-    expect(COMPARE_ROWS).toHaveLength(17)
+  it('carries all sixteen compare rows, in spec order, with the split compare feature', () => {
+    expect(COMPARE_ROWS).toHaveLength(16)
     expect(COMPARE_ROWS.map(r => r.label)).toEqual(ALL_LABELS)
     const sbs = COMPARE_ROWS.find(r => r.label === 'Side-by-side breakdown')
     expect(sbs).toBeDefined()
     expect(sbs!.values).toEqual(['—', 'Up to 3', 'Up to 3'])
-    const run = COMPARE_ROWS.find(r => r.label === 'Tickers per analysis run')
+    const run = COMPARE_ROWS.find(r => r.label === 'Tickers per run')
     expect(run).toBeDefined()
     expect(run!.values).toEqual(['3', '10', '100+ (bulk)'])
+    // Option (a), user decision 2026-09-27: the cap is on what you enter, not on
+    // re-checking a saved watchlist.
+    expect(run!.note).toMatch(/Re-checking a watchlist always runs the whole list/)
+  })
+
+  // How many tickers run at the same moment is a server setting shared by every
+  // plan, so no row may sell it (user decision 2026-09-27).
+  it('never sells simultaneous or parallel analysis as a plan feature', () => {
+    const text = JSON.stringify([PLANS, COMPARE_ROWS])
+    expect(text).not.toMatch(/parallel/i)
+    expect(COMPARE_ROWS.map(r => r.label)).not.toContain('Bulk / parallel analysis')
   })
 
   // Task 13's fix round pinned the *render* order against this data; it did not
@@ -262,7 +268,7 @@ describe('plans', () => {
       return row!.values[0]
     }
     expect(byLabel('Analyses per month')).toBe('~5')
-    expect(byLabel('Tickers per analysis run')).toBe('3')
+    expect(byLabel('Tickers per run')).toBe('3')
     expect(byLabel('Watchlists')).toBe('1')
     expect(byLabel('Stocks per watchlist')).toBe('5')
     expect(byLabel('Score history')).toBe('6 months')
@@ -295,7 +301,7 @@ describe('plans', () => {
       return row!.values[0]
     }
     expect(byLabel('Analyses per month')).toBe(`~${DEMO_RUN_LIMIT}`)
-    expect(byLabel('Tickers per analysis run')).toBe(String(MAX_TICKERS))
+    expect(byLabel('Tickers per run')).toBe(String(MAX_TICKERS))
   })
 
   // Moved out of Pricing.tsx: the toggle's tag is a pricing number, and a
@@ -310,23 +316,8 @@ describe('plans', () => {
     expect(PERIODS[1].save).toBeUndefined()
   })
 
-  // The who-cards restate one plan each, in PLANS order. A card that opened
-  // with a different plan than the one it describes would sell the wrong tier.
-  it('gives each plan one who-it-is-for card, in plan order', () => {
-    expect(WHO).toHaveLength(PLANS.length)
-    WHO.forEach((w, i) => {
-      expect(w.tag.startsWith(PLANS[i].name)).toBe(true)
-      expect(w.title.length).toBeGreaterThan(10)
-      expect(w.who.length).toBeGreaterThan(40)
-      expect(w.focus.length).toBeGreaterThan(40)
-    })
-    expect(WHO.map(w => w.tag))
-      .toEqual(['Free · Try', 'Pro · Depth', 'Unlimited · Scale'])
-  })
-
   it('never calls Free the full product', () => {
     const free = PLANS[0]
-    expect(free.forLine).toBe('Full-depth analysis, small volume.')
     expect(JSON.stringify(free)).not.toMatch(/full product/i)
     // Spec 5.7: Free is honest — complete analysis, capped volume. Both halves
     // have to be present, not just the flattering one.
@@ -339,7 +330,7 @@ describe('plans', () => {
   // right direction. What is banned is the reversed ratio, the hyphenated compound
   // and the R/R abbreviation.
   it('says assessment rather than signal, and Reward/Risk rather than Risk/Reward', () => {
-    const text = JSON.stringify([PLANS, COMPARE_ROWS, WHO, PERIODS])
+    const text = JSON.stringify([PLANS, COMPARE_ROWS, PERIODS])
     expect(text).toMatch(/Reward\s?\/\s?Risk/)
     expect(text).not.toMatch(/signal/i)
     expect(text).not.toMatch(/Risk\s*[/-]\s*Reward/)
@@ -349,7 +340,7 @@ describe('plans', () => {
 
   // Spec section 8 rules 3 and 5, and the fake-door rule on invented urgency.
   it('publishes no scoring cut-off, no internal identifier and no manufactured scarcity', () => {
-    const text = JSON.stringify([PLANS, COMPARE_ROWS, WHO, PERIODS])
+    const text = JSON.stringify([PLANS, COMPARE_ROWS, PERIODS])
     expect(text.length).toBeGreaterThan(500)
     expect(text).not.toMatch(/[<>≥≤]\s*\d/)
     expect(text).not.toMatch(/scores?\s+\d/i)

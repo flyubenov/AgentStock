@@ -18,12 +18,13 @@ void (() => track('rage_click_v2'))
 /** Spec section 9's event list, hand-transcribed from
  *  docs/superpowers/specs/2026-09-23-intrinsica-fake-door-design.md — the
  *  funnel sentence, plus `free_plan_clicked`, which that section names
- *  separately as its own event excluded from paid-intent conversion.
+ *  separately as its own event excluded from paid-intent conversion, plus
+ *  `watchlist_clicked` (added 2026-09-26 by user decision, likewise outside it).
  *
  *  Transcribed and NOT imported from `./analytics`. An expectation derived from
  *  the constant under test compares the module to itself and passes whatever it
  *  contains, which is a failure mode this branch has shipped before. These
- *  eleven strings are the spec's, typed out; if the two lists disagree, one of
+ *  twelve strings are the spec's, typed out; if the two lists disagree, one of
  *  the two documents is wrong and a human has to say which. */
 const SPEC_EVENTS = [
   'page_view',
@@ -37,6 +38,7 @@ const SPEC_EVENTS = [
   'payment_button_clicked',
   'email_submitted',
   'free_plan_clicked',
+  'watchlist_clicked',
 ]
 
 /** THE LIST IS CLOSED — spec section 9 says so in as many words: "this list is

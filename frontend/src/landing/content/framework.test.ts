@@ -97,13 +97,14 @@ describe('framework content', () => {
     expect(text).not.toMatch(/\.py\b|backend\/|scoring\./)
   })
 
-  it('carries the four overview highlights the spec names, and the closing line', () => {
-    expect(OVERVIEW.points.map(p => p.title)).toEqual([
-      'Scored for its sector.', 'Valued for its type.',
-      'Calibrated for distortions.', 'Built to run in parallel.'])
-    for (const p of OVERVIEW.points) expect(p.body).toBeTruthy()
-    expect(OVERVIEW.lead).toMatch(/no single blended rating/)
-    expect(OVERVIEW.tail).toMatch(/Click any assessment below/)
+  // Variant D3 (user decision 2026-09-26): the four highlights were cut. The lead
+  // leaves the calibration count to the component, which renders CALIBRATIONS.length.
+  it('carries the short overview lead, the judgment note and the closing line', () => {
+    expect(OVERVIEW).not.toHaveProperty('points')
+    expect(`${OVERVIEW.lead.before} ${OVERVIEW.lead.bold}`).not.toMatch(/\d/)
+    expect(OVERVIEW.lead.after).toBe('Same data, same score.')
+    expect(OVERVIEW.judgment.title).toBe('A methodology, not a measurement.')
+    expect(OVERVIEW.tail).toMatch(/Click an assessment/)
   })
 
   it('attaches every calibration to at least one assessment', () => {

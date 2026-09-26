@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from 'react'
+import { Fragment, useEffect, useState, type ReactNode } from 'react'
 import type { TickerPayload } from '../types'
 import { dollars, gapClass, gapPct, money, num } from '../format'
 
@@ -7,6 +7,8 @@ interface Props {
   open: Record<string, boolean>
   onToggle: (ticker: string) => void
   renderBreakdown: (row: TickerPayload) => ReactNode
+  /** The locked watchlist star beside each ticker (a fake door — nothing is saved). */
+  onWatch?: (ticker: string) => void
 }
 
 /** Units live in the header so the cells stay numeric (style B). Tier words such as
@@ -34,7 +36,7 @@ function bestOf(values: (number | null)[]): number | null {
   return Math.max(...finite)
 }
 
-export default function ResultGrid({ rows, open, onToggle, renderBreakdown }: Props) {
+export default function ResultGrid({ rows, open, onToggle, renderBreakdown, onWatch }: Props) {
   if (rows.length === 0) return null
 
   // Best-in-column highlight (spec 5.2) applies only in compare mode — more than
@@ -87,6 +89,14 @@ export default function ResultGrid({ rows, open, onToggle, renderBreakdown }: Pr
                     >
                       <span className="tk">{r.ticker}</span>
                     </button>
+                    {onWatch && (
+                      <button type="button" className="watch"
+                              aria-label={`Add ${r.ticker} to a watchlist`}
+                              title="Add to watchlist"
+                              onClick={e => { e.stopPropagation(); onWatch(r.ticker) }}>
+                        ☆
+                      </button>
+                    )}
                     <span className="nm">{r.company_name ?? ''}</span>
                   </td>
                   <td className={isBest(quality, bestQuality) ? 'best' : undefined}>
@@ -126,7 +136,38 @@ export default function ResultGrid({ rows, open, onToggle, renderBreakdown }: Pr
 /** "Computed in parallel: AAPL ✓ MSFT ✓ NVDA ✓ · 3 tickers · 2.1s" — shown above the
  *  grid whenever more than one ticker ran (spec 5.2). A ticker whose engines all
  *  declined is marked ✗ rather than ✓: the bar reports what happened. */
-export function RunBar({ rows, ms }: { rows: TickerPayload[]; ms: number | null }) {
+/** While a multi-ticker run is in flight the strip says so at once — every
+ *  ticker's bar sweeps and the clock counts up — then settles into the result
+ *  (loading variant E, user decision 2026-09-26). The backend answers all tickers
+ *  in one response, so no ticker is ever shown as done before the others: the
+ *  strip claims only what the page knows. */
+function LiveRunBar({ tickers }: { tickers: string[] }) {
+  const [ms, setMs] = useState(0)
+  useEffect(() => {
+    const t0 = Date.now()
+    const id = setInterval(() => setMs(Date.now() - t0), 100)
+    return () => clearInterval(id)
+  }, [])
+  return (
+    <div className="runbar live" role="status">
+      <span className="rp wait">Computing in parallel:</span>
+      {tickers.map(t => (
+        <span key={t} className="rp">
+          {t} <span className="mini ind" aria-hidden="true"><span /></span>
+        </span>
+      ))}
+      <span className="rp total">{tickers.length} tickers · {(ms / 1000).toFixed(1)}s</span>
+    </div>
+  )
+}
+
+export function RunBar({ rows, ms, pending = [] }: {
+  rows: TickerPayload[]
+  ms: number | null
+  /** The tickers of the run in flight, if any. */
+  pending?: string[]
+}) {
+  if (pending.length > 1) return <LiveRunBar tickers={pending} />
   if (rows.length < 2) return null
   return (
     <div className="runbar">

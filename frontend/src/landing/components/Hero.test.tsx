@@ -122,6 +122,18 @@ describe('Hero', () => {
       expect(onAnalyze).not.toHaveBeenCalled()
     })
 
+    // Loading variant E: the busy button spins and says how many tickers it is on.
+    it('shows a spinner and the ticker count on the busy Analyze button', () => {
+      const { container, rerender } = render(
+        <Hero onAnalyze={noop} onSelectAssessment={noop} busy={true} busyCount={3} exhausted={false} />)
+      expect(screen.getByRole('button', { name: 'Analyzing 3…' })).toBeDisabled()
+      expect(container.querySelector('.an-btn .spin')).toHaveAttribute('aria-hidden', 'true')
+      rerender(<Hero onAnalyze={noop} onSelectAssessment={noop} busy={true} busyCount={1} exhausted={false} />)
+      expect(screen.getByRole('button', { name: 'Analyzing…' })).toBeInTheDocument()
+      rerender(<Hero onAnalyze={noop} onSelectAssessment={noop} busy={false} busyCount={0} exhausted={false} />)
+      expect(container.querySelector('.an-btn .spin')).not.toBeInTheDocument()
+    })
+
     it('is disabled while busy even behind the exhausted wall, where it is the only control', async () => {
       const onAnalyze = vi.fn()
       render(<Hero onAnalyze={onAnalyze} onSelectAssessment={noop} busy={true} exhausted={true} />)

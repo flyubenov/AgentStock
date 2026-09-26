@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react'
-import { COMPARE_ROWS, PERIODS, PLANS, WHO, priceFor, type Billing } from '../content/plans'
+import { COMPARE_ROWS, PERIODS, PLANS, priceFor, type Billing } from '../content/plans'
 
 /** The pricing section (spec 5.7): three plan cards over a billing toggle, then
- *  the who-it-is-for cards and the canonical plan matrix.
+ *  the canonical plan matrix. Each card's for-line says who the plan is for; the
+ *  separate who-it-is-for cards and the closing line were cut (user decision
+ *  2026-09-27) — the matrix carries the detail.
  *
  *  Every string comes from content/plans.ts, for the same reason the framework
  *  panels do: the matrix and the cards quote the same allowances, and two
@@ -115,16 +117,6 @@ export default function Pricing({ billing, onBilling, onChoose, onView }: {
             The same deep analysis in every tier — you unlock more <b>volume</b>, then{' '}
             <b>scale & automation</b>.
           </p>
-          <div className="who">
-            {WHO.map(w => (
-              <div key={w.tag} className="who-card">
-                <div className="wtag">{w.tag}</div>
-                <div className="wt">{w.title}</div>
-                <div className="wfor">{w.who}</div>
-                <div className="wfocus"><b>Focus:</b> {w.focus}</div>
-              </div>
-            ))}
-          </div>
           <div className="cmp-wrap">
             <table className="cmp-plans">
               <thead>
@@ -164,10 +156,6 @@ export default function Pricing({ billing, onBilling, onChoose, onView }: {
               </tbody>
             </table>
           </div>
-          <p className="compare-note">
-            Free sells the framework · Pro sells depth & unlimited use · Unlimited sells
-            scale, discovery & automation.
-          </p>
         </div>
       </div>
     </section>

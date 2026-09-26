@@ -19,15 +19,14 @@
  *     capped. It is never "the full product".
  *
  *  The Free caps are not aspirational: `~5 analyses a month` is demoLimit.ts's
- *  own allowance and `3 tickers per run` is the backend's per-run cap. The hero
- *  free-note quotes both as well. One pair of numbers, four places, and
+ *  own allowance and `3 tickers per run` is the backend's per-run cap. One pair
+ *  of numbers, several places, and
  *  plans.test.ts derives its assertion from the constants rather than retyping
  *  them.
  *
  *  Every string the pricing section renders is here, including the two that
  *  used to sit in Pricing.tsx: the billing toggle's `save ~17%` tag (a pricing
- *  number, and a pricing number in a component is one no data test can reach)
- *  and the three who-it-is-for cards. */
+ *  number, and a pricing number in a component is one no data test can reach). */
 
 export type Billing = 'annual' | 'monthly'
 
@@ -70,49 +69,41 @@ export const PLANS: Plan[] = [
   {
     name: 'Free',
     title: 'Try Intrinsica',
-    forLine: 'Full-depth analysis, small volume.',
+    forLine: 'For the curious investor judging the framework on stocks they already know.',
     cta: 'Start free',
     features: [
-      '~5 full-depth analyses / month',
-      'Every analysis complete — Quality, Moat, Fair Value & Reward/Risk with the full breakdown, nothing blurred',
-      'Up to 3 tickers per analysis run',
-      '1 watchlist, up to 5 stocks',
-      '6 months of score history (2 quarters)',
-      'Discovery: see the filters, results locked',
+      'Every analysis complete — nothing blurred',
+      '~5 analyses a month · up to 3 tickers per run',
+      '1 watchlist of 5 · 6 months of score history',
     ],
   },
   {
     name: 'Pro',
     title: 'Deep Stock Analysis',
-    forLine: 'Unlimited analysis & your research workflow.',
+    forLine: 'For the serious individual investor researching the stocks they care about.',
     featured: true,
     cta: 'Choose Pro',
     annual: { effective: '$18.00', yearly: 216,
               sub: 'billed annually · $216/yr · save 18%' },
     monthly: { effective: '$21.99', sub: 'billed monthly · $21.99/mo' },
     features: [
-      'Everything in Free (same full depth), plus:',
       'Unlimited analyses — no monthly cap',
-      'Up to 10 tickers per analysis run · side-by-side breakdown of 3',
-      '5–10 watchlists of 50 stocks · ~2 years of score history & charts',
-      'Score-change alerts (10–20) · CSV / PDF export · basic portfolio analysis',
+      'Up to 10 tickers per run · side-by-side breakdown of 3',
+      'Watchlists, ~2 years of history, alerts & exports',
     ],
   },
   {
     name: 'Unlimited',
-    title: 'Discover, Monitor & Automate at Scale',
-    forLine: 'Automated, systematic research across your universe.',
+    title: 'Discover & Automate at Scale',
+    forLine: 'For investors scanning & monitoring a whole universe or portfolio.',
     cta: 'Choose Unlimited',
     annual: { effective: '$25.00', yearly: 300,
               sub: 'billed annually · $300/yr · save 17%' },
     monthly: { effective: '$29.99', sub: 'billed monthly · $29.99/mo' },
     features: [
-      'Everything in Pro, plus:',
-      'Bulk / parallel analysis — 25, 50, 100+ tickers in one run',
-      'Screen on Quality/Moat/FV/Reward/Risk across hundreds of stocks',
-      'Unlimited watchlists · advanced portfolio analysis',
-      'Full score-history evolution & “What Changed?”',
-      'Automated monitoring · unlimited alerts · bulk exports',
+      'Bulk runs — 100+ tickers in one run, results stream in as each finishes',
+      'Screen hundreds of stocks on all four scores',
+      'Automated monitoring, unlimited alerts & “What Changed?”',
     ],
   },
 ]
@@ -160,43 +151,17 @@ export function totalFor(planName: string, billing: Billing): string {
   return `$${plan.annual!.yearly} / year (${plan.annual!.effective}/mo)`
 }
 
-/** The three "who it is for" cards above the matrix (spec 5.7). Copy, so it
- *  lives with the rest of the copy: each card restates one plan's promise, and
- *  a restatement kept in a different file from the thing it restates drifts.
- *  `tag` opens with the plan name, in PLANS order — plans.test.ts pins that. */
-export interface Audience {
-  tag: string
-  title: string
-  who: string
-  focus: string
-}
-
-export const WHO: Audience[] = [
-  {
-    tag: 'Free · Try',
-    title: 'Experience the framework',
-    who: 'For the curious investor judging the framework on stocks they already know.',
-    focus: 'every analysis is complete and nothing is blurred — but volume, watchlists, history and discovery are capped.',
-  },
-  {
-    tag: 'Pro · Depth',
-    title: 'Deep individual research',
-    who: 'For the serious individual investor researching the stocks they care about.',
-    focus: 'unlimited analysis on the names you pick, plus your research workflow.',
-  },
-  {
-    tag: 'Unlimited · Scale',
-    title: 'Systematic & automated',
-    who: 'For investors scanning & monitoring a whole universe or portfolio.',
-    focus: 'discover across the market and let Intrinsica monitor it for you.',
-  },
-]
-
 /** The canonical plan matrix (spec 5.7). Two resolutions are encoded here:
  *
- *  - Compare is split in two. "Tickers per analysis run" is the results grid
+ *  - Compare is split in two. "Tickers per run" is the results grid
  *    (3 / 10 / 100+); "Side-by-side breakdown" is a separate view capped at 3 by
  *    screen width. This replaces the undeliverable "5–10 side by side".
+ *  - Tickers per run is the ONLY run-size limit (user decision 2026-09-27). How
+ *    many tickers are analyzed at the same moment is a server setting shared by
+ *    every plan (orchestrator/batch.py runs a pool of 3, bounded by the data
+ *    source's rate limit), so it is never sold as a plan feature — the old "Bulk /
+ *    parallel analysis" row claimed Unlimited ran 100+ at once, which it does not.
+ *    Re-checking a watchlist runs the whole list regardless of this cap.
  *  - The first two rows are identical across all three plans on purpose. That is
  *    the product's central claim — the depth never changes, only the volume and
  *    the automation — so a matrix where they differed would be selling something
@@ -208,8 +173,8 @@ export const COMPARE_ROWS: CompareRow[] = [
     values: ['Full', 'Full', 'Full'], on: [true, true, true] },
   { label: 'Analyses per month',
     values: ['~5', 'Unlimited', 'Unlimited'] },
-  { label: 'Tickers per analysis run',
-    note: 'They come back in one results grid, ranked side by side',
+  { label: 'Tickers per run',
+    note: 'How many you can enter in one go. Re-checking a watchlist always runs the whole list',
     values: ['3', '10', '100+ (bulk)'], on: [false, false, true] },
   { label: 'Side-by-side breakdown',
     note: 'Full factor tables of 3 companies in one view',
@@ -219,7 +184,6 @@ export const COMPARE_ROWS: CompareRow[] = [
   { label: 'Portfolio analysis', values: ['—', 'Basic', 'Advanced'] },
   { label: 'Score history', values: ['6 months', '~2 years', 'Full history'] },
   { label: 'Score-history charts', values: ['6 months', 'Yes', 'Advanced'] },
-  { label: 'Bulk / parallel analysis', values: ['—', '—', 'Yes'], on: [false, false, true] },
   { label: 'Discovery — screen on Quality/Moat/FV/Reward/Risk',
     note: 'Preview = the filters are visible, running them is locked',
     values: ['Preview', 'Preview', 'Full'], on: [false, false, true] },
