@@ -48,11 +48,16 @@
 /* hero — promise + analyzer left, result card right (hero rework 2026-09-27) */
 .intrinsica .hero { padding: 56px 0 48px; }
 .intrinsica .hero-in { max-width: 1160px; margin: 0 auto; padding: 0 24px; display: grid; grid-template-columns: 1fr 1fr;
-  gap: 48px; align-items: center; }
+  gap: 48px; align-items: start; }
+/* Top-aligned, not centred: the card grows while a run is in flight (live strip) and
+ * would otherwise push the input down under the cursor. The padding re-balances the
+ * two columns at rest. */
+.intrinsica .hero-l { padding-top: 36px; }
 .intrinsica .hero-h1 { font: 700 48px/1.08 var(--fh); letter-spacing: -.03em; text-wrap: balance; }
 .intrinsica .hero-sub { color: var(--dim); font-size: 17px; margin-top: 16px; max-width: 46ch; }
 .intrinsica .an-micro { font-size: 13px; color: var(--mute); margin-top: 10px; }
 @media (max-width: 900px) {
+  .intrinsica .hero-l { padding-top: 0; }
   .intrinsica .hero { padding: 32px 0 36px; }
   .intrinsica .hero-in { grid-template-columns: 1fr; gap: 26px; padding: 0 16px; }
   .intrinsica .hero-h1 { font-size: 34px; }
@@ -499,3 +504,10 @@
 .intrinsica .bk-x:hover { color: var(--text); background: var(--bg); }
 .intrinsica .bk-dock .bd { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 6px 16px 18px; }
 @media (max-width: 600px) { .intrinsica .bk-in { padding: 18px 16px 22px; } }
+/* The % vs price colour must beat the card's own caption colour (spec 5.2). */
+.intrinsica .rc .gap-pos { color: var(--pos); } .intrinsica .rc .gap-near { color: var(--blue); }
+.intrinsica .rc .gap-warn { color: var(--warn); } .intrinsica .rc .gap-neg { color: var(--neg); }
+@media (max-width: 600px) {
+  .intrinsica .rc-head { flex-wrap: wrap; }
+  .intrinsica .rc-head > div { flex: 1 1 100%; }
+}
