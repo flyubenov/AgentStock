@@ -14,6 +14,17 @@
 >    event list itself did not grow — it is still closed, and now enforced at build time.
 >
 > Full decision record: <https://claude.ai/artifact/QrzYRX1oAr6kYzAcENbkn2>
+
+> **REVISION 2026-09-27 — hero rework (approved by the user, NOT yet implemented).**
+> §5.1, §5.2, §5.3, §5.4, §9 and §11 are revised below. In summary:
+> - The hero becomes a promise headline beside a live result card.
+> - The results grid is replaced by that card.
+> - The breakdown opens under the hero.
+> - The Framework section gains a question band and two tab-pair labels.
+>
+> Background: a competitor review at <https://claude.ai/artifact/M4aHVziuvx5mE3PczL9YL9>,
+> item 1 of its suggested order. Mock-ups and their builders are in
+> `.superpowers/brainstorm/hero/` (`build_runflow2.py` for the card, `build_phone.py` for phone).
 - **Author:** f_lub (with Claude)
 - **Branch:** `01-fake-door-test`
 - **Source material:** `MonetizationPlan/Agent_Stock_Smoke_Fake_Test_Monetization_Plan.md`, `MonetizationPlan/FreeProUnlimited.md`, `MonetizationPlan/NewPlatformName-Branding-Positioning.txt`
@@ -58,7 +69,7 @@ Two pages, one route each, sharing nav/footer chrome:
 
 | Route | Contents |
 |---|---|
-| `/` (landing) | nav · hero + analyzer · results · methodology · why · workflow · pricing + compare · footer |
+| `/` (landing) | nav · hero (analyzer + result card) · breakdown (when open) · question band · methodology · why · workflow · pricing + compare · footer |
 | `/checkout` | mini-nav ("← Back to pricing") · plan summary · **Proceed to payment** · post-click disclosure · short legal footer |
 
 **Checkout is a separate page, not a section.** In the mock this is `#site` vs
@@ -90,63 +101,107 @@ Workflow · Pricing · Sign up (CTA)**.
 
 ### 5.1 Hero
 
-- Wordmark **Intrinsica**, then **Fundamental Stock Analysis**.
-- **Pipeline strip** directly under the headline *(added 2026-09-26, user decision,
-  variant B3)*: `Dozens of fundamentals → Intrinsica methodology · weights & calibrations →
-  Four scores`, the last pill highlighted. It says what Intrinsica is: not raw financial
-  data, but the fundamentals turned into four scores by its own methodology. The "Four
-  scores" pill lands on the four assessments set directly beneath it.
-- **The four assessments inline under the headline** (placement "V2", locked), each a
-  coloured dot + name + its plain-English question, and each **clickable**: clicking jumps
-  to the methodology section and selects that assessment's tab.
-  - Quality — *How strong is the underlying business?*
-  - Moat — *How durable are its competitive advantages?*
-  - Fair Value — *What is the business worth based on its fundamentals and valuation methods?*
-  - Reward / Risk — *How attractive is the current price relative to intrinsic value and downside risk?*
-- ~~Sub-line: "Evaluate stocks using a consistent, transparent fundamental framework."~~
-  *Removed 2026-09-26 (variant B3): the pipeline strip carries this claim instead.*
-- **Analyzer** immediately below: one rounded field (mono, focus glow, no magnifier icon),
-  placeholder "Enter one or more tickers — e.g. NVDA, AMD, AVGO", and an **Analyze →**
-  button. No trust line — the field sits directly above the results grid so input and
-  output read as one unit.
-- **Compare chip** under the analyzer *(user decision, 2026-09-26 — supersedes v21's
-  "no chips")*: "Or try: Compare AAPL · MSFT · NVDA" fills the input with the three
-  tickers and runs them in parallel as a sample run. It never consumes the typed demo
-  allowance and stays available after it is used up.
+*Rewritten 2026-09-27 (hero rework, user decisions throughout).*
 
-### 5.2 Results
+**Removed in this rework:**
+- the "Intrinsica / Fundamental Stock Analysis" heading (the wordmark stays in the nav);
+- the pipeline strip (variant B3, 2026-09-26);
+- the four clickable assessment questions (placement "V2").
 
-Results **always render as the grid**, including for a single ticker (one row,
-auto-expanded). Above it, when more than one ticker ran, a parallel-run bar
-("Computed in parallel: AAPL ✓ AMD ✓ … · 3 tickers · 2.1s").
+The questions still live in each Framework detail panel (§5.4). A "numbers band" of fixed facts was designed and **rejected**: three of its four figures never change and they are abstract without the detail. The per-ticker "◆ N calibrations applied" card line was designed and **rejected** too. The breakdown's calibration chips (§5.3) stay the only place fired calibrations are shown.
 
-**While a run is in flight** *(added 2026-09-26, user decision, loading variant E)*: the
-Analyze button shows a spinner and the count ("Analyzing 3…"; "Analyzing…" for one); for
-more than one ticker the parallel-run bar appears at once as "Computing in parallel: AAPL ·
-MSFT · NVDA" with a sweeping bar per ticker and an elapsed-time counter, then settles into
-the result above; the previous result is dimmed until the new one lands. No ticker is shown
-as done before the others — the endpoint answers all of them in one response. Reduced
-motion stops the spinner and sweep.
+**Layout.**
+- **Desktop:** two columns of equal weight, with a container wider than the page's 1040px (about 1160px). The **left** column holds the promise and the analyzer; the **right** holds the result card (§5.2).
+- **Phone:** one column in the order headline → subline → analyzer → card. The input comes first on purpose: card-first was mocked and rejected, because it pushed the input below the fold and put the input between the card and its breakdown.
 
-**Grid columns (style B · Institutional — chosen over Terminal and Scorecard):**
+**Left column, top to bottom:**
+- **Headline:** "Judge the business. Then judge the price."
+  - Chosen from seven options; "Is it a good business, at a good price?" was the runner-up and now opens the question band (§5.4).
+  - One fixed headline: no rotation and no A/B split.
+- **Subline:** "Quality and Moat tell you how good the company is; Fair Value and Reward/Risk tell you whether the price makes sense. All from the fundamentals, all shown."
+- **Analyzer:** as before.
+  - One rounded field (mono, focus glow, no magnifier icon) with the placeholder "Enter one or more tickers — e.g. NVDA, AMD, AVGO", and an **Analyze →** button.
+  - On a phone the button goes full width under the field.
+- **Compare chip** under the analyzer *(user decision, 2026-09-26)*: "Or try: Compare AAPL · MSFT · NVDA".
+  - It fills the input with the three tickers and runs them as a sample run.
+  - It never consumes the typed demo allowance and stays available after the allowance is used up.
+- **Micro-line:** "Up to 3 tickers at a time · no account needed".
+- **Demo-limit wall:** when it applies, it replaces the field and button in this column, unchanged.
 
-`Company | Quality /10 | Moat /100 | Fair Value | % vs Price | Price | Reward/Risk × | (expand)`
+### 5.2 Results — the result card
 
-- Values only — **no tier words in the grid** (Strong / Excellent / Wide live in the breakdown).
-- `/10`, `/100` and `×` are rendered as small units in the header, not in the cells.
-- **% vs Price** = (fair value − price) / price, signed and colour-coded:
-  ≥ +10% green · 0…+10% blue · −10…0 amber · < −10% red.
-- Best-in-column highlight (blue) in compare mode only; no stars; cells top-aligned.
-- Clicking a row expands the **breakdown** inline (§5.3). No "rows are expandable" hint text.
+*Rewritten 2026-09-27. **The results grid is removed.** Every result renders in one card in the hero's right column; there is no results table below the hero.*
+
+**Tiles view** is used for the page-load sample (AAPL) and for any one-ticker run.
+- **Header:**
+  - ticker, company name, the ☆ watchlist star (§9), then price and profile ("$341.07 · Tech / Growth profile");
+  - a pill on the right: "Live example · computed just now" for the sample (with a pulsing dot), or "Your analysis" for a visitor's own run.
+- **Tiles:** a 2×2 grid in the order Quality, Moat (top row, the business), then Fair Value, Reward / Risk (bottom row, the price). Each tile has:
+  - a coloured dot and the name;
+  - the big number with its unit (`7.8 /10`, `95 /100`, `$159`, `1.1 ×`);
+  - one small visual:
+    - Quality and Moat: a gauge bar;
+    - Fair Value: two bars, fair value against price on one scale;
+    - Reward / Risk: two bars, the reward score against the risk score;
+  - a caption.
+- **Tile captions** come from the product's **existing** tier labels. No new wording is introduced.
+  - Quality: `qualityTier` (Top-decile / Excellent / Strong / Moderate / Weak).
+  - Moat: `moatTier` (Wide / Established / Narrow / Little or none).
+  - Fair Value: "Price N% above/below fair value", coloured with the % vs price bands below.
+  - Reward / Risk: the engine's tier (e.g. Balanced, Reward-Favored).
+- **Footer:** "Click any score for its full breakdown ↓".
+
+**Comparison view** is used for two or three tickers (the landing cap is 3, so it always fits).
+- **Header:** "Comparing N", the tickers, and the "Your analysis" pill.
+- **Rows:** one per ticker. Each has:
+  - ticker, name and star;
+  - Quality, Moat, Fair Value (with "% vs price") and Reward / Risk, each with its tier caption;
+  - a ▾ affordance.
+- **Footer:** "Click a ticker for its full breakdown ↓".
+- **On a phone** each ticker becomes a block: ticker, star and name on one line, then its four scores as four small boxes. A colour key sits above the blocks.
+
+**Rules carried over from the grid:**
+- **% vs Price** = (fair value − price) / price, signed and colour-coded: ≥ +10% green · 0…+10% blue · −10…0 amber · < −10% red.
+- Best-in-column highlight in the comparison view only.
+- Every number in the card is derived from the breakdown's factors (see the end of §5.3).
+
+**Tier words: this REVERSES the grid's rule.** The grid's rule was "Values only — no tier words in the grid". The card shows tier words as captions; the user approved this with the mock-ups on 2026-09-27.
+
+**Interaction.**
+- Clicking a **tile** opens the breakdown (§5.3) on that tile's tab.
+- Clicking a **comparison row** opens that ticker's breakdown on the current tab.
+- The clicked tile or row is highlighted. Clicking it again, or using the breakdown's Close, folds the breakdown.
+- **Nothing opens by itself:** the old "one row, auto-expanded" behaviour is gone.
+
+**After a visitor's run** the card shows that run: tiles for one ticker, comparison for two or three. The sample never comes back on its own.
+
+**While a run is in flight** *(loading variant E, 2026-09-26, now placed inside the card)*:
+- The Analyze button shows a spinner and the count ("Analyzing 3…"; "Analyzing…" for one).
+- For more than one ticker, the top of the card shows "Computing in parallel: AAPL · MSFT · NVDA", with a sweeping bar per ticker and an elapsed-time counter.
+- The card's previous result is dimmed underneath until the new one lands.
+- No ticker is shown as done before the others: the endpoint answers all of them in one response.
+- Reduced motion stops the spinner and the sweep.
+- After a multi-ticker run, the card header carries the run summary ("3 tickers · 2.1 s") in place of the old parallel-run bar.
+
+**Errors.**
+- A ticker whose assessment could not be computed shows "—" and "could not be computed" in that tile or comparison cell.
+- A partly invalid run shows the valid tickers in the card and today's "Not recognised: X" notice.
+- An all-invalid run, a server error or a failed fetch shows today's notice line and **leaves the previous card in place**. This is a change: today the grid is emptied. An empty card would leave a hole in the hero.
 
 ~~Below the grid, a **free-note** …~~ *Removed 2026-09-26 (user decision).* It was
 inaccurate — it called the demo open with no account but never mentioned the 5-run limit,
 and presented that demo limit as the Free plan's monthly allowance — and every true part of
 it is already said by the pricing matrix and the demo-limit message.
 
-### 5.3 Breakdown (inside an expanded row)
+### 5.3 Breakdown (opens under the hero)
 
-A slim tab strip across the **full grid width** — Quality · Moat · Fair Value · Reward/Risk —
+*Placement revised 2026-09-27. The contents are unchanged.*
+
+The breakdown opens **full-width directly under the hero**, below both columns, when a tile or comparison row is clicked (§5.2). It is always in the same place, whichever ticker or score opened it.
+- It gains a small header, "TICKER Company · full breakdown", and a **Close ✕**.
+- Opening it scrolls it into view only if it is off screen.
+
+A slim tab strip across the **full container width** — Quality · Moat · Fair Value · Reward/Risk —
 with one panel below. Every panel is the same four-column table:
 
 | Factor | Data | Score | Weight |
@@ -173,10 +228,23 @@ with one panel below. Every panel is the same four-column table:
   "Tech / Growth", `MEGA_CAP` → "Mega Cap valuation blend"). **Raw ALL_CAPS / underscore
   identifiers must never reach the UI.**
 
-**Every headline number in the grid is derived from the factors in the breakdown.** The grid
-and the breakdown can never disagree, because the grid does not carry numbers of its own.
+**Every headline number in the card is derived from the factors in the breakdown.** The card
+and the breakdown can never disagree, because the card does not carry numbers of its own.
+(This was written for the grid; it carries over to the card unchanged.)
 
 ### 5.4 "How Intrinsica works" (the framework)
+
+**Question band** *(added 2026-09-27, user decision, placement option 2)*:
+- A short full-width band **immediately before** this section, on the stage background.
+- It has the question as a heading, **"Is it a good business, at a good price?"**, then one line: "Intrinsica answers with four scores from the fundamentals: Quality, Moat, Fair Value and Reward/Risk. Every input and weight is on show."
+- It bridges the live result above to the explanation below.
+- The overview card's heading and text are **not** changed. Putting the question into the card was rejected, because it would repeat "four scores from the fundamentals" back to back.
+
+**Tab-pair labels** *(added 2026-09-27)*: two small uppercase labels sit above the assessment tabs.
+- "Is it a good business?" spans Quality and Moat.
+- "At a good price?" spans Fair Value and Reward/Risk.
+- They echo the hero headline and the card's two tile rows.
+- On a phone, where the tabs are 2×2, each label sits above its pair.
 
 One consolidated section — overview card → four assessment tabs joined to one detail
 panel — replacing the previously overlapping why / how / methodology / calibration sections.
@@ -380,7 +448,7 @@ Per analysed ticker the API must return:
   which assessment(s) it touched.
 - **Live layer:** the current price, and the `% vs price` gap computed at read time (§12.1).
 
-Grid values are **computed from these components in the UI**; the API should not send a
+Card values (the grid's, before the 2026-09-27 rework) are **computed from these components in the UI**; the API should not send a
 separately-rounded headline that could disagree with its own breakdown.
 
 ## 8. Copy rules (binding on this page and all future marketing copy)
@@ -438,8 +506,12 @@ One event per funnel step, each carrying `visitor_id` and a timestamp:
 
 - **Primary metric:** unique visitors reaching `payment_button_clicked` ÷ unique visitors.
 - **`free_plan_clicked` is a separate event** and is excluded from that ratio.
+- **Hero rework (2026-09-27): no new events; the list stays at 12.**
+  - `breakdown_opened (ticker, assessment)` now fires when a **card tile** or **comparison row** opens the breakdown (§5.2). For a tile, `assessment` is the tile clicked; for a row, the tab currently selected.
+  - Nothing opens by itself any more, so every `breakdown_opened` is a real click. Folding it fires nothing, as before.
+  - The hero's assessment links are gone, so `methodology_viewed` now fires only from the Framework tabs.
 - **`watchlist_clicked` (ticker)** *(added 2026-09-26, user decision — the list grows by
-  this one event)*: the star beside each ticker in the results grid. Watchlists are not
+  this one event)*: the star beside each ticker in the result card (§5.2; it was on the grid rows before the 2026-09-27 rework). Watchlists are not
   built; the click answers with a toast — "Watchlists require an Intrinsica account. Start with
   Free. See plans →" (the ticker rides on the event, not in the copy) — that stays 10 s or until
   dismissed. The star carries no lock icon, on purpose: a lock would suppress the very
@@ -503,11 +575,21 @@ the same `visitor_id` is the final-step drop-off, so both events must fire relia
 - **Unit:** the derivation helpers — category roll-ups, per-metric weight = category weight ÷
   active metric count, the fair-value blend, the reward/risk axes + clamp + tier mapping, and
   the `% vs price` colour banding.
-- **Contract:** a golden-file test per sample ticker asserting each grid headline equals the
+- **Contract:** a golden-file test per sample ticker asserting each card headline equals the
   value derived from the breakdown components, so the two cannot drift.
-- **Component:** tab selection from a hero assessment click; row expand / collapse; the
-  billing toggle updating both the card prices and the checkout total; checkout state reset on
-  re-entry.
+- **Component:**
+  - the result card's tiles view and comparison view;
+  - the tier captions;
+  - the sample pill vs "Your analysis";
+  - loading inside the card;
+  - a failed tile or cell;
+  - the star inside the card;
+  - a tile click opening the breakdown on that tile's tab, and a row click opening that ticker; clicking again or Close folding it; nothing auto-opening;
+  - a failed run keeping the previous card;
+  - the question band and the tab-pair labels;
+  - the billing toggle updating both the card prices and the checkout total;
+  - checkout state reset on re-entry.
+  *(Hero rework 2026-09-27: the tests for the hero assessment links, the pipeline strip and the grid rows are removed with those elements.)*
 - **Funnel:** an end-to-end test walking analyze → pricing → checkout → click, asserting the
   analytics events fire in order, once each, with the right plan and billing — **and that no
   card or payment input exists anywhere in the DOM.**
@@ -553,6 +635,8 @@ multi-stock / multi-assessment overlays, earnings markers, full range and export
 ### 12.4 Default marquee ticker
 
 AAPL opens on an honest but downbeat −9% gap; NVDA opens friendlier at +5%. Unresolved.
+
+*Status 2026-09-27:* the shipped page uses **AAPL** (`SAMPLE` in `LandingPage.tsx`). It now opens the hero card, currently at a −53% gap. The hero rework keeps AAPL; changing the ticker is a one-constant change if it is revisited.
 
 ## 13. Implementation notes
 
