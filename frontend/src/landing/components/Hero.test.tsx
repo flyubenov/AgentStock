@@ -23,6 +23,16 @@ describe('Hero', () => {
     expect(screen.getByText('Up to 3 tickers per analysis run.')).toBeInTheDocument()
   })
 
+  // Final review: the button is disabled while busy, but Enter reached submit() anyway.
+  // A second run racing the first can land out of order and replace the visitor's
+  // own result with the mount sample.
+  it('does not start a second run from the Enter key while one is in flight', async () => {
+    const onAnalyze = vi.fn()
+    render(<Hero onAnalyze={onAnalyze} busy={true} exhausted={false} card={<div>CARD</div>} />)
+    await userEvent.type(screen.getByRole('textbox'), 'NVDA{Enter}')
+    expect(onAnalyze).not.toHaveBeenCalled()
+  })
+
   it('does not submit an empty field', async () => {
     const onAnalyze = vi.fn()
     render(<Hero onAnalyze={onAnalyze} busy={false} exhausted={false} card={<div>CARD</div>} />)

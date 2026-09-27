@@ -34,7 +34,10 @@ export const FETCH_TIMEOUT_MS = 150_000
 
 export default function LandingPage() {
   const [rows, setRows] = useState<TickerPayload[]>([])
-  const [busy, setBusy] = useState(false)
+  // True from the first render: the mount sample (below) always runs, but it starts in
+  // a passive effect the browser may paint before. Starting idle would flash the
+  // card's could-not-load message for a frame on every page load (final review).
+  const [busy, setBusy] = useState(true)
   // The tickers of the run in flight, for the live strip and the button count.
   const [pending, setPending] = useState<string[]>([])
   // The watchlist toast: null when hidden, otherwise a click counter that re-keys

@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, act, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { renderToString } from 'react-dom/server'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import LandingPage, { FETCH_TIMEOUT_MS } from './LandingPage'
 import { runsUsed } from './demoLimit'
@@ -709,6 +710,15 @@ describe('LandingPage breakdown dock', () => {
 })
 
 describe('LandingPage result card states (hero rework)', () => {
+  // Final review: the mount sample starts in a passive effect, which the browser may
+  // paint before. The first frame must already say the sample is running — never the
+  // could-not-load message. A server render runs no effects, so it shows that frame.
+  it('paints "running" in the very first frame, before the sample has even started', () => {
+    const html = renderToString(<MemoryRouter><LandingPage /></MemoryRouter>)
+    expect(html).toContain('Running the analysis…')
+    expect(html).not.toContain('could not be loaded')
+  })
+
   it('shows the running frame, then the could-not-load message, when the sample fails', async () => {
     let fail!: (e: unknown) => void
     vi.stubGlobal('fetch', vi.fn(() => new Promise((_r, rej) => { fail = rej })))

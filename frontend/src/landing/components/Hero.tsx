@@ -49,6 +49,8 @@ export default function Hero({ onAnalyze, busy, busyCount = 0, exhausted, notice
   const [error, setError] = useState<string | null>(null)
 
   function submit() {
+    // The button is disabled while busy; Enter must be too, or two runs race.
+    if (busy) return
     const tickers = value.split(',').map(t => t.trim().toUpperCase()).filter(Boolean)
     if (tickers.length === 0) {
       setError('Enter at least one ticker.')
