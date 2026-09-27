@@ -152,7 +152,7 @@ describe('copy guard — the files it scans', () => {
   // still add is visibility of a file deleted from OUTSIDE that list
   // (demoLimit.ts, format.ts, types.ts). An exact count makes that loud.
   it('finds landing sources to check', () => {
-    expect(sources.length).toBe(19)
+    expect(sources.length).toBe(20)
   })
 
   // A glob that silently matched nothing passes every guard below, for ever.
@@ -169,6 +169,7 @@ describe('copy guard — the files it scans', () => {
       './components/Workflow.tsx',
       './components/Pricing.tsx',
       './components/LiveRunBar.tsx',
+      './components/ResultCard.tsx',
       './components/ResultGrid.tsx',
       './components/Nav.tsx',
       './components/SiteFooter.tsx',

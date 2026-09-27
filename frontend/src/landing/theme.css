@@ -450,3 +450,72 @@
   .intrinsica .wtoast a { order: 2; }
 }
 @media (prefers-reduced-motion: reduce) { .intrinsica .wtoast { animation: none; } }
+
+/* Result card — the hero's right column (hero rework 2026-09-27). One ticker: four
+ * tiles; two or three: a compact comparison. Mock: .superpowers/brainstorm/hero/. */
+.intrinsica .rc { background: var(--bg); border: 1px solid var(--border2); border-radius: 18px; padding: 18px 20px 14px;
+  box-shadow: 0 1px 2px rgba(11,11,15,.05), 0 24px 60px rgba(11,11,15,.10); text-align: left; }
+.intrinsica .rc .runbar { margin: 0 0 12px; box-shadow: none; }
+.intrinsica .rc-empty { min-height: 280px; display: grid; place-items: center; color: var(--mute); font-size: 14px; text-align: center; }
+.intrinsica .rc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+  padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.intrinsica .rc-head .tk { font: 700 20px var(--fh); }
+.intrinsica .rc-head .co { color: var(--dim); font-size: 14px; }
+.intrinsica .rc-head .px { font: 500 13px var(--fm); color: var(--mute); margin-top: 2px; }
+.intrinsica .rc-pill { display: inline-flex; align-items: center; gap: 7px; font: 600 11.5px var(--fb); border-radius: 99px;
+  padding: 5px 10px; white-space: nowrap; }
+.intrinsica .rc-pill.live { color: var(--pos); background: #ecfdf3; }
+.intrinsica .rc-pill.live i { width: 7px; height: 7px; border-radius: 50%; background: var(--pos); animation: rc-pulse 1.6s ease-in-out infinite; }
+.intrinsica .rc-pill.yours { color: var(--accent); background: var(--accent-soft); }
+@keyframes rc-pulse { 50% { opacity: .3; } }
+.intrinsica .rc .watch { background: none; border: 1px solid var(--border2); cursor: pointer; color: var(--dim); font: 400 14px var(--fb);
+  line-height: 1; padding: 4px 7px; border-radius: 7px; vertical-align: 2px; }
+.intrinsica .rc .watch:hover, .intrinsica .rc .watch:focus-visible { color: var(--warn); background: var(--bg3); }
+.intrinsica .rc .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+.intrinsica .rc-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); margin: 12px 0;
+  border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.intrinsica .rc-tile { background: var(--bg); border: 0; padding: 13px 15px; text-align: left; cursor: pointer; display: flex;
+  flex-direction: column; gap: 0; font: inherit; color: inherit; position: relative; }
+.intrinsica .rc-tile::after { content: "↓"; position: absolute; right: 12px; top: 12px; font-size: 13px; color: var(--mute); }
+.intrinsica .rc-tile:hover { background: var(--bg2); }
+.intrinsica .rc-tile.on { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
+.intrinsica .rc-tile.on::after { color: var(--accent); }
+.intrinsica .rc-tile .n { font: 600 13px var(--fb); display: flex; align-items: center; }
+.intrinsica .rc-tile .v { font: 700 32px/1.1 var(--fh); letter-spacing: -.02em; margin-top: 6px; }
+.intrinsica .rc-tile .v small { font: 500 13px var(--fm); color: var(--mute); margin-left: 3px; }
+.intrinsica .rc-tile .c { font-size: 12.5px; color: var(--dim); margin-top: 8px; }
+.intrinsica .rc-g { display: block; height: 6px; background: var(--bg3); border-radius: 9px; margin-top: 10px; overflow: hidden; }
+.intrinsica .rc-g b, .intrinsica .rc-pair .t b { display: block; height: 100%; border-radius: 9px; }
+.intrinsica .rc-pair { display: grid; gap: 4px; margin-top: 10px; }
+.intrinsica .rc-pair .r { display: grid; grid-template-columns: 58px 1fr 40px; align-items: center; gap: 8px; font-size: 11px; color: var(--mute); }
+.intrinsica .rc-pair .t { height: 6px; background: var(--bg3); border-radius: 9px; overflow: hidden; }
+.intrinsica .rc-pair em { font: 500 11px var(--fm); font-style: normal; color: var(--dim); text-align: right; }
+.intrinsica .rc-foot { font-size: 12.5px; color: var(--mute); padding-top: 10px; border-top: 1px solid var(--border); }
+.intrinsica .rc-cmp { margin: 8px 0 10px; }
+.intrinsica .rc-cols, .intrinsica .rc-row { display: grid; grid-template-columns: 1.35fr repeat(4, 1fr); gap: 8px; align-items: start; }
+.intrinsica .rc-cols { font: 600 11.5px var(--fb); color: var(--dim); padding: 6px 8px; }
+.intrinsica .rc-row { padding: 11px 8px; border-top: 1px solid var(--border); cursor: pointer; }
+.intrinsica .rc-row:hover { background: var(--bg2); }
+.intrinsica .rc-row.on { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.intrinsica .rc-id { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.intrinsica .rc-open { background: none; border: 0; padding: 0; font: 700 15px var(--fh); color: inherit; cursor: pointer; }
+.intrinsica .rc-id .nm { flex-basis: 100%; font-size: 11.5px; color: var(--mute); }
+.intrinsica .rc-id .chev { display: none; }
+.intrinsica .rc-cell b { display: block; font: 700 18px var(--fh); }
+.intrinsica .rc-cell .s { display: block; font-size: 11.5px; color: var(--dim); margin-top: 2px; }
+.intrinsica .rc-cell.best b { color: var(--accent); }
+@media (max-width: 600px) {
+  .intrinsica .rc { padding: 16px 14px 12px; }
+  .intrinsica .rc-tile { padding: 12px; }
+  .intrinsica .rc-tile .v { font-size: 28px; }
+  .intrinsica .rc-pair .r { grid-template-columns: 40px 1fr 32px; gap: 5px; font-size: 10px; }
+  .intrinsica .rc-cols { grid-template-columns: repeat(4, 1fr); font-size: 11px; }
+  .intrinsica .rc-cols > span:first-child { display: none; }
+  .intrinsica .rc-row { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .intrinsica .rc-id { grid-column: 1 / -1; }
+  .intrinsica .rc-id .nm { flex-basis: auto; }
+  .intrinsica .rc-id .chev { display: inline; margin-left: auto; color: var(--mute); }
+  .intrinsica .rc-cell { background: var(--bg2); border-radius: 8px; padding: 7px 8px; }
+  .intrinsica .rc-cell b { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { .intrinsica .rc-pill.live i { animation: none; } }
