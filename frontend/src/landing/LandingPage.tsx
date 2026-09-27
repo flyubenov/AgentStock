@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import './theme.css'
 import Nav from './components/Nav'
 import Hero from './components/Hero'
-import ResultGrid, { RunBar } from './components/ResultGrid'
+import ResultCard from './components/ResultCard'
+import OpenBreakdown from './components/OpenBreakdown'
+import QuestionBand from './components/QuestionBand'
 import WatchToast from './components/WatchToast'
-import Breakdown from './components/Breakdown'
 import Framework from './components/Framework'
 import Why from './components/Why'
 import Workflow from './components/Workflow'
@@ -52,8 +53,7 @@ export default function LandingPage() {
   // demoLimit.ts, which fails open — so this starts `false` (not exhausted)
   // whenever storage is unavailable, never locking out a real visitor.
   const [exhausted, setExhausted] = useState(() => !canAnalyze())
-  const [open, setOpen] = useState<Record<string, boolean>>({})
-  // How long the last run took, for the parallel-run bar (spec 5.2).
+  // How long the last run took, for the card's run summary (spec 5.2).
   const [lastMs, setLastMs] = useState<number | null>(null)
   // The billing period the pricing cards show, and the one a plan choice carries
   // into the checkout. Annual by default (spec 5.7). Owned here rather than
@@ -99,42 +99,33 @@ export default function LandingPage() {
   // every render of the page.
   const reportPricingView = useCallback(() => track(EVENTS.pricingViewed), [])
 
-  // The analytics call must stay OUTSIDE the updater. React requires state
-  // updaters to be pure and deliberately double-invokes them under StrictMode
-  // (main.tsx wraps the app in it), so tracking from inside would fire
-  // breakdown_opened twice per expand in development. The transition is
-  // computed from the current `open` — which is therefore a dependency — and
-  // the event is emitted once, beside the state change rather than within it.
-  //
-  // The panel opens on whichever assessment the page is currently showing —
-  // one `assessment` is shared by the hero cards, the framework tabs and every
-  // breakdown — so the expand means nothing without it: spec section 9 names
-  // the event `breakdown_opened (ticker, assessment tab)`. It is the tab's
-  // human name, the same value methodology_viewed posts, never the AssessmentId
-  // index (spec section 8: no internal identifiers leave the app). Individual
-  // tab SWITCHES inside an open panel stay uninstrumented — section 9 names
-  // them among the things deliberately not tracked; this is the state at the
-  // moment of the open, and fires only on the open transition.
-  //
-  // `assessment` joins the dependency array for that read. It changes nothing
-  // about the once-per-expand guarantee above, which rests on where the call
-  // sits (beside setOpen, never inside the updater) and not on how often the
-  // callback is rebuilt.
-  //
-  // A single-row result opens by itself (spec 5.2: "one row, auto-expanded"), so a
-  // row with no recorded state reads as open when it is the only one. That default
-  // is presentation, not a visitor action, and fires nothing; the first click on it
-  // is a collapse.
-  const isOpen = useCallback((ticker: string) =>
-    open[ticker] ?? (rows.length === 1 && rows[0].ticker === ticker), [open, rows])
+  // Which ticker's breakdown the dock under the hero is showing, if any (spec 5.3,
+  // hero rework 2026-09-27). The tab is the page's single `assessment`, shared with
+  // the card's tiles, the dock's own tabs and the Framework section.
+  const [openTicker, setOpenTicker] = useState<string | null>(null)
+  // The source of the run whose rows the card shows: it picks the card's pill
+  // ("Live example" for a sample, "Your analysis" for a typed run).
+  const [rowsSource, setRowsSource] = useState<AnalyzeSource | null>(null)
 
-  const toggle = useCallback((ticker: string) => {
-    const opening = !isOpen(ticker)
-    setOpen(prev => ({ ...prev, [ticker]: opening }))
-    if (opening) {
-      track(EVENTS.breakdownOpened, { ticker, assessment: FRAMEWORK[assessment].name })
-    }
-  }, [isOpen, assessment])
+  // breakdown_opened fires only on a closed -> open transition, and beside the state
+  // change, never inside an updater (StrictMode double-invokes updaters — fix round 1).
+  // A tile on the ticker already open switches the tab; the same tile again folds it.
+  // Tab switches and folds are uninstrumented (spec section 9).
+  const openTile = useCallback((ticker: string, tab: AssessmentId) => {
+    const wasOpen = openTicker === ticker
+    if (wasOpen && assessment === tab) { setOpenTicker(null); return }
+    setAssessment(tab)
+    setOpenTicker(ticker)
+    if (!wasOpen) track(EVENTS.breakdownOpened, { ticker, assessment: FRAMEWORK[tab].name })
+  }, [openTicker, assessment])
+
+  // A comparison row opens on whichever tab the page is on.
+  const openRow = useCallback((ticker: string) => {
+    if (openTicker === ticker) { setOpenTicker(null); return }
+    setOpenTicker(ticker)
+    track(EVENTS.breakdownOpened, { ticker, assessment: FRAMEWORK[assessment].name })
+  }, [openTicker, assessment])
+  const closeBreakdown = useCallback(() => setOpenTicker(null), [])
 
   const analyze = useCallback(async (tickers: string[], source: AnalyzeSource) => {
     setBusy(true)
@@ -164,10 +155,15 @@ export default function LandingPage() {
       // visitor as a stale guess.
       if (body.error) setNotice(body.error)
       else if (body.invalid.length) setNotice(`Not recognised: ${body.invalid.join(', ')}`)
-      setRows(results)
-      // A new result set starts from its own default expansion.
-      setOpen({})
-      setLastMs(Date.now() - started)
+      // A run that produced no rows (all invalid, a server error) leaves the previous
+      // card — and any open breakdown — in place: an empty card would leave a hole in
+      // the hero (spec 5.2, hero rework). The notice above says what happened.
+      if (results.length > 0) {
+        setRows(results)
+        setRowsSource(source)
+        setOpenTicker(null)
+        setLastMs(Date.now() - started)
+      }
       // The allowance means "a run the visitor got value from" — distinct from
       // analysis_started above, which means "a run was attempted" and fires
       // unconditionally. Only count a typed run once it actually produced at
@@ -215,7 +211,7 @@ export default function LandingPage() {
   // the body background to match this page's own light background while mounted,
   // and restore whatever was there before on unmount so the dark analyst app gets
   // its background back untouched.
-  // The mock's smooth in-page scrolling (nav anchors, hero assessments) is set on
+  // The mock's smooth in-page scrolling (nav anchors) is set on
   // <html>, so it is applied and restored the same way.
   useEffect(() => {
     const previous = document.body.style.backgroundColor
@@ -228,8 +224,7 @@ export default function LandingPage() {
     }
   }, [])
 
-  const effectiveOpen: Record<string, boolean> = {}
-  for (const r of rows) effectiveOpen[r.ticker] = isOpen(r.ticker)
+  const openRowData = rows.find(r => r.ticker === openTicker) ?? null
 
   return (
     <div className="intrinsica">
@@ -237,37 +232,31 @@ export default function LandingPage() {
       <main>
         <Hero
           onAnalyze={analyze}
-          onSelectAssessment={setAssessment}
           busy={busy}
           busyCount={pending.length}
           exhausted={exhausted}
+          notice={notice}
+          card={
+            <ResultCard
+              rows={rows}
+              source={rowsSource}
+              pending={pending}
+              busy={busy}
+              ms={lastMs}
+              open={openTicker ? { ticker: openTicker, tab: assessment } : null}
+              onTile={openTile}
+              onRow={openRow}
+              onWatch={watchFor}
+            />
+          }
         />
-        {notice && <p className="notice container">{notice}</p>}
-        <section className="section" id="result">
-          <div className="container">
-            <RunBar rows={rows} ms={lastMs} pending={pending} />
-            {/* The previous result dims while a new run is in flight, so it
-                cannot be mistaken for the answer to the new request. */}
-            <div className={busy && rows.length ? 'stale' : undefined} aria-busy={busy}>
-              <ResultGrid
-                rows={rows}
-                open={effectiveOpen}
-                onToggle={toggle}
-                onWatch={watchFor}
-                // One `assessment` for the whole page: the hero's assessment
-                // cards, every expanded row's breakdown and (from Task 11) the
-                // framework tabs all read and write this single value, so opening
-                // "Moat" anywhere opens it everywhere.
-                renderBreakdown={r => (
-                  <Breakdown row={r} tab={assessment} onTab={setAssessment} />
-                )}
-              />
-            </div>
-          </div>
-        </section>
+        {openRowData && (
+          <OpenBreakdown row={openRowData} tab={assessment} onTab={setAssessment} onClose={closeBreakdown} />
+        )}
+        <QuestionBand />
         {/* The framework tabs are the third reader of the page's single
-            `assessment`, beside the hero cards and every expanded row's
-            breakdown panel — picking "Moat" in any of the three shows Moat in
+            `assessment`, beside the result card's tiles and the open
+            breakdown dock — picking "Moat" in any of the three shows Moat in
             all three, which is the point of there being one piece of state.
             methodology_viewed is fired here rather than inside Framework so the
             component that owns the state owns its instrumentation; the event

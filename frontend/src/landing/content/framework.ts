@@ -168,14 +168,6 @@ export const OVERVIEW = {
   tail: 'Click an assessment for every category, weight and calibration.',
 }
 
-/** The hero's pipeline strip: what goes in, what Intrinsica adds, what comes out.
- *  The last step names the four assessments set directly beneath it. */
-export const PIPELINE = [
-  'Dozens of fundamentals',
-  'Intrinsica methodology · weights & calibrations',
-  'Four scores',
-] as const
-
 /** `affects` holds assessment NAMES, matched against FRAMEWORK rather than an
  *  index, so a reordered FRAMEWORK cannot silently re-point a calibration at the
  *  wrong panel. `guarded: true` is a claim about the engine — the adjustment is

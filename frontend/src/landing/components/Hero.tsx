@@ -1,7 +1,6 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { DEMO_RUN_LIMIT, DEMO_WINDOW_DAYS } from '../demoLimit'
-import { PIPELINE } from '../content/framework'
-import type { AnalyzeSource, AssessmentId } from '../types'
+import type { AnalyzeSource } from '../types'
 
 // The demo/UX pre-check only. The server (backend/routers/landing.py MAX_TICKERS)
 // is the source of truth for the real cap — this value and its message can drift
@@ -30,22 +29,22 @@ interface Props {
    *  ('sample') — the source travels through to analysis_started and to the
    *  no-account demo limit, which only 'typed' runs consume. */
   onAnalyze: (tickers: string[], source: AnalyzeSource) => void
-  onSelectAssessment: (id: AssessmentId) => void
   /** True while an analysis is in flight. Disables BOTH the Analyze button
    *  and the compare chip: concurrent chip clicks would each fire their own
    *  analysis_started, inflating the very metric the chip exists to measure. */
   busy: boolean
-  /** How many tickers the in-flight run covers; the busy button says so
-   *  ("Analyzing 3…"). Loading variant E, user decision 2026-09-26. */
+  /** How many tickers the in-flight run covers ("Analyzing 3…"). Loading variant E. */
   busyCount?: number
-  /** True once this browser has used up its free demo runs (frontend/src/
-   *  landing/demoLimit.ts). Replaces the ticker input/button with a short
-   *  message pointing at pricing — sample and compare-chip runs are unaffected,
-   *  since those never go through this control. */
+  /** True once this browser has used up its free demo runs (demoLimit.ts). */
   exhausted: boolean
+  /** A run's notice ("Not recognised: X", a server error, a timeout), shown under the
+   *  input it is about (spec 5.2, hero rework 2026-09-27). */
+  notice?: string | null
+  /** The result card: the hero's right column (spec 5.1). */
+  card: ReactNode
 }
 
-export default function Hero({ onAnalyze, onSelectAssessment, busy, busyCount = 0, exhausted }: Props) {
+export default function Hero({ onAnalyze, busy, busyCount = 0, exhausted, notice, card }: Props) {
   const [value, setValue] = useState('')
   const [error, setError] = useState<string | null>(null)
 
@@ -73,88 +72,64 @@ export default function Hero({ onAnalyze, onSelectAssessment, busy, busyCount = 
     onAnalyze([...COMPARE_TICKERS], 'sample')
   }
 
+  // Spec 5.1 (hero rework 2026-09-27): promise and analyzer on the left, the live
+  // result card on the right; one column on a phone, input first. The wordmark
+  // heading, the pipeline strip and the four assessment links are gone — the card
+  // shows the four scores themselves, and the questions live in the Framework.
   return (
     <header className="hero">
-      <div className="container">
-        <div className="brand">Intrinsica</div>
-        <div className="h3">Fundamental Stock Analysis</div>
-
-        {/* What Intrinsica is, as a flow: it does not show raw financial data, it
-            turns the fundamentals into four scores through its own methodology.
-            The last step lands on the four assessments directly below. This
-            replaces the v21 sub-line (user decision, variant B3). */}
-        <div className="pipe">
-          {PIPELINE.map((step, i) => (
-            <span key={step} className="pipe-step-wrap">
-              {i > 0 && <span className="ar" aria-hidden="true">→</span>}
-              <span className={i === PIPELINE.length - 1 ? 'st out' : 'st'}>{step}</span>
-            </span>
-          ))}
-        </div>
-
-        {/* Each assessment is a link to the methodology section that also selects
-            that assessment's tab there (spec 5.1: "clicking jumps to the
-            methodology section and selects that assessment's tab"). */}
-        <div className="assess4">
-          {ASSESSMENTS.map((a, i) => (
-            <a
-              key={a.name}
-              className="it"
-              href="#how"
-              title={`How ${a.name} is assessed`}
-              onClick={() => onSelectAssessment(i as AssessmentId)}
-            >
-              <div className="nm">
-                <span className="dot" style={{ background: a.color }} />
-                {a.name} <span className="go" aria-hidden="true">→</span>
-              </div>
-              <div className="q">{a.question}</div>
-            </a>
-          ))}
-        </div>
-
-        <div className="analyzer" id="analyze">
-          {exhausted ? (
-            <p className="an-wall">
-              You've used all {DEMO_RUN_LIMIT} free analyses in a rolling{' '}
-              {DEMO_WINDOW_DAYS}-day window. <a href="#pricing">See the plans</a> to
-              keep analyzing.
-            </p>
-          ) : (
-            <>
-              <div className="an-row">
-                <div className="an-field">
-                  <input
-                    value={value}
-                    aria-label="Tickers"
-                    onChange={e => setValue(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') submit() }}
-                    placeholder="Enter one or more tickers — e.g. NVDA, AMD, AVGO"
-                  />
+      <div className="hero-in">
+        <div className="hero-l">
+          <h1 className="hero-h1">Judge the business.{' '}<br />Then judge the price.</h1>
+          <p className="hero-sub">
+            Quality and Moat tell you how good the company is; Fair Value and Reward/Risk
+            tell you whether the price makes sense. All from the fundamentals, all shown.
+          </p>
+          <div className="analyzer" id="analyze">
+            {exhausted ? (
+              <p className="an-wall">
+                You've used all {DEMO_RUN_LIMIT} free analyses in a rolling{' '}
+                {DEMO_WINDOW_DAYS}-day window. <a href="#pricing">See the plans</a> to
+                keep analyzing.
+              </p>
+            ) : (
+              <>
+                <div className="an-row">
+                  <div className="an-field">
+                    <input
+                      value={value}
+                      aria-label="Tickers"
+                      onChange={e => setValue(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') submit() }}
+                      placeholder="Enter one or more tickers — e.g. NVDA, AMD, AVGO"
+                    />
+                  </div>
+                  <button className="an-btn" type="button" onClick={submit} disabled={busy}>
+                    {busy
+                      ? <><span className="spin" aria-hidden="true" />
+                          {busyCount > 1 ? `Analyzing ${busyCount}…` : 'Analyzing…'}</>
+                      : 'Analyze →'}
+                  </button>
                 </div>
-                <button className="an-btn" type="button" onClick={submit} disabled={busy}>
-                  {busy
-                    ? <><span className="spin" aria-hidden="true" />
-                        {busyCount > 1 ? `Analyzing ${busyCount}…` : 'Analyzing…'}</>
-                    : 'Analyze →'}
-                </button>
-              </div>
-              {error && <p className="an-error">{error}</p>}
-            </>
-          )}
+                {error && <p className="an-error">{error}</p>}
+              </>
+            )}
 
-          {/* Outside the exhausted branch on purpose: chip runs are served from
-              the server cache at zero cost to the visitor's typed allowance, so
-              this must keep working after the wall above appears. Styled with the
-              mock's own `.chips` / `.chip` rules, which v21 defines under the
-              analyzer. */}
-          <div className="chips">
-            <span className="lbl">Or try:</span>
-            <button type="button" className="chip" onClick={runCompare} disabled={busy}>
-              Compare {COMPARE_TICKERS.join(' · ')}
-            </button>
+            {/* Outside the exhausted branch on purpose: chip runs never consume the
+                typed allowance, so this keeps working after the wall appears. */}
+            <div className="chips">
+              <span className="lbl">Or try:</span>
+              <button type="button" className="chip" onClick={runCompare} disabled={busy}>
+                Compare {COMPARE_TICKERS.join(' · ')}
+              </button>
+            </div>
+            {!exhausted && (
+              <p className="an-micro">Up to {MAX_TICKERS} tickers at a time · no account needed</p>
+            )}
           </div>
+          {notice && <p className="notice">{notice}</p>}
         </div>
+        <div className="hero-r">{card}</div>
       </div>
     </header>
   )

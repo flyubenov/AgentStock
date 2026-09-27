@@ -152,7 +152,7 @@ describe('copy guard — the files it scans', () => {
   // still add is visibility of a file deleted from OUTSIDE that list
   // (demoLimit.ts, format.ts, types.ts). An exact count makes that loud.
   it('finds landing sources to check', () => {
-    expect(sources.length).toBe(22)
+    expect(sources.length).toBe(21)
   })
 
   // A glob that silently matched nothing passes every guard below, for ever.
@@ -172,7 +172,6 @@ describe('copy guard — the files it scans', () => {
       './components/ResultCard.tsx',
       './components/OpenBreakdown.tsx',
       './components/QuestionBand.tsx',
-      './components/ResultGrid.tsx',
       './components/Nav.tsx',
       './components/SiteFooter.tsx',
       './components/Tip.tsx',
@@ -189,7 +188,7 @@ describe('copy guard — the files it scans', () => {
   // below would pass against a page that said "signal" in forty-eight point type.
   it('extracts real copy, not an empty string', () => {
     const copy = sources.map(([, text]) => text).join('\n')
-    expect(copy).toMatch(/Fundamental Stock Analysis/)       // JSX text in Hero
+    expect(copy).toMatch(/Then judge the price/)       // JSX text in Hero
     expect(copy).toMatch(/no payment was taken/)
     expect(copy).toMatch(/Choose your plan/)
   })

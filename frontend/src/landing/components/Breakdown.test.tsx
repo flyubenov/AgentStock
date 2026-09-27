@@ -76,9 +76,9 @@ describe('Breakdown tabs', () => {
     }
   })
 
-  // `AssessmentId` is a bare index shared with Hero's assessment links, which
-  // call onSelectAssessment(i). If the two label lists ever drift, clicking
-  // "Moat" in the hero opens "Fair Value" here and nothing else would catch it.
+  // `AssessmentId` is a bare index shared with the result card's tiles (Hero's
+  // ASSESSMENTS order), which call onTile(ticker, i). If the two label lists drift, clicking
+  // the "Moat" tile opens "Fair Value" here and nothing else would catch it.
   it('keeps its tab labels and order identical to the hero assessment cards', () => {
     const { container } = show()
     const labels = Array.from(container.querySelectorAll('.bd .tabs button'))

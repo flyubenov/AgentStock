@@ -302,8 +302,8 @@ describe('LandingPage demo limit — only a successful typed run counts (fix rou
 
 // Controller Addition 2: the compare chip is a prefill shortcut into the same
 // analyze() path as the button, tagged 'sample', rendering into the same
-// ResultGrid this task wires up. Assertions are on rendered output (the DOM the
-// real ResultGrid produces), never on the fetch mock echoing itself.
+// result card. Assertions are on rendered output (the DOM the
+// real ResultCard produces), never on the fetch mock echoing itself.
 // Every highlighted column carries DISTINCT values, and the winner is a
 // different row in three of the four — a fixture where all three tickers share
 // a moat, a gap and a ratio (as this one first did) cannot tell a working
@@ -334,9 +334,10 @@ const COMPARE_RESULTS = () => ({
   invalid: [], error: null,
 })
 
-// The results grid by its own class: a single-row result auto-expands into a
-// breakdown table, and the pricing matrix is a table too.
-const gridOf = () => document.querySelector<HTMLElement>('table.g')!
+// The hero's result card and the breakdown dock (hero rework 2026-09-27).
+const cardOf = () => document.querySelector<HTMLElement>('.hero-r .rc')!
+const dockOf = () => document.querySelector<HTMLElement>('section.bk-dock')
+const tile = (name: string) => within(cardOf()).getByRole('button', { name: new RegExp(`^${name}`) })
 
 describe('LandingPage compare chip (controller addition 2)', () => {
   it('fills the input, analyzes the fixed trio as a sample run, and renders all three rows with the best-in-column highlight', async () => {
@@ -350,27 +351,29 @@ describe('LandingPage compare chip (controller addition 2)', () => {
     await userEvent.click(screen.getByRole('button', { name: /Compare/ }))
 
     await waitFor(() => {
-      expect(within(gridOf()).getByText('MSFT')).toBeInTheDocument()
+      expect(within(cardOf()).getByText('MSFT')).toBeInTheDocument()
     })
-    expect(within(gridOf()).getByText('AAPL')).toBeInTheDocument()
-    expect(within(gridOf()).getByText('NVDA')).toBeInTheDocument()
+    expect(within(cardOf()).getByText('AAPL')).toBeInTheDocument()
+    expect(within(cardOf()).getByText('NVDA')).toBeInTheDocument()
     expect(screen.getByRole('textbox')).toHaveValue('AAPL, MSFT, NVDA')
     expect(track).toHaveBeenCalledWith('analysis_started',
       { tickers: ['AAPL', 'MSFT', 'NVDA'], count: 3, source: 'sample' })
-    // Three tickers ran at once, so the parallel-run bar appears (spec 5.2).
-    expect(screen.getByText(/Computed in parallel/)).toBeInTheDocument()
+    // Three tickers ran at once, so the card's header carries the run summary (spec 5.2).
+    expect(cardOf().querySelector('.rc-head')).toHaveTextContent(/3 tickers · \d+\.\d s/)
+    // The chip is a sample run, so the card keeps the live-example pill.
+    expect(within(cardOf()).getByText(/Live example/)).toBeInTheDocument()
 
     // A different row wins quality, moat and the fair-value gap, so a
     // highlight stuck on one row — or on all of them — fails here.
-    const grid = gridOf()
-    const rowOf = (t: string) => within(grid).getByText(t).closest('tr')!
-    expect(within(rowOf('MSFT')).getByText('9.5')).toHaveClass('best')
-    expect(within(rowOf('AAPL')).getByText('81')).toHaveClass('best')
-    expect(within(rowOf('NVDA')).getByText('+12%')).toHaveClass('best')
-    expect(within(rowOf('AAPL')).getByText('2.4×')).toHaveClass('best')
-    expect(within(rowOf('AAPL')).getByText('8.0')).not.toHaveClass('best')
-    expect(within(rowOf('NVDA')).getByText('45')).not.toHaveClass('best')
-    expect(grid.querySelectorAll('.best')).toHaveLength(4)
+    const rowOf = (t: string) => within(cardOf()).getByRole('button', { name: t }).closest('.rc-row') as HTMLElement
+    const cell = (t: string, text: string) => within(rowOf(t)).getByText(text).closest('.rc-cell')!
+    expect(cell('MSFT', '9.5')).toHaveClass('best')
+    expect(cell('AAPL', '81')).toHaveClass('best')
+    expect(cell('NVDA', '+12%')).toHaveClass('best')
+    expect(cell('AAPL', '2.4×')).toHaveClass('best')
+    expect(cell('AAPL', '8.0')).not.toHaveClass('best')
+    expect(cell('NVDA', '45')).not.toHaveClass('best')
+    expect(cardOf().querySelectorAll('.rc-cell.best')).toHaveLength(4)
   })
 
   it('keeps working after the typed allowance is exhausted, and never consumes it', async () => {
@@ -404,11 +407,11 @@ describe('LandingPage compare chip (controller addition 2)', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /Compare/ }))
     await waitFor(() => {
-      expect(within(gridOf()).getByText('MSFT')).toBeInTheDocument()
+      expect(within(cardOf()).getByText('MSFT')).toBeInTheDocument()
     })
     // The chip's own run replaced the mount's single row with its three.
     expect(screen.queryByText('Mount Sample Only Inc.')).not.toBeInTheDocument()
-    expect(within(gridOf()).getByText('NVDA')).toBeInTheDocument()
+    expect(within(cardOf()).getByText('NVDA')).toBeInTheDocument()
     expect(track).toHaveBeenCalledWith('analysis_started',
       { tickers: ['AAPL', 'MSFT', 'NVDA'], count: 3, source: 'sample' })
     expect(screen.getByText(/see the plans/i)).toBeInTheDocument()
@@ -419,7 +422,7 @@ describe('LandingPage compare chip (controller addition 2)', () => {
     await renderSettled()
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ json: async () => COMPARE_RESULTS() }))
     await userEvent.click(screen.getByRole('button', { name: /Compare/ }))
-    await waitFor(() => { expect(within(gridOf()).getByText('NVDA')).toBeInTheDocument() })
+    await waitFor(() => { expect(within(cardOf()).getByText('NVDA')).toBeInTheDocument() })
     vi.mocked(track).mockClear()
 
     await userEvent.click(screen.getByRole('button', { name: 'Add NVDA to a watchlist' }))
@@ -449,13 +452,13 @@ describe('LandingPage compare chip (controller addition 2)', () => {
 
     expect(screen.getByRole('button', { name: 'Analyzing 3…' })).toBeDisabled()
     expect(screen.getByRole('status')).toHaveTextContent(/Computing in parallel:.*AAPL.*MSFT.*NVDA/)
-    expect(gridOf().closest('.stale')).not.toBeNull()
+    expect(cardOf().querySelector('.stale')).not.toBeNull()
 
     await act(async () => { answer({ json: async () => COMPARE_RESULTS() }) })
-    await waitFor(() => { expect(within(gridOf()).getByText('NVDA')).toBeInTheDocument() })
+    await waitFor(() => { expect(within(cardOf()).getByText('NVDA')).toBeInTheDocument() })
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
-    expect(screen.getByText(/Computed in parallel/)).toBeInTheDocument()
-    expect(gridOf().closest('.stale')).toBeNull()
+    expect(cardOf().querySelector('.rc-head')).toHaveTextContent(/3 tickers · \d+\.\d s/)
+    expect(cardOf().querySelector('.stale')).toBeNull()
     expect(screen.getByRole('button', { name: 'Analyze →' })).toBeEnabled()
   })
 })
@@ -542,100 +545,78 @@ describe('LandingPage analysis_completed props (fix round 16d)', () => {
 // double-invokes them, so breakdown_opened fired twice per expand in
 // development. This is the only render in the suite wrapped in StrictMode —
 // without it the assertion below cannot observe the defect at all.
-describe('LandingPage breakdown analytics under StrictMode (fix round 1)', () => {
+describe('LandingPage breakdown analytics under StrictMode', () => {
   const opens = (track: unknown) =>
-    vi.mocked(track as (...a: unknown[]) => void).mock.calls
-      .filter(c => c[0] === 'breakdown_opened')
-
-  // Spec 5.2: a single-ticker result opens by itself. That is presentation, not
-  // a visitor action, so it must record nothing — otherwise every page load
-  // (the mount sample is one ticker) would post a breakdown_opened nobody chose.
-  it('auto-expands a single row without recording an open', async () => {
-    const { track } = await import('../lib/analytics')
+    vi.mocked(track as (...a: unknown[]) => void).mock.calls.filter(c => c[0] === 'breakdown_opened')
+  const mount = async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       json: async () => ({ results: [compareRow('AAPL')], invalid: [], error: null }),
     }))
     render(<StrictMode><MemoryRouter><LandingPage /></MemoryRouter></StrictMode>)
-    await waitFor(() => {
-      expect(screen.getByText('AAPL Inc.')).toBeInTheDocument()
-    })
-    expect(screen.getByRole('button', { name: 'AAPL' })).toHaveAttribute('aria-expanded', 'true')
+    await waitFor(() => { expect(within(cardOf()).getByText('AAPL Inc.')).toBeInTheDocument() })
+  }
+
+  // Spec 5.2 (hero rework): nothing opens by itself any more.
+  it('opens nothing on load and records nothing', async () => {
+    const { track } = await import('../lib/analytics')
+    await mount()
+    expect(dockOf()).toBeNull()
     expect(opens(track)).toEqual([])
   })
 
-  it('fires breakdown_opened exactly once per expand', async () => {
+  it('fires breakdown_opened exactly once when a tile opens it, with that tile as the tab', async () => {
     const { track } = await import('../lib/analytics')
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      json: async () => ({ results: [compareRow('AAPL')], invalid: [], error: null }),
-    }))
-    render(<StrictMode><MemoryRouter><LandingPage /></MemoryRouter></StrictMode>)
-    await waitFor(() => {
-      expect(screen.getByText('AAPL Inc.')).toBeInTheDocument()
-    })
-    // Collapse the auto-opened row first; the open that follows is the visitor's.
-    await userEvent.click(screen.getByRole('button', { name: 'AAPL' }))
+    await mount()
     vi.mocked(track).mockClear()
-
-    await userEvent.click(screen.getByRole('button', { name: 'AAPL' }))
-
-    expect(opens(track))
-      .toEqual([['breakdown_opened', { ticker: 'AAPL', assessment: 'Quality' }]])
+    await userEvent.click(tile('Moat'))
+    expect(dockOf()).not.toBeNull()
+    expect(opens(track)).toEqual([['breakdown_opened', { ticker: 'AAPL', assessment: 'Moat' }]])
   })
 
-  // Fix round 16d: spec section 9 names this event `breakdown_opened (ticker,
-  // assessment tab)`. The plan dropped the tab and so did the implementation,
-  // so an expand was recorded without the thing the visitor was actually
-  // reading. Asserted with the page on a NON-default tab, because a constant
-  // 'Quality' passes the test above and this is the one that catches it.
-  //
-  // Still under StrictMode, and still an exact one-call list: `assessment` had
-  // to join `toggle`'s dependency array, and the once-per-open guarantee (the
-  // track call sits beside setOpen, never inside the updater) has to survive
-  // that untouched.
-  it('records the assessment tab the row opens on, not a constant', async () => {
+  it('switches tab from another tile without recording a second open, and folds from the same tile', async () => {
     const { track } = await import('../lib/analytics')
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      json: async () => ({ results: [compareRow('AAPL')], invalid: [], error: null }),
-    }))
-    const { container } = render(
-      <StrictMode><MemoryRouter><LandingPage /></MemoryRouter></StrictMode>
-    )
-    await waitFor(() => {
-      expect(screen.getByText('AAPL Inc.')).toBeInTheDocument()
-    })
-    // The hero's assessment cards write the page's single `assessment` — the
-    // same one the breakdown panel reads. Index 3 is Reward / Risk.
-    await userEvent.click(container.querySelectorAll('.assess4 .it')[3])
-    await userEvent.click(screen.getByRole('button', { name: 'AAPL' }))   // collapse
+    await mount()
+    await userEvent.click(tile('Moat'))
     vi.mocked(track).mockClear()
 
-    await userEvent.click(screen.getByRole('button', { name: 'AAPL' }))
+    await userEvent.click(tile('Fair Value'))
+    expect(dockOf()).not.toBeNull()
+    expect(tile('Fair Value')).toHaveAttribute('aria-pressed', 'true')
+    expect(tile('Moat')).toHaveAttribute('aria-pressed', 'false')
+    expect(opens(track)).toEqual([])
 
-    expect(opens(track))
-      .toEqual([['breakdown_opened', { ticker: 'AAPL', assessment: 'Reward / Risk' }]])
+    await userEvent.click(tile('Fair Value'))
+    expect(dockOf()).toBeNull()
+    expect(opens(track)).toEqual([])
   })
 
-  it('fires nothing when the row is collapsed again', async () => {
+  it('folds from Close and records nothing for it', async () => {
     const { track } = await import('../lib/analytics')
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      json: async () => ({ results: [compareRow('AAPL')], invalid: [], error: null }),
-    }))
+    await mount()
+    await userEvent.click(tile('Quality'))
+    vi.mocked(track).mockClear()
+    await userEvent.click(within(dockOf()!).getByRole('button', { name: 'Close' }))
+    expect(dockOf()).toBeNull()
+    expect(opens(track)).toEqual([])
+  })
+
+  it('opens a comparison row on the current tab, once, and folds it from the same row', async () => {
+    const { track } = await import('../lib/analytics')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ json: async () => COMPARE_RESULTS() }))
     render(<StrictMode><MemoryRouter><LandingPage /></MemoryRouter></StrictMode>)
-    await waitFor(() => {
-      expect(screen.getByText('AAPL Inc.')).toBeInTheDocument()
-    })
+    await waitFor(() => { expect(within(cardOf()).getByRole('button', { name: 'NVDA' })).toBeInTheDocument() })
+    // Move the shared assessment to Reward / Risk from the Framework tabs first.
+    await userEvent.click(document.querySelectorAll<HTMLElement>('.mcards button')[3])
     vi.mocked(track).mockClear()
 
-    const control = screen.getByRole('button', { name: 'AAPL' })
-    expect(control).toHaveAttribute('aria-expanded', 'true')     // auto-opened
-    await userEvent.click(control)
-    expect(control).toHaveAttribute('aria-expanded', 'false')
-    expect(opens(track)).toHaveLength(0)
-    await userEvent.click(control)
-    expect(control).toHaveAttribute('aria-expanded', 'true')
-    await userEvent.click(control)
-    expect(control).toHaveAttribute('aria-expanded', 'false')
+    const nvda = within(cardOf()).getByRole('button', { name: 'NVDA' })
+    await userEvent.click(nvda)
+    expect(nvda).toHaveAttribute('aria-expanded', 'true')
+    expect(opens(track)).toEqual([['breakdown_opened', { ticker: 'NVDA', assessment: 'Reward / Risk' }]])
 
+    await userEvent.click(nvda)
+    expect(nvda).toHaveAttribute('aria-expanded', 'false')
+    expect(dockOf()).toBeNull()
     expect(opens(track)).toHaveLength(1)
   })
 })
@@ -665,7 +646,7 @@ describe('Layout nav (controller addition)', () => {
 // Task 10: `renderBreakdown` used to return null, so nothing here proved the
 // expanded row renders anything at all. These assert on the real Breakdown's
 // output and on the one piece of state the page shares with it — `assessment`,
-// which the hero cards write and the panel reads.
+// which the card tiles write and the dock reads.
 const BREAKDOWN_ROW: TickerPayload = {
   ticker: 'AAPL', company_name: 'Apple Inc.', price: 232,
   quality: {
@@ -685,73 +666,116 @@ const BREAKDOWN_ROW: TickerPayload = {
   calibrations: [], errors: [],
 }
 
-describe('LandingPage breakdown panel (task 10)', () => {
-  async function openRow() {
+describe('LandingPage breakdown dock', () => {
+  async function openFromTile(name = 'Quality') {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       json: async () => ({ results: [BREAKDOWN_ROW], invalid: [], error: null }),
     }))
     const utils = renderPage()
-    await waitFor(() => {
-      expect(screen.getByText('Apple Inc.')).toBeInTheDocument()
-    })
-    // A single row opens by itself (spec 5.2) — no click needed.
-    expect(screen.getByRole('button', { name: 'AAPL' })).toHaveAttribute('aria-expanded', 'true')
+    await waitFor(() => { expect(within(cardOf()).getByText('Apple Inc.')).toBeInTheDocument() })
+    await userEvent.click(tile(name))
     return utils
   }
 
-  // Scoped to the expanded row's own `.bd` panel since task 11: the framework
-  // section below the grid names the same Quality category, so an unscoped
-  // getByText would now match two elements and fail on ambiguity rather than on
-  // anything real.
-  it('expands a row into the real factor table, not an empty panel', async () => {
-    const { container } = await openRow()
-    const panel = container.querySelector<HTMLElement>('.bd')!
-    expect(within(panel).getByText(/Growth & Margins/)).toBeInTheDocument()
-    expect(within(panel).getByText('Revenue growth (3-yr)')).toBeInTheDocument()
-    expect(within(panel).getByText('+8.1% / yr')).toBeInTheDocument()
-    for (const name of ['Quality', 'Moat', 'Fair Value', 'Reward \\/ Risk']) {
-      expect(within(panel).getByRole('button', { name: new RegExp(`^${name}`) })).toBeInTheDocument()
-    }
+  it('opens the real factor table under the hero, not an empty panel', async () => {
+    await openFromTile()
+    const dock = dockOf()!
+    expect(dock.previousElementSibling).toHaveClass('hero')
+    expect(within(dock).getByText(/Growth & Margins/)).toBeInTheDocument()
+    expect(within(dock).getByText('Revenue growth (3-yr)')).toBeInTheDocument()
+    expect(within(dock).getByText('+8.1% / yr')).toBeInTheDocument()
   })
 
-  it('switches the open panel when a breakdown tab is clicked', async () => {
-    const { container } = await openRow()
-    await userEvent.click(within(container.querySelector<HTMLElement>('.bd')!)
-      .getByRole('button', { name: /^Moat/ }))
-    const panel = container.querySelector<HTMLElement>('.bd')!
-    expect(within(panel).getAllByText('ROIC level').length).toBeGreaterThan(0)
-    expect(within(panel).queryByText(/Growth & Margins/)).not.toBeInTheDocument()
+  it('opens on the tab of the tile that was clicked', async () => {
+    await openFromTile('Moat')
+    expect(within(dockOf()!).getAllByText('ROIC level').length).toBeGreaterThan(0)
+    expect(within(dockOf()!).queryByText(/Growth & Margins/)).not.toBeInTheDocument()
   })
 
-  // The hero cards and the breakdown share one `assessment`, so choosing an
-  // assessment up in the hero must move the panel already open below it.
-  it('follows the hero assessment cards, which write the same assessment state', async () => {
-    const { container } = await openRow()
-    const cards = container.querySelectorAll('.assess4 .it')
-    await userEvent.click(cards[2])
-    const panel = container.querySelector<HTMLElement>('.bd')!
-    expect(within(panel).getByText('Mega Cap valuation blend')).toBeInTheDocument()
-    expect(within(panel).queryByText(/Growth & Margins/)).not.toBeInTheDocument()
+  it('switches the open panel from its own tabs, and the tile highlight follows', async () => {
+    await openFromTile()
+    await userEvent.click(within(dockOf()!).getByRole('button', { name: /^Fair Value/ }))
+    expect(within(dockOf()!).getByText('Mega Cap valuation blend')).toBeInTheDocument()
+    expect(tile('Fair Value')).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('closes when a new run lands', async () => {
+    await openFromTile()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ json: async () => COMPARE_RESULTS() }))
+    await userEvent.click(screen.getByRole('button', { name: /Compare/ }))
+    await waitFor(() => { expect(within(cardOf()).getByRole('button', { name: 'MSFT' })).toBeInTheDocument() })
+    expect(dockOf()).toBeNull()
+  })
+})
+
+describe('LandingPage result card states (hero rework)', () => {
+  it('shows the running frame, then the could-not-load message, when the sample fails', async () => {
+    let fail!: (e: unknown) => void
+    vi.stubGlobal('fetch', vi.fn(() => new Promise((_r, rej) => { fail = rej })))
+    renderPage()
+    expect(cardOf()).toHaveTextContent('Running the analysis…')
+    await act(async () => { fail(new TypeError('network down')) })
+    await waitFor(() => {
+      expect(cardOf()).toHaveTextContent('The live example could not be loaded. Try a ticker on the left.')
+    })
+    expect(document.querySelector('.hero-l')).toHaveTextContent('The analysis could not be reached. Please try again.')
+  })
+
+  it('keeps the previous card and its open breakdown when a run returns no rows', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      json: async () => ({ results: [BREAKDOWN_ROW], invalid: [], error: null }),
+    }))
+    renderPage()
+    await waitFor(() => { expect(within(cardOf()).getByText('Apple Inc.')).toBeInTheDocument() })
+    await userEvent.click(tile('Moat'))
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      json: async () => ({ results: [], invalid: ['ZZZZ'], error: null }),
+    }))
+    await userEvent.type(screen.getByRole('textbox'), 'ZZZZ')
+    await userEvent.click(screen.getByRole('button', { name: 'Analyze →' }))
+    await waitFor(() => { expect(screen.getByText('Not recognised: ZZZZ')).toBeInTheDocument() })
+
+    expect(within(cardOf()).getByText('Apple Inc.')).toBeInTheDocument()
+    expect(dockOf()).not.toBeNull()
+  })
+
+  it('labels a typed run as the visitor’s own', async () => {
+    await renderSettled()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      json: async () => ({ results: [compareRow('NVDA')], invalid: [], error: null }),
+    }))
+    await userEvent.type(screen.getByRole('textbox'), 'NVDA')
+    await userEvent.click(screen.getByRole('button', { name: 'Analyze →' }))
+    await waitFor(() => { expect(within(cardOf()).getByText('Your analysis')).toBeInTheDocument() })
+  })
+
+  it('places the question band between the hero and the Framework', async () => {
+    const { container } = await renderSettled()
+    const band = container.querySelector('.qband')!
+    const how = container.querySelector('section#how')!
+    expect(band.compareDocumentPosition(how) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(container.querySelector('.hero')!.compareDocumentPosition(band) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 })
 
 // Task 11: the framework section reads and writes the SAME `assessment` the
-// hero cards and every expanded breakdown panel use. There is one piece of
+// card tiles and the open breakdown dock use. There is one piece of
 // state for the concept, so these tests assert the jump in both directions —
-// hero -> framework and framework -> an already-open breakdown panel.
+// card -> framework and framework -> an already-open breakdown dock.
 describe('LandingPage framework section (task 11)', () => {
   const detail = (c: HTMLElement) => c.querySelector<HTMLElement>('.mdetail')!
 
-  it('shows the framework panel for the assessment the hero cards select', async () => {
-    const { container } = await renderSettled()
+  it('moves the Framework panel when a card tile picks an assessment — one shared state', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      json: async () => ({ results: [BREAKDOWN_ROW], invalid: [], error: null }),
+    }))
+    const { container } = renderPage()
+    await waitFor(() => { expect(within(cardOf()).getByText('Apple Inc.')).toBeInTheDocument() })
     expect(detail(container).querySelector('.dh')).toHaveTextContent('Quality')
-    expect(detail(container)).toHaveTextContent('35% of the score · 7 metrics')
-
-    await userEvent.click(container.querySelectorAll('.assess4 .it')[1])
-
+    await userEvent.click(tile('Moat'))
     expect(detail(container).querySelector('.dh')).toHaveTextContent('Moat')
     expect(detail(container)).toHaveTextContent('40 of 100 points')
-    expect(detail(container)).not.toHaveTextContent('35% of the score · 7 metrics')
   })
 
   it('moves an already-open breakdown panel when a framework card is clicked', async () => {
@@ -762,26 +786,30 @@ describe('LandingPage framework section (task 11)', () => {
     await waitFor(() => {
       expect(screen.getByText('Apple Inc.')).toBeInTheDocument()
     })
-    const panel = container.querySelector<HTMLElement>('.bd')!
+    await userEvent.click(tile('Quality'))
+    const panel = dockOf()!
     expect(within(panel).getByText(/Growth & Margins/)).toBeInTheDocument()
 
     await userEvent.click(container.querySelectorAll('.mcards button')[1])
 
-    expect(within(container.querySelector<HTMLElement>('.bd')!).getAllByText('ROIC level').length)
+    expect(within(dockOf()!).getAllByText('ROIC level').length)
       .toBeGreaterThan(0)
-    expect(within(container.querySelector<HTMLElement>('.bd')!).queryByText(/Growth & Margins/))
+    expect(within(dockOf()!).queryByText(/Growth & Margins/))
       .not.toBeInTheDocument()
   })
 
   it('records methodology_viewed with the assessment chosen, and only from here', async () => {
     const { track } = await import('../lib/analytics')
-    const { container } = await renderSettled()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      json: async () => ({ results: [BREAKDOWN_ROW], invalid: [], error: null }),
+    }))
+    const { container } = renderPage()
+    await waitFor(() => { expect(within(cardOf()).getByText('Apple Inc.')).toBeInTheDocument() })
     vi.mocked(track).mockClear()
 
-    // A hero card writes the same state but is not the methodology section, so
-    // it must not fire the event (spec section 9's list is closed and is about
-    // funnel steps, not every control that touches `assessment`).
-    await userEvent.click(container.querySelectorAll('.assess4 .it')[3])
+    // A card tile writes the same state but is not the methodology section, so it
+    // must not fire the event (spec section 9).
+    await userEvent.click(tile('Reward / Risk'))
     expect(track).not.toHaveBeenCalledWith('methodology_viewed', expect.anything())
 
     await userEvent.click(container.querySelectorAll('.mcards button')[2])

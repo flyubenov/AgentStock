@@ -45,12 +45,21 @@
 .intrinsica .links .cta:hover { color: #fff; background: var(--accent-d); }
 @media (max-width: 720px) { .intrinsica .links a:not(.cta):not(.back) { display: none; } .intrinsica .nav-in { padding: 12px 16px; } }
 
-/* hero */
-.intrinsica .hero { text-align: center; padding: 58px 0 22px; }
-.intrinsica .brand { font: 700 58px var(--fh); letter-spacing: -.03em; line-height: 1.6; }
-.intrinsica .h3 { font: 600 22px var(--fh); color: var(--dim); margin-top: 6px; }
+/* hero — promise + analyzer left, result card right (hero rework 2026-09-27) */
+.intrinsica .hero { padding: 56px 0 48px; }
+.intrinsica .hero-in { max-width: 1160px; margin: 0 auto; padding: 0 24px; display: grid; grid-template-columns: 1fr 1fr;
+  gap: 48px; align-items: center; }
+.intrinsica .hero-h1 { font: 700 48px/1.08 var(--fh); letter-spacing: -.03em; text-wrap: balance; }
+.intrinsica .hero-sub { color: var(--dim); font-size: 17px; margin-top: 16px; max-width: 46ch; }
+.intrinsica .an-micro { font-size: 13px; color: var(--mute); margin-top: 10px; }
+@media (max-width: 900px) {
+  .intrinsica .hero { padding: 32px 0 36px; }
+  .intrinsica .hero-in { grid-template-columns: 1fr; gap: 26px; padding: 0 16px; }
+  .intrinsica .hero-h1 { font-size: 34px; }
+  .intrinsica .hero-sub { font-size: 15.5px; }
+}
 .intrinsica .sub { color: var(--dim); font-size: 16px; margin-top: 13px; }
-.intrinsica .analyzer { max-width: 560px; margin: 24px auto 0; }
+.intrinsica .analyzer { max-width: none; margin: 26px 0 0; }
 .intrinsica .an-row { display: flex; gap: 10px; background: var(--bg); border: 1.5px solid var(--border2); border-radius: 16px;
   padding: 8px; box-shadow: var(--sh); transition: .15s; }
 .intrinsica .an-row:focus-within { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft), var(--sh); }
@@ -62,7 +71,7 @@
   padding: 0 26px; cursor: pointer; white-space: nowrap; }
 .intrinsica .an-btn:hover { background: var(--accent-d); }
 .intrinsica .an-btn:disabled { opacity: .6; cursor: not-allowed; }
-.intrinsica .chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 15px; }
+.intrinsica .chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-start; margin-top: 15px; }
 .intrinsica .chips .lbl { font-size: 13px; color: var(--mute); }
 .intrinsica .chip { font: 600 13px var(--fm); color: var(--dim); background: var(--bg2); border: 1px solid var(--border);
   border-radius: 999px; padding: 6px 13px; cursor: pointer; }
@@ -74,69 +83,24 @@
   border-radius: 16px; padding: 16px 18px; }
 .intrinsica .an-wall a { color: var(--accent); font-weight: 600; }
 .intrinsica .an-wall a:hover { text-decoration: underline; }
-.intrinsica .notice { color: var(--dim); font-size: 14px; text-align: center; margin: 0 auto 14px; }
-@media (max-width: 720px) { .intrinsica .brand { font-size: 44px; } .intrinsica .h3 { font-size: 19px; } }
-
-/* pipeline strip under the headline (variant B3): fundamentals -> methodology -> four scores */
-.intrinsica .pipe { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; margin-top: 22px;
-  font: 500 12.5px var(--fb); color: var(--dim); }
-.intrinsica .pipe-step-wrap { display: inline-flex; align-items: center; gap: 10px; }
-.intrinsica .pipe .st { background: var(--bg2); border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px; }
-.intrinsica .pipe .st.out { background: var(--accent-soft); border-color: transparent; color: var(--accent); font-weight: 600; }
-.intrinsica .pipe .ar { color: var(--mute); }
-
-/* four assessments — inline under headline (V2) */
-.intrinsica .assess4 { display: flex; justify-content: center; gap: 28px; flex-wrap: wrap; max-width: 940px; margin: 16px auto 0; }
-.intrinsica .assess4 .it { max-width: 206px; text-align: center; display: block; padding: 8px 10px; border-radius: 12px;
-  border: 1px solid transparent; transition: .12s; cursor: pointer; }
-.intrinsica .assess4 .it:hover { border-color: var(--border); background: var(--bg2); }
-.intrinsica .assess4 .it:hover .go { opacity: 1; transform: translateX(0); }
-.intrinsica .assess4 .go { color: var(--accent); opacity: 0; transform: translateX(-3px); transition: .12s; }
-.intrinsica .assess4 .nm { font: 700 13.5px var(--fh); display: inline-flex; align-items: center; gap: 6px; }
-.intrinsica .assess4 .q { font-size: 12px; color: var(--mute); margin-top: 3px; line-height: 1.42; }
-@media (max-width: 720px) { .intrinsica .assess4 { gap: 16px 20px; } .intrinsica .assess4 .it { max-width: 45%; } }
+.intrinsica .notice { color: var(--neg); font-size: 14px; margin-top: 12px; }
 
 .intrinsica .section { padding: 58px 0; border-top: 1px solid var(--border); }
-.intrinsica #result { padding-top: 20px; border-top: none; background: var(--bg); }
 .intrinsica .stage { background: var(--bg2); }
 .intrinsica .kicker { font: 600 12px var(--fb); letter-spacing: .16em; text-transform: uppercase; color: var(--accent); margin-bottom: 12px; }
 .intrinsica .stitle { font: 700 30px var(--fh); letter-spacing: -.02em; margin-bottom: 12px; }
 .intrinsica .ssub { color: var(--dim); max-width: 700px; font-size: 16px; }
 .intrinsica .ssub + .ssub { margin-top: 10px; }
 
-/* results: parallel-run bar, grid style B · Institutional */
+/* the live "Computing in parallel" strip, at the top of the result card while a run is in flight */
 .intrinsica .runbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: var(--bg); border: 1px solid var(--border);
   border-radius: 12px; padding: 11px 15px; margin-bottom: 14px; font-size: 12.5px; color: var(--dim); box-shadow: var(--sh); }
 .intrinsica .runbar .rp { display: flex; align-items: center; gap: 7px; }
 .intrinsica .runbar .mini { width: 70px; height: 5px; border-radius: 999px; background: var(--bg3); overflow: hidden; }
-.intrinsica .runbar .mini > span { display: block; height: 100%; width: 100%; background: var(--pos); }
-.intrinsica .runbar .mini.fail > span { background: var(--neg); }
-.intrinsica .runbar .done { color: var(--pos); } .intrinsica .runbar .fail { color: var(--neg); }
 .intrinsica .runbar .total { margin-left: auto; color: var(--mute); }
 
 .intrinsica .gap-pos { color: var(--pos); } .intrinsica .gap-near { color: var(--blue); }
 .intrinsica .gap-warn { color: var(--warn); } .intrinsica .gap-neg { color: var(--neg); } .intrinsica .gap-none { color: var(--mute); }
-.intrinsica .tB { overflow-x: auto; }
-.intrinsica .tB table.g { width: 100%; border-collapse: collapse; background: var(--bg); border: 1px solid var(--border2);
-  border-radius: 8px; overflow: hidden; font-variant-numeric: tabular-nums; }
-.intrinsica .tB table.g > thead th { padding: 8px 12px; font: 600 10px var(--fb); letter-spacing: .07em; text-transform: uppercase;
-  color: var(--mute); background: var(--bg2); border-bottom: 1px solid var(--border2); text-align: right; white-space: nowrap; }
-.intrinsica .tB table.g > thead th u { text-decoration: none; text-transform: none; letter-spacing: 0; font-weight: 500; color: #a3a3ad; }
-.intrinsica .tB table.g > thead th:first-child, .intrinsica .tB tr.row td:first-child { text-align: left; }
-.intrinsica .tB tr.row td { padding: 9px 12px; border-bottom: 1px solid var(--border); font: 500 13px var(--fb); text-align: right;
-  white-space: nowrap; vertical-align: top; }
-.intrinsica .tB .tk { font: 700 13px var(--fb); }
-.intrinsica .tB .nm { font-size: 12px; color: var(--mute); margin-left: 8px; }
-/* Implementation-only: the row's keyboard affordance is a real button that reads as
-   the plain ticker text the mock shows. */
-.intrinsica .tB .rowx { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
-.intrinsica .tB tr.row { cursor: pointer; }
-.intrinsica .tB tr.row:hover td { background: #fafbfc; }
-.intrinsica .tB tr.row.open td { background: var(--accent-soft); }
-.intrinsica .tB tr.row td.best { color: var(--accent); font-weight: 700; }
-.intrinsica .tB tr.exp > td { background: var(--bg); padding: 6px 16px 18px; border-bottom: 1px solid var(--border2); cursor: default; }
-.intrinsica .tB .chev { display: inline-block; color: var(--mute); transition: transform .15s; }
-.intrinsica .tB tr.row.open .chev { transform: rotate(180deg); color: var(--accent); }
 @media (max-width: 760px) { .intrinsica table.cmp { display: block; overflow-x: auto; } }
 
 /* breakdown · slim tabs, full width */
@@ -433,13 +397,10 @@
 }
 
 /* Watchlist star + toast (user decision 2026-09-26, variant E). The star sits beside
- * the ticker so it stays on screen when the grid scrolls sideways on a phone; no lock
+ * the ticker in the result card (its rule lives with the card); no lock
  * icon, on purpose. The toast is fixed, so the layout never moves; on a phone it spans
  * the width above the home indicator, elsewhere it is a centred card. Its link and
  * close button are 44px tall touch targets. */
-.intrinsica .tB .watch { background: none; border: 0; cursor: pointer; color: var(--mute); font: 400 15px var(--fb);
-  line-height: 1; padding: 4px 6px; margin-left: 4px; border-radius: 6px; vertical-align: middle; }
-.intrinsica .tB .watch:hover, .intrinsica .tB .watch:focus-visible { color: var(--warn); background: var(--bg3); }
 .intrinsica .wtoast { position: fixed; z-index: 60; left: 50%; transform: translateX(-50%);
   bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: min(440px, calc(100% - 32px));
   display: flex; align-items: center; gap: 6px 12px; padding: 8px 6px 8px 16px; border-radius: 12px;
