@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { money, num, pct, gapClass, figure, weight, dollars, gapPct, qualityTier, moatTier } from './format'
+import { money, num, pct, gapClass, figure, weight, dollars, gapPct, qualityTier, moatTier, fvCaption } from './format'
 
 describe('formatters', () => {
   it('renders an em dash for every absent value', () => {
@@ -148,5 +148,21 @@ describe('mock headline forms', () => {
     expect(moatTier(40)).toBe('Narrow')
     expect(moatTier(39)).toBe('Little or none')
     expect(moatTier(null)).toBeNull()
+  })
+})
+
+describe('fvCaption', () => {
+  // gap_pct is (fair value - price) / price, so it is measured against the PRICE.
+  it('says how far fair value sits from the price, measured against the price', () => {
+    expect(fvCaption(-53.43)).toBe('Fair value 53% below price')
+    expect(fvCaption(12.4)).toBe('Fair value 12% above price')
+  })
+  it('says "at price" when the gap rounds to zero, never "0% above"', () => {
+    expect(fvCaption(0.4)).toBe('Fair value at price')
+    expect(fvCaption(-0.4)).toBe('Fair value at price')
+  })
+  it('falls back to the em dash for a missing or broken gap', () => {
+    expect(fvCaption(null)).toBe('—')
+    expect(fvCaption(Number.NaN)).toBe('—')
   })
 })

@@ -79,6 +79,16 @@ export function gapPct(v: number | null): string {
   return `${r > 0 ? '+' : '−'}${Math.abs(r)}%`
 }
 
+/** The result card's Fair Value caption (spec 5.2). `gap_pct` is measured against the
+ *  price, so the sentence is about where fair value sits relative to the price —
+ *  "Price 53% above fair value" would silently change the base of the percentage. */
+export function fvCaption(v: number | null): string {
+  if (!finite(v)) return DASH
+  const r = Math.round(v)
+  if (r === 0) return 'Fair value at price'
+  return `Fair value ${Math.abs(r)}% ${r > 0 ? 'above' : 'below'} price`
+}
+
 /** The outcome bands the framework section publishes (spec 5.4 item 4), read back
  *  onto one score. These are the public bands, never a metric's scoring cut-off. */
 export function qualityTier(v: number | null): string | null {
