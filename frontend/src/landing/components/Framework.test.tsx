@@ -272,13 +272,16 @@ describe('Framework — page rules', () => {
   // Variant E (user decision): three of the four assessments are judgments, and
   // the overview card says so — as its second paragraph, in the original wording
   // (option B, 2026-09-27).
-  it('says plainly that the scores are a methodology, not a measurement', () => {
+  it('says plainly that the scores come from Intrinsica’s own method', () => {
     const { container } = show(0)
     const note = container.querySelector('.ovcard .judg')!
-    expect(note).toHaveTextContent('A methodology, not a measurement.')
-    expect(note).toHaveTextContent(/Quality, Moat and Reward\/Risk have no single correct formula/)
-    expect(note).toHaveTextContent(/assembles the fundamentals that bear on each/)
-    expect(note).toHaveTextContent(/see exactly how a score was reached, and disagree with it\./)
+    // Wording chosen 2026-09-27 (variant 3): explains the method and states the
+    // judgment plainly, without a warning tone or a "disagree with it" ending.
+    expect(note.querySelector('b')).toHaveTextContent('Intrinsica’s own method.')
+    expect(note).toHaveTextContent(/no single agreed way to score a company’s Quality, Moat or Reward\/Risk/)
+    expect(note).toHaveTextContent(/weights them by its own methodology/)
+    expect(note).toHaveTextContent(/Each score opens up to the inputs and weights behind it\.$/)
+    expect(note).not.toHaveTextContent(/disagree/i)
     const order = Array.from(container.querySelectorAll('.ovcard > p')).map(p => p.className)
     expect(order).toEqual(['ssub', 'ssub judg', 'ovtail'])
     expect(container.querySelector('.ovsplit')).toBeNull()

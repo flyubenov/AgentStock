@@ -162,8 +162,8 @@ export const OVERVIEW = {
    *  not quantities with a correct value. Intrinsica's scores are the product of its
    *  own methodology, and the page's transparency is what makes that honest. */
   judgment: {
-    title: 'A methodology, not a measurement.',
-    body: 'Quality, Moat and Reward/Risk have no single correct formula. Intrinsica assembles the fundamentals that bear on each, weights them and turns them into a score, so companies can be compared on the same scale. Every input and weight is on the page, so you can see exactly how a score was reached, and disagree with it.',
+    title: 'Intrinsica’s own method.',
+    body: 'There is no single agreed way to score a company’s Quality, Moat or Reward/Risk. Intrinsica takes the fundamentals that matter for each, weights them by its own methodology and condenses them into one comparable score. Each score opens up to the inputs and weights behind it.',
   },
   tail: 'Click an assessment for every category, weight and calibration.',
 }

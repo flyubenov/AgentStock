@@ -194,11 +194,11 @@ from a side box into the text, and its original wording was restored)*:
 1. Lead: "Four separate engines turn the latest fundamentals into four scores, using explicit
    formulas and **N data-triggered calibrations**. Same data, same score." — N is the live
    count of calibrations, never a hand-written number.
-2. Second paragraph, bold opener *(variant E)*: **"A methodology, not a measurement."**
-   Quality, Moat and Reward/Risk have no single correct formula. Intrinsica assembles the
-   fundamentals that bear on each, weights them and turns them into a score, so companies can
-   be compared on the same scale. Every input and weight is on the page, so you can see
-   exactly how a score was reached, and disagree with it.
+2. Second paragraph, bold opener *(variant E; reworded 2026-09-27, user decision — less of a
+   warning, no "disagree with it")*: **"Intrinsica's own method."** There is no single agreed
+   way to score a company's Quality, Moat or Reward/Risk. Intrinsica takes the fundamentals
+   that matter for each, weights them by its own methodology and condenses them into one
+   comparable score. Each score opens up to the inputs and weights behind it.
 3. Closing line: "Click an assessment for every category, weight and calibration."
 
 **Assessment tabs.** One box: a row of four tabs (dot + name only; 2×2 on a phone) forms

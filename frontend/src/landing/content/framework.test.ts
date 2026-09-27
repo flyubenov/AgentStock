@@ -103,7 +103,7 @@ describe('framework content', () => {
     expect(OVERVIEW).not.toHaveProperty('points')
     expect(`${OVERVIEW.lead.before} ${OVERVIEW.lead.bold}`).not.toMatch(/\d/)
     expect(OVERVIEW.lead.after).toBe('Same data, same score.')
-    expect(OVERVIEW.judgment.title).toBe('A methodology, not a measurement.')
+    expect(OVERVIEW.judgment.title).toBe('Intrinsica’s own method.')
     expect(OVERVIEW.tail).toMatch(/Click an assessment/)
   })
 
