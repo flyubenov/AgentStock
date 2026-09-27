@@ -1,4 +1,5 @@
-import { Fragment, useEffect, useState, type ReactNode } from 'react'
+import { Fragment, type ReactNode } from 'react'
+import LiveRunBar from './LiveRunBar'
 import type { TickerPayload } from '../types'
 import { dollars, gapClass, gapPct, money, num } from '../format'
 
@@ -136,31 +137,6 @@ export default function ResultGrid({ rows, open, onToggle, renderBreakdown, onWa
 /** "Computed in parallel: AAPL ✓ MSFT ✓ NVDA ✓ · 3 tickers · 2.1s" — shown above the
  *  grid whenever more than one ticker ran (spec 5.2). A ticker whose engines all
  *  declined is marked ✗ rather than ✓: the bar reports what happened. */
-/** While a multi-ticker run is in flight the strip says so at once — every
- *  ticker's bar sweeps and the clock counts up — then settles into the result
- *  (loading variant E, user decision 2026-09-26). The backend answers all tickers
- *  in one response, so no ticker is ever shown as done before the others: the
- *  strip claims only what the page knows. */
-function LiveRunBar({ tickers }: { tickers: string[] }) {
-  const [ms, setMs] = useState(0)
-  useEffect(() => {
-    const t0 = Date.now()
-    const id = setInterval(() => setMs(Date.now() - t0), 100)
-    return () => clearInterval(id)
-  }, [])
-  return (
-    <div className="runbar live" role="status">
-      <span className="rp wait">Computing in parallel:</span>
-      {tickers.map(t => (
-        <span key={t} className="rp">
-          {t} <span className="mini ind" aria-hidden="true"><span /></span>
-        </span>
-      ))}
-      <span className="rp total">{tickers.length} tickers · {(ms / 1000).toFixed(1)}s</span>
-    </div>
-  )
-}
-
 export function RunBar({ rows, ms, pending = [] }: {
   rows: TickerPayload[]
   ms: number | null
