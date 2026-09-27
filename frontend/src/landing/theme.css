@@ -519,3 +519,14 @@
   .intrinsica .rc-cell b { font-size: 16px; }
 }
 @media (prefers-reduced-motion: reduce) { .intrinsica .rc-pill.live i { animation: none; } }
+
+/* Breakdown dock — opens full-width under the hero (hero rework 2026-09-27). */
+.intrinsica .bk-dock { background: var(--bg2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.intrinsica .bk-in { max-width: 1160px; margin: 0 auto; padding: 22px 24px 26px; }
+.intrinsica .bk-head { display: flex; align-items: baseline; gap: 8px; font-size: 15px; color: var(--dim); margin-bottom: 12px; }
+.intrinsica .bk-head b { font: 700 18px var(--fh); color: var(--text); }
+.intrinsica .bk-x { margin-left: auto; background: none; border: 1px solid var(--border2); border-radius: 8px; padding: 6px 12px;
+  font: 600 13px var(--fb); color: var(--dim); cursor: pointer; min-height: 36px; }
+.intrinsica .bk-x:hover { color: var(--text); background: var(--bg); }
+.intrinsica .bk-dock .bd { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 6px 16px 18px; }
+@media (max-width: 600px) { .intrinsica .bk-in { padding: 18px 16px 22px; } }
