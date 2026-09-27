@@ -135,7 +135,7 @@ The questions still live in each Framework detail panel (§5.4). A "numbers band
 **Tiles view** is used for the page-load sample (AAPL) and for any one-ticker run.
 - **Header:**
   - ticker, company name, the ☆ watchlist star (§9), then price and profile ("$341.07 · Tech / Growth profile");
-  - a pill on the right: "Live example · computed just now" for the sample (with a pulsing dot), or "Your analysis" for a visitor's own run.
+  - a pill on the right, set by the run's `source`: "Live example · computed just now" (pulsing dot) for a **sample** run (the page-load AAPL and the Compare chip), "Your analysis" for a **typed** run. *(Clarified 2026-09-27: a Compare-chip comparison is a sample, so it is not labelled "Your analysis".)*
 - **Tiles:** a 2×2 grid in the order Quality, Moat (top row, the business), then Fair Value, Reward / Risk (bottom row, the price). Each tile has:
   - a coloured dot and the name;
   - the big number with its unit (`7.8 /10`, `95 /100`, `$159`, `1.1 ×`);
@@ -147,12 +147,12 @@ The questions still live in each Framework detail panel (§5.4). A "numbers band
 - **Tile captions** come from the product's **existing** tier labels. No new wording is introduced.
   - Quality: `qualityTier` (Top-decile / Excellent / Strong / Moderate / Weak).
   - Moat: `moatTier` (Wide / Established / Narrow / Little or none).
-  - Fair Value: "Price N% above/below fair value", coloured with the % vs price bands below.
+  - Fair Value: "Fair value N% below price" / "Fair value N% above price" (or "Fair value at price" when it rounds to 0), coloured with the % vs price bands below. *(Corrected 2026-09-27: the approved wording, "Price N% above fair value", reversed the base of the percentage. `gap_pct` is measured against the price.)*
   - Reward / Risk: the engine's tier (e.g. Balanced, Reward-Favored).
 - **Footer:** "Click any score for its full breakdown ↓".
 
 **Comparison view** is used for two or three tickers (the landing cap is 3, so it always fits).
-- **Header:** "Comparing N", the tickers, and the "Your analysis" pill.
+- **Header:** "Comparing N", the tickers, and the same source-driven pill as the tiles view.
 - **Rows:** one per ticker. Each has:
   - ticker, name and star;
   - Quality, Moat, Fair Value (with "% vs price") and Reward / Risk, each with its tier caption;
@@ -182,6 +182,12 @@ The questions still live in each Framework detail panel (§5.4). A "numbers band
 - No ticker is shown as done before the others: the endpoint answers all of them in one response.
 - Reduced motion stops the spinner and the sweep.
 - After a multi-ticker run, the card header carries the run summary ("3 tickers · 2.1 s") in place of the old parallel-run bar.
+
+**Before the first result.**
+- While the page-load sample is still running, the card shows its frame with "Running the analysis…" and no numbers (generic on purpose: a typed run can also land on an empty card after a failed sample).
+- If that sample fails, the card says "The live example could not be loaded. Try a ticker on the left." It never shows invented or placeholder figures.
+
+**Notice line.** The notices ("Not recognised: X", server errors, timeouts) render in the left column, under the micro-line, next to the input they are about.
 
 **Errors.**
 - A ticker whose assessment could not be computed shows "—" and "could not be computed" in that tile or comparison cell.
