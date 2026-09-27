@@ -226,3 +226,14 @@ export const CALIBRATIONS: Calibration[] = [
     effect: 'Growth & burn factors are overridden by the annual statement only when it reads materially better — never worse.',
     affects: ['Reward / Risk'], guarded: true },
 ]
+
+/** The band before the Framework (spec 5.4, hero rework 2026-09-27): the investor's
+ *  question, then how Intrinsica answers it. */
+export const QUESTION_BAND = {
+  title: 'Is it a good business, at a good price?',
+  body: 'Intrinsica answers with four scores from the fundamentals: Quality, Moat, Fair Value and Reward/Risk. Every input and weight is on show.',
+} as const
+
+/** Labels over the Framework tabs, one per pair in FRAMEWORK order: Quality + Moat
+ *  answer the first, Fair Value + Reward / Risk the second. */
+export const TAB_PAIRS = ['Is it a good business?', 'At a good price?'] as const

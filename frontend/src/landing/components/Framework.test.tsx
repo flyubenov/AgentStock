@@ -30,6 +30,14 @@ describe('Framework — overview card', () => {
 })
 
 describe('Framework — assessment cards', () => {
+  it('groups the tabs under the two questions: the business, then the price', () => {
+    const { container } = show()
+    const pairs = Array.from(container.querySelectorAll('.mpair'))
+    expect(pairs.map(p => p.querySelector('.mpl')?.textContent))
+      .toEqual(['Is it a good business?', 'At a good price?'])
+    expect(pairs.map(p => Array.from(p.querySelectorAll('.cn')).map(n => n.textContent)))
+      .toEqual([['Quality', 'Moat'], ['Fair Value', 'Reward / Risk']])
+  })
   // D3: a tab is the name alone — the question, scale, weights and counts are
   // all in the panel, and the question is said once, in the panel's header.
   it('labels each tab with the assessment name only, and puts its question in the panel', () => {
@@ -38,7 +46,7 @@ describe('Framework — assessment cards', () => {
       expect(FRAMEWORK.map(a => a.name)).toContain(b.textContent)
     }
     expect(container.querySelector('.mdetail .d-q')).toHaveTextContent(FRAMEWORK[1].question)
-    expect(container.querySelector('.mbox .mcards + .mdetail')).toBeInTheDocument()
+    expect(container.querySelector('.mbox .mpairs + .mdetail')).toBeInTheDocument()
   })
 
   it('offers a card per assessment, in the shared assessment order', () => {

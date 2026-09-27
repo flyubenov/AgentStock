@@ -226,14 +226,22 @@
 .intrinsica .ovtail { margin-top: 16px; font-size: 13px; color: var(--mute); }
 /* assessment tabs joined to the top of the detail panel (variant D3) */
 .intrinsica .mbox { margin-top: 18px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); box-shadow: var(--sh); overflow: hidden; }
-.intrinsica .mcards { display: grid; grid-template-columns: repeat(4, 1fr); background: var(--bg2); border-bottom: 1px solid var(--border); }
+.intrinsica .mpairs { display: grid; grid-template-columns: 1fr 1fr; background: var(--bg2); border-bottom: 1px solid var(--border); }
+.intrinsica .mpl { font: 600 11px var(--fb); letter-spacing: .08em; text-transform: uppercase; color: var(--dim);
+  text-align: center; padding: 10px 8px 4px; }
+.intrinsica .mpair + .mpair { border-left: 1px solid var(--border); }
+.intrinsica .mcards { display: grid; grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 600px) { .intrinsica .mpairs { grid-template-columns: 1fr; } .intrinsica .mpair + .mpair { border-left: 0; border-top: 1px solid var(--border); } }
+.intrinsica .qband { background: var(--bg2); border-top: 1px solid var(--border); padding: 48px 0 8px; text-align: center; }
+.intrinsica .qband h2 { font: 700 34px/1.15 var(--fh); letter-spacing: -.02em; text-wrap: balance; }
+.intrinsica .qband p { color: var(--dim); font-size: 17px; max-width: 62ch; margin: 12px auto 0; }
+@media (max-width: 600px) { .intrinsica .qband h2 { font-size: 26px; } .intrinsica .qband p { font-size: 15px; } }
 .intrinsica .mcard { background: transparent; border: 0; border-bottom: 3px solid transparent; padding: 13px 10px; cursor: pointer;
   transition: .12s; color: var(--text); }
 .intrinsica .mcard:hover { background: var(--bg3); }
 .intrinsica .mcard.on { background: var(--bg); border-bottom-color: var(--accent); }
 .intrinsica .mcard .cn { font: 700 14px var(--fh); display: flex; align-items: center; justify-content: center; gap: 7px; }
 .intrinsica .mcard .cn .dot { width: 9px; height: 9px; }
-@media (max-width: 600px) { .intrinsica .mcards { grid-template-columns: repeat(2, 1fr); } }
 .intrinsica .mdetail { background: var(--bg); padding: 24px 26px; }
 .intrinsica .mdetail .dh { font: 700 21px var(--fh); margin-bottom: 4px; display: flex; align-items: center; gap: 9px; }
 .intrinsica .mdetail .dh .dot { width: 11px; height: 11px; }

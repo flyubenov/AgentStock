@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CALIBRATIONS, FRAMEWORK, OVERVIEW } from '../content/framework'
+import { CALIBRATIONS, FRAMEWORK, OVERVIEW, TAB_PAIRS } from '../content/framework'
 import Tip from './Tip'
 import type { AssessmentId } from '../types'
 
@@ -80,17 +80,28 @@ export default function Framework({ tab, onTab }: {
               same reason Breakdown's strip uses them: a tablist owes a screen
               reader roving tabindex and arrow-key navigation, and a half-built one
               is worse than none. These are toggle buttons and get Enter/Space and
-              a focus ring for free. */}
-          <div className="mcards">
-            {FRAMEWORK.map((x, i) => (
-              <button key={x.name} type="button"
-                      className={i === tab ? 'mcard on' : 'mcard'}
-                      aria-pressed={i === tab}
-                      onClick={() => onTab(i as AssessmentId)}>
-                <span className="cn">
-                  <span className="dot" style={{ background: x.color }} />{x.name}
-                </span>
-              </button>
+              a focus ring for free.
+              Split into two labelled pairs (hero rework 2026-09-27): the business, then the price. */}
+          <div className="mpairs">
+            {TAB_PAIRS.map((label, p) => (
+              <div key={label} className="mpair">
+                <div className="mpl">{label}</div>
+                <div className="mcards">
+                  {FRAMEWORK.slice(p * 2, p * 2 + 2).map((x, k) => {
+                    const i = p * 2 + k
+                    return (
+                      <button key={x.name} type="button"
+                              className={i === tab ? 'mcard on' : 'mcard'}
+                              aria-pressed={i === tab}
+                              onClick={() => onTab(i as AssessmentId)}>
+                        <span className="cn">
+                          <span className="dot" style={{ background: x.color }} />{x.name}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
             ))}
           </div>
 
