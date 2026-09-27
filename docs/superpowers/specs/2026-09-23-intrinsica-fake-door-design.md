@@ -196,7 +196,9 @@ from a side box into the text, and its original wording was restored)*:
    count of calibrations, never a hand-written number.
 2. Second paragraph, bold opener *(variant E; reworded 2026-09-27, user decision — less of a
    warning, no "disagree with it")*: **"Intrinsica's own method."** There is no single agreed
-   way to score a company's Quality, Moat or Reward/Risk. Intrinsica takes the fundamentals
+   way to score a company's quality, its moat, or the reward it offers against its risk.
+   *(General concepts, lower case on purpose: capitalised they would read as Intrinsica's
+   own scores lacking a formula.)* Intrinsica takes the fundamentals
    that matter for each, weights them by its own methodology and condenses them into one
    comparable score. Each score opens up to the inputs and weights behind it.
 3. Closing line: "Click an assessment for every category, weight and calibration."

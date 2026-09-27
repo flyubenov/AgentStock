@@ -278,7 +278,9 @@ describe('Framework — page rules', () => {
     // Wording chosen 2026-09-27 (variant 3): explains the method and states the
     // judgment plainly, without a warning tone or a "disagree with it" ending.
     expect(note.querySelector('b')).toHaveTextContent('Intrinsica’s own method.')
-    expect(note).toHaveTextContent(/no single agreed way to score a company’s Quality, Moat or Reward\/Risk/)
+    // General concepts, lower case (user decision): capitalised, "Quality, Moat or
+    // Reward/Risk" would read as Intrinsica's own scores having no agreed formula.
+    expect(note).toHaveTextContent(/no single agreed way to score a company’s quality, its moat, or the reward it offers against its risk\./)
     expect(note).toHaveTextContent(/weights them by its own methodology/)
     expect(note).toHaveTextContent(/Each score opens up to the inputs and weights behind it\.$/)
     expect(note).not.toHaveTextContent(/disagree/i)

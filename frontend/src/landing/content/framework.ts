@@ -163,7 +163,7 @@ export const OVERVIEW = {
    *  own methodology, and the page's transparency is what makes that honest. */
   judgment: {
     title: 'Intrinsica’s own method.',
-    body: 'There is no single agreed way to score a company’s Quality, Moat or Reward/Risk. Intrinsica takes the fundamentals that matter for each, weights them by its own methodology and condenses them into one comparable score. Each score opens up to the inputs and weights behind it.',
+    body: 'There is no single agreed way to score a company’s quality, its moat, or the reward it offers against its risk. Intrinsica takes the fundamentals that matter for each, weights them by its own methodology and condenses them into one comparable score. Each score opens up to the inputs and weights behind it.',
   },
   tail: 'Click an assessment for every category, weight and calibration.',
 }
