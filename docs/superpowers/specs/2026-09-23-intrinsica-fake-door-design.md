@@ -25,6 +25,21 @@
 > Background: a competitor review at <https://claude.ai/artifact/M4aHVziuvx5mE3PczL9YL9>,
 > item 1 of its suggested order. Mock-ups and their builders are in
 > `.superpowers/brainstorm/hero/` (`build_runflow2.py` for the card, `build_phone.py` for phone).
+>
+> *Status 2026-09-29: the hero rework is implemented and pushed.*
+
+> **REVISION 2026-09-29 — brand, palette and page polish (approved by the user, NOT yet
+> implemented).** Item 2 of the same competitor review. §4 is rewritten; §5, §5.1, §5.2,
+> §5.4, §5.7, §5.8 and §11 are revised below. In summary:
+> - A brand mark: a keyhole on a teal plate, lit in the four assessment colours.
+> - A new palette: a deep-teal accent on warm paper. The assessment colours are re-balanced so none is confused with another.
+> - One set of line icons, one full-width teal band, and sections that float in on scroll.
+> - A static share image.
+> - A shorter Framework panel, with collapsible categories.
+> - The "Intrinsica's own method." paragraph is reworded.
+>
+> The fonts are unchanged. Mock-ups and their builders are in `.superpowers/brainstorm/brand/`; the colour
+> measurements (CIEDE2000 and colour-blind simulation) are in `colours.py`.
 - **Author:** f_lub (with Claude)
 - **Branch:** `01-fake-door-test`
 - **Source material:** `MonetizationPlan/Agent_Stock_Smoke_Fake_Test_Monetization_Plan.md`, `MonetizationPlan/FreeProUnlimited.md`, `MonetizationPlan/NewPlatformName-Branding-Positioning.txt`
@@ -82,22 +97,100 @@ page is added as a new route tree; `/database`, `/results/:jobId` and friends ar
 
 ## 4. Visual system
 
-Light theme, defined as CSS custom properties on `:root` (carried into the Tailwind theme):
+*Rewritten 2026-09-29 (brand round, user decisions throughout). The tokens live on
+`.intrinsica` in `frontend/src/landing/theme.css`, scoped so the dark analyst app is untouched.*
 
-- **Type:** Space Grotesk (headings, brand, numbers) · Inter (body) · JetBrains Mono
-  (ticker input, tabular values, weights, scales).
-- **Colour:** white background, indigo accent `#4f46e5` with a soft tint for pills;
-  assessment dots Quality `#22c55e`, Moat `#3b82f6`, Fair Value `#4f46e5`,
-  Reward/Risk `#f59e0b`; positive `#16a34a`, warn amber, negative red.
-- **Surfaces:** rounded cards, soft shadows, a light "stage" background on alternating
-  sections.
-- Responsive to phone width; the breakdown tab strip collapses to two columns and strength
-  bars are hidden below 700px.
+**Principle: colour means data.** The four assessment colours and gain / loss green and red
+use up the colour wheel. So the interface accent is one dark teal that sits clear of all six. Every
+chromatic accent that was measured collided with one of them: orange with Quality for
+colour-blind readers, red with loss, and navy and indigo with the violet. Indigo, today's accent, read as a fifth colour on the page.
+
+**Type — unchanged:** Space Grotesk (headings, brand, big numbers) · Inter (body) ·
+JetBrains Mono (ticker input, tabular values, weights, scales). Serif and single-family
+pairings were mocked and rejected.
+
+**Palette tokens** *(deep teal accent · warm paper page)*:
+
+| Token | Value | Was |
+|---|---|---|
+| `--bg` / `--bg2` / `--bg3` | `#fdfcf9` / `#f6f3ec` / `#efebe2` | `#ffffff` / `#f7f8fa` / `#f1f2f6` |
+| `--border` / `--border2` | `#e8e3d8` / `#ddd7ca` | `#e9ebef` / `#e0e2e8` |
+| `--text` / `--dim` / `--mute` | `#141414` / `#57534b` / `#8c877c` | `#0b0b0f` / `#54545f` / `#8b8b97` |
+| `--accent` / `--accent-d` / `--accent-soft` | `#0f5257` / `#0a3d41` / `#e4eee9` | `#4f46e5` / `#4338ca` / `#eef0ff` |
+| `--pos` / `--neg` / `--warn` / `--blue` | unchanged | |
+
+The accent drives buttons, links, the active tab underline, the billing toggle, the plan badges and the featured
+card. It is the same teal as the logo plate.
+
+**Hard-coded colours that follow the palette** (every other literal in `theme.css` stays):
+- nav background: `rgba(255,255,255,.86)` → `rgba(253,252,249,.88)`;
+- `.runbar .mini.ind`: `#e0e7ff` → `#dfe6df`;
+- `.wtoast a` (on the dark toast): `#c7c3ff` → `#9fd3cf`;
+- the Proceed-to-payment shadow: `rgba(79,70,229,.28)` → `rgba(15,82,87,.28)`;
+- the old gradient logo tile `.logo .mk` (`#7c74f2`) is removed and replaced by the brand mark below.
+
+**Assessment colours** — one fixed colour per assessment everywhere on the page: dots, gauge
+bars, tabs and the Framework panel. The score moves a bar's length, never its shade.
+
+| Assessment | Page token | Logo (keyhole) | Was |
+|---|---|---|---|
+| Quality | `--q: #22c55e` (unchanged) | aqua `#66fff7` | `#22c55e` |
+| Moat | `--mo: #3d8bff` azure | `#3d8bff` | `#3b82f6` |
+| Fair Value | `--fv: #d4b106` gold | yellow `#fae842` | `#4f46e5` |
+| Reward / Risk | `--rr: #440ab8` violet | `#440ab8` | `#f59e0b` |
+
+- The page and the logo differ on purpose for two assessments, with the user's approval:
+  - **Quality:** green melts into the teal plate, so the logo uses aqua.
+  - **Fair Value:** the bright yellow almost disappears on warm paper (1.2 : 1), so small marks on the page use the deeper gold (2.0 : 1). The keyhole keeps the bright yellow.
+- The closest pair is Moat azure vs Reward/Risk violet: 36 apart (CIEDE2000), and 27 for deuteranopia. That is clearly apart, and the tightest spot in the set.
+
+**Brand mark — "light through the keyhole".** The keyhole reads as the letter i.
+- **Geometry:** a 100 × 100 viewBox.
+  - **Plate:** a rounded square, x/y 4–96, `rx 22`, filled with a vertical gradient `#17696f → #0a3a3e`.
+  - **Keyhole:** one path, `M43.10 51.32 A15 15 0 1 1 56.90 51.32 L62 80 L38 80 Z`, with a rim stroke `#8fc4c5` at width 1.6 and round joins.
+- **Colours:** the mark is always **fully lit**, in four quadrants clipped to the keyhole.
+  - The head (y 23–53) is aqua on the left and azure on the right: Quality | Moat.
+  - The slot (y 53–80) is yellow on the left and violet on the right: Fair Value | Reward/Risk.
+  - The split is at x = 50.
+- **No partial version.** A partly lit, per-result mark was designed and dropped. The mark appears **only** as the logo and the favicon, never on result cards, comparison rows or per-stock images.
+- **Nav:** the mark at **42 px** beside the "Intrinsica" wordmark (23 px, gap 11 px).
+- **Favicon:** the same SVG replaces Vite's `public/favicon.svg`. It is app-wide, because `index.html` serves every route.
+
+**Line icons.** One drawn set replaces the typed glyphs everywhere except the Why section.
+- **Style:** stroke 1.8–2.4, round caps, `currentColor` or a CSS mask.
+- **Replacements:**
+
+  | Where | Today | Becomes |
+  |---|---|---|
+  | Watch button | ☆ | bookmark (it saves to a watchlist; a star reads as "rate") |
+  | Result tiles | ↓ after the name | chevron-down |
+  | Plan-card bullets | ✓ | teal check |
+  | Close buttons (breakdown and toast) | ✕ | × |
+  | Calibration rows | ▾ | chevron |
+  | Checkout confirmation line | ✓ | check |
+- **Unchanged:**
+  - arrows inside sentences ("Analyze →", "breakdown ↓", "See plans →") stay as text;
+  - the tooltip text "gate ✓ passed" stays as text;
+  - the Why section's emoji are **never** changed: the user's standing rule is that the Why section stays exactly as it is.
+
+**Rhythm.** One full-width band in the brand teal breaks the even paper/beige alternation: the question band (§5.4).
+
+**Motion — sections float in on scroll.**
+- Content below the first screen starts 32 px lower and transparent. It slides up and fades in as it enters the view:
+  - 0.7 s, `cubic-bezier(.2,.7,.2,1)`, fired by an IntersectionObserver with a −8 % bottom margin;
+  - **once** per element, never replayed on scrolling back.
+- Cards in a row stagger by 90 ms each, capped at four steps. These are the Framework tabs, the Why cards, the Workflow steps and the plan cards.
+- **It is an animation, not lazy loading.** Every section is in the DOM from the first render, so search engines, link previews and nav anchors see the whole page.
+- **The hero is never animated.** With `prefers-reduced-motion: reduce` nothing animates. If the script does not run, everything is simply visible (the hidden state is applied by the script, never by static CSS).
+
+**Surfaces:** rounded cards and soft shadows. The "stage" sections alternate on `--bg2`.
+
+**Responsive:** the page works down to phone width. The breakdown tab strip collapses to two columns, and the strength bars are hidden below 700px.
 
 ## 5. Page sections (landing)
 
 Nav is sticky with an anchor per section: **Analyze · Methodology · Why Intrinsica ·
-Workflow · Pricing · Sign up (CTA)**.
+Workflow · Pricing · Sign up (CTA)**. On the left sits the brand mark (42 px, §4) and the "Intrinsica" wordmark.
 
 ### 5.1 Hero
 
@@ -134,7 +227,7 @@ The questions still live in each Framework detail panel (§5.4). A "numbers band
 
 **Tiles view** is used for the page-load sample (AAPL) and for any one-ticker run.
 - **Header:**
-  - ticker, company name, the ☆ watchlist star (§9), then price and profile ("$341.07 · Tech / Growth profile");
+  - ticker, company name, the watchlist button (§9; drawn as a bookmark icon since 2026-09-29, §4), then price and profile ("$341.07 · Tech / Growth profile");
   - a pill on the right, set by the run's `source`: "Live example · computed just now" (pulsing dot) for a **sample** run (the page-load AAPL and the Compare chip), "Your analysis" for a **typed** run. *(Clarified 2026-09-27: a Compare-chip comparison is a sample, so it is not labelled "Your analysis".)*
 - **Tiles:** a 2×2 grid in the order Quality, Moat (top row, the business), then Fair Value, Reward / Risk (bottom row, the price). Each tile has:
   - a coloured dot and the name;
@@ -241,7 +334,10 @@ and the breakdown can never disagree, because the card does not carry numbers of
 ### 5.4 "How Intrinsica works" (the framework)
 
 **Question band** *(added 2026-09-27, user decision, placement option 2)*:
-- A short full-width band **immediately before** this section, on the stage background.
+- A short full-width band **immediately before** this section. *Revised 2026-09-29:* it is the page's one teal band (§4 Rhythm) instead of the stage background:
+  - background `--accent` (`#0f5257`), no top border, padding 64 px above and below;
+  - heading `#fff`, body `#cfe3e1`;
+  - the Framework section below keeps its own top padding.
 - It has the question as a heading, **"Is it a good business, at a good price?"**, then one line: "Intrinsica answers with four scores from the fundamentals: Quality, Moat, Fair Value and Reward/Risk. Every input and weight is on show."
 - It bridges the live result above to the explanation below.
 - The overview card's heading and text are **not** changed. Putting the question into the card was rejected, because it would repeat "four scores from the fundamentals" back to back.
@@ -268,13 +364,12 @@ from a side box into the text, and its original wording was restored)*:
 1. Lead: "Four separate engines turn the latest fundamentals into four scores, using explicit
    formulas and **N data-triggered calibrations**. Same data, same score." — N is the live
    count of calibrations, never a hand-written number.
-2. Second paragraph, bold opener *(variant E; reworded 2026-09-27, user decision — less of a
-   warning, no "disagree with it")*: **"Intrinsica's own method."** There is no single agreed
-   way to score a company's quality, its moat, or the reward it offers against its risk.
-   *(General concepts, lower case on purpose: capitalised they would read as Intrinsica's
-   own scores lacking a formula.)* Intrinsica takes the fundamentals
-   that matter for each, weights them by its own methodology and condenses them into one
-   comparable score. Each score opens up to the inputs and weights behind it.
+2. Second paragraph, bold opener. *Reworded again 2026-09-29, user decision.* "There is no single agreed way to score…" read as if Intrinsica itself had no settled method. The new text states the honest part as a fact about the subject, and says outright that the method is fixed:
+
+   **"Intrinsica's own method."** Quality, Moat and Reward/Risk aren't printed in any filing;
+   they have to be assessed. Intrinsica assesses them with one fixed methodology: it takes the
+   fundamentals that matter for each, weights them and condenses them into a single score,
+   the same way for every company. Each score opens up to the inputs and weights behind it.
 3. Closing line: "Click an assessment for every category, weight and calibration."
 
 **Assessment tabs.** One box: a row of four tabs (dot + name only; 2×2 on a phone) forms
@@ -288,12 +383,37 @@ consistency is a requirement; they had drifted):
 1. Name + **scale** pill (`0–10 · sector-aware`, `0–100`, `$ per share`, `ratio · 0.2–5.0×`).
 2. The question (the only place in this section it appears), then a one-line "what it
    measures".
-3. **Categories**, each with a weight / points pill, its metric list, and a two-line pair:
-   green **Scores high:** … / amber **Scores low:** … in plain sentences. Fair Value uses
-   **Weighted up / Weighted down**; the Reward/Risk risk category is titled
-   "Risk axis · a high score here is the bad one".
-4. A closing note carrying the outcome bands only (9+ top-decile · 80+ wide moat ·
-   1.3–2.0× Reward-Favored, etc.).
+3. **Categories as collapsed rows**. *Revised 2026-09-29, user decision, variant A. Four categories, each with a metric list and two "Scores high / Scores low" sentences, read as a wall of text.* Each category is one row, styled like a calibration row and **collapsed by default**:
+   - **Row, closed:** the category name, then a one-line plain question under it. On the right sit the weight and a chevron.
+     - Where the weight is a fixed share (Quality %, Moat points), the weight also gets a small bar in the assessment's colour, scaled to the largest category in that panel.
+     - Where it is a range ("typically 40–60%", "6 factors"), the text alone is shown.
+   - **Row, open:** the metrics as chips, then one short line: **▲ High:** … · **▼ Low:** … (Fair Value: **▲ Weighted up:** … · **▼ Weighted down:** …).
+   - Rows open and close independently, like the calibrations.
+   - The Reward/Risk risk category keeps the title "Risk axis · a high score here is the bad one".
+   - Categories, weights and metric lists are **unchanged**, and no threshold is shown.
+   - The copy, which replaces the `hi` / `lo` sentences:
+
+   | Assessment · category | Question | ▲ | ▼ |
+   |---|---|---|---|
+   | Quality · Growth & Margins (35%) | Is it growing — and profitably? | compounding revenue, margins holding | stalled growth, margins sliding |
+   | Quality · Returns on Capital (30%) | Does it earn more than its capital costs? | well above its cost of capital | barely matches it |
+   | Quality · Balance-Sheet Strength (15%) | Can it weather a bad year? | little debt, capex easily funded | leverage that needs a kind cycle |
+   | Quality · Shareholder Alignment (20%) | Are owners treated well? | buybacks, earnings that arrive as cash | steady dilution, paper earnings |
+   | Moat · Magnitude (40 pts) | How far above its cost of capital does it earn? | returns far above the cost of capital | returns that merely match it |
+   | Moat · Durability (50 pts) | Does the edge last, year after year? | a decade of above-cost returns, margins that hold | a good spell inside a cyclical swing |
+   | Moat · Cash-backing (10 pts) | Does the profit turn into cash? | profit that becomes cash | profit that stays on paper |
+   | Fair Value · Cash-flow models | What will the business pay out over time? | steady, predictable cash flows | erratic cash flows, or pre-profit |
+   | Fair Value · Earnings multiples | How is it priced against its earnings? | meaningful profits, comparable with peers | losses, or earnings distorted by amortization |
+   | Fair Value · Sales multiples | What is growth worth before profit? | fast growth, no profit yet | a mature, profitable company |
+   | Fair Value · Income & asset models | What do its dividends or assets say? | dividend payers, lenders, asset-heavy names | asset-light businesses |
+   | Reward/Risk · Reward axis | How much upside is left? | a growing business well below its highs | a full price, little left to re-rate |
+   | Reward/Risk · Risk axis | How much can go wrong? | leverage and volatility stacking up | light debt, a steady price, self-funded |
+
+4. **Closing note becomes a scale strip.** Five or four tinted cells, tinted in the assessment's colour and deepening toward the best band. Under them is one short line:
+   - **Quality:** below 5 Weak · 5–7 Moderate · 7–8 Strong · 8–9 Excellent · 9+ Top-decile. Line: "Each metric is scored against fixed thresholds; the category weights follow the sector profile (Tech / Growth shown)." The band names are `qualityTier`'s.
+   - **Moat:** below 40 Little or none · 40–59 Narrow · 60–79 Established · 80+ Wide. Line: "An economic-profit gate caps any company that does not out-earn its cost of capital."
+   - **Fair Value:** no strip, because it has no score to band. Line: "The company's type sets the blend — a bank leans on price / book, a mega cap on cash flows. Every analysis shows the exact blend it used."
+   - **Reward/Risk:** below 0.5× Value Trap · 0.5–0.8× Risk-Favored · 0.8–1.3× Balanced · 1.3–2.0× Reward-Favored · 2.0×+ Asymmetric Upside. Line: "Reward ÷ risk, clamped to 0.2–5.0×."
 5. **Calibrations for this assessment** as expandable rows: *When it applies* / *What it does*
    / example, each tagged **Conditional** (all), **Guarded** (only where the engine guard is
    one-directional) and **Shown live**, with the tag explanation on hover. All collapsed by
@@ -344,6 +464,11 @@ billed annually, with the annual total beneath.
 
 Cards are equal height with the button pinned to the bottom. Pro carries the subtle
 `featured` highlight (no "most popular" text).
+
+*Revised 2026-09-29 (brand round).* The green in the pricing section moves to the accent, because green now means a score or a gain:
+- the **FREE** badge is set in bold `--accent`;
+- in "Compare plans", the included cells (`td.on`: Full, Yes, Up to 3, 100+ (bulk)) are set in **bold (700) teal `--accent`**;
+- the plan-card bullets are the teal line check (§4).
 
 *Slimmed 2026-09-27 (user decision).* Each card lists **three** features:
 Free — "Every analysis complete — nothing blurred" · "~5 analyses a month · up to 3 tickers
@@ -403,6 +528,19 @@ Three deliberate resolutions are encoded in this table:
 
 Two lines: the modeling-tool / not-personalized-advice disclaimer, and the positioning line.
 A short form repeats on the checkout page.
+
+**Share image and page metadata** *(added 2026-09-29; `index.html` has none today)*:
+- **The image:** one **static** 1200 × 630 PNG, `public/og-image.png`, on the warm paper background. It shows:
+  - the brand mark (about 160 px) and the "Intrinsica" wordmark;
+  - the headline "Judge the business. Then judge the price.";
+  - one line: "Quality · Moat · Fair Value · Reward/Risk — from the fundamentals, all shown."
+- **The meta tags** in `index.html`:
+  - `og:title` "Intrinsica — Judge the business. Then judge the price.";
+  - `og:description` = the question band's line;
+  - `og:image`, `og:type=website`;
+  - `twitter:card=summary_large_image`;
+  - a matching `<meta name="description">`.
+- A per-stock share image waits for the per-stock pages on the backlog.
 
 ## 6. Checkout page and the fake door
 
@@ -596,6 +734,22 @@ the same `visitor_id` is the final-step drop-off, so both events must fire relia
   - the billing toggle updating both the card prices and the checkout total;
   - checkout state reset on re-entry.
   *(Hero rework 2026-09-27: the tests for the hero assessment links, the pipeline strip and the grid rows are removed with those elements.)*
+  - *(Brand round 2026-09-29.)* The Framework rows:
+    - they render collapsed, with the question and the weight;
+    - a click opens one row, and the rows toggle independently;
+    - an open row shows the chips and the High / Low line;
+    - the scale strip or the Fair Value line is shown.
+  - The brand mark renders in the nav, and no mark appears on the card or the rows.
+  - The watch and close buttons render icons, keeping their accessible names.
+  - The reveal on scroll:
+    - elements get the hidden class only once the script runs;
+    - they become visible when they intersect;
+    - the hero is never hidden;
+    - nothing is hidden under reduced motion.
+- **Content guards** *(2026-09-29)*:
+  - `framework.test.ts` pins the new row shape (`question`, `hi`, `lo`, weight) for every category of all four assessments;
+  - a test pins the "Intrinsica's own method." paragraph and asserts the phrase "no single agreed" is gone;
+  - a test asserts `index.html` carries the og/twitter tags and that `public/og-image.png` exists.
 - **Funnel:** an end-to-end test walking analyze → pricing → checkout → click, asserting the
   analytics events fire in order, once each, with the right plan and billing — **and that no
   card or payment input exists anywhere in the DOM.**
