@@ -117,17 +117,21 @@ async def flush_events() -> int:
         taken_oldest, _oldest = _oldest, None
     if not rows:
         return 0
+    # The write runs in the Sheets executor thread, which cancelling this task
+    # cannot stop. So the write is shielded, and if shutdown cancels flush_loop
+    # mid-write, its real outcome is awaited before deciding: rows that were
+    # written stay written (requeuing them would send them twice), rows that
+    # failed go back on the queue for the lifespan's final flush.
+    write = asyncio.ensure_future(_run_sheets(_append_sync, rows))
     try:
-        await _run_sheets(_append_sync, rows)
+        await asyncio.shield(write)
     except asyncio.CancelledError:
-        # Shutdown cancels flush_loop, possibly mid-write. CancelledError is not an
-        # Exception, so without this the rows already taken off the queue would be
-        # lost with the task. Put them back synchronously (no await, so nothing can
-        # interleave on the event loop), and let the cancellation proceed; the
-        # lifespan's final flush_events() then writes them.
-        _queue[:0] = rows
-        _trim_locked()
-        _oldest = _now() if _queue else None
+        try:
+            await write
+        except Exception:
+            _queue[:0] = rows
+            _trim_locked()
+            _oldest = _now() if _queue else None
         raise
     except Exception as exc:
         # Logged once per process: an unset INTRINSICA_EVENTS_SHEET_ID or an unshared

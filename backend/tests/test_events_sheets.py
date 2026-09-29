@@ -237,22 +237,50 @@ async def test_with_no_events_sheet_events_stay_queued_and_nothing_is_written(mo
 
 
 @pytest.mark.asyncio
-async def test_a_flush_cancelled_mid_write_puts_its_rows_back(monkeypatch):
-    """Shutdown cancels flush_loop; if that lands while a write is in flight, the
-    rows already taken off the queue must go back, not vanish with the task."""
+async def test_a_write_that_completes_after_cancellation_is_not_written_twice(monkeypatch):
+    """Cancelling the flush does not stop the Sheets write already running in its
+    executor thread. If that write succeeds, the shutdown flush must not send the
+    same rows again: a duplicated payment click inflates the metric the page is for."""
+    import threading
     monkeypatch.setattr(events_sheets, "_BATCH_SIZE", 100)
     await record_event(_ev(1))
-    started = asyncio.Event()
+    writes: list[list[list[str]]] = []
+    started, release = threading.Event(), threading.Event()
 
-    async def hang(*_a, **_k):
+    def slow_append(rows):                             # runs in the real executor thread
         started.set()
-        await asyncio.Event().wait()                   # a Sheets call that never returns
+        release.wait(5)
+        writes.append(rows)
 
-    monkeypatch.setattr(events_sheets, "_run_sheets", hang)
+    monkeypatch.setattr(events_sheets, "_append_sync", slow_append)
     task = asyncio.create_task(flush_events())
-    await started.wait()
-    assert events_sheets._queue == []                  # taken, in flight
+    await asyncio.to_thread(started.wait, 5)
     task.cancel()
+    release.set()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
+    await flush_events()                               # the lifespan's final flush
+    assert [[r[1] for r in rows] for rows in writes] == [["event-1"]]
+    assert events_sheets._queue == []
+
+
+@pytest.mark.asyncio
+async def test_a_write_that_fails_after_cancellation_is_requeued(monkeypatch):
+    import threading
+    monkeypatch.setattr(events_sheets, "_BATCH_SIZE", 100)
+    await record_event(_ev(1))
+    started, release = threading.Event(), threading.Event()
+
+    def failing_append(rows):
+        started.set()
+        release.wait(5)
+        raise RuntimeError("down")
+
+    monkeypatch.setattr(events_sheets, "_append_sync", failing_append)
+    task = asyncio.create_task(flush_events())
+    await asyncio.to_thread(started.wait, 5)
+    task.cancel()
+    release.set()
     with contextlib.suppress(asyncio.CancelledError):
         await task
     assert [r[1] for r in events_sheets._queue] == ["event-1"]
