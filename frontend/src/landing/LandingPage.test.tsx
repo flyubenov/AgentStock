@@ -1007,3 +1007,17 @@ describe('LandingPage pricing section (task 13)', () => {
     expect(container.textContent).not.toMatch(/card number|cvc|cvv|billing address/i)
   })
 })
+
+describe('LandingPage — scroll reveal', () => {
+  afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
+
+  it('starts the reveal once the page has mounted', async () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false })))
+    vi.stubGlobal('IntersectionObserver', class { observe() {} unobserve() {} disconnect() {} })
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(
+      { top: 5000, bottom: 5050, left: 0, right: 0, width: 0, height: 50, x: 0, y: 5000, toJSON: () => ({}) } as DOMRect)
+    await renderSettled()
+    expect(document.querySelector('.qband .container')).toHaveClass('rv')
+    expect(document.querySelector('#analyze')!.closest('.rv')).toBeNull()
+  })
+})

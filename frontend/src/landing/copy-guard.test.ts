@@ -152,7 +152,7 @@ describe('copy guard — the files it scans', () => {
   // still add is visibility of a file deleted from OUTSIDE that list
   // (demoLimit.ts, format.ts, types.ts). An exact count makes that loud.
   it('finds landing sources to check', () => {
-    expect(sources.length).toBe(22)
+    expect(sources.length).toBe(23)
   })
 
   // A glob that silently matched nothing passes every guard below, for ever.

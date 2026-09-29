@@ -16,6 +16,7 @@ import { track, EVENTS } from '../lib/analytics'
 import { API_BASE } from '../lib/api'
 import { canAnalyze, recordRun } from './demoLimit'
 import { FRAMEWORK } from './content/framework'
+import { startReveal } from './reveal'
 import type { Billing } from './content/plans'
 import type {
   AnalyzeResponse, AnalyzeSource, AssessmentId, FreeClickSource, TickerPayload,
@@ -207,6 +208,10 @@ export default function LandingPage() {
     track(EVENTS.pageView)
     void analyze([SAMPLE], 'sample')
   }, [analyze])
+
+  // Spec §4 Motion: sections float in on scroll. Started once, after the first
+  // render has put every section in the DOM.
+  useEffect(() => startReveal(), [])
 
   // index.css sets a global dark body background; the elastic overscroll gutter
   // (below short content, and the rubber-band area past the top/bottom on touch
