@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Re-skin the Intrinsica landing page with the approved brand. That covers the teal accent on warm paper, the re-balanced assessment colours, the keyhole mark with its favicon, line icons, the teal question band and the float-in on scroll. It also shortens the Framework panel into collapsible categories, rewords the method paragraph, and adds a static share image with og tags.
+**Goal:** Re-skin the Intrinsica landing page with the approved brand, show Moat on a 0–10 scale, and move funnel events out of the Agent Stock spreadsheet. That covers the teal accent on warm paper, the re-balanced assessment colours, the keyhole mark with its favicon, line icons, the teal question band and the float-in on scroll. It also shortens the Framework panel into collapsible categories, rewords the method paragraph, and adds a static share image with og tags.
 
 **Architecture:** All of this lives in the landing route tree `frontend/src/landing/`, scoped under `.intrinsica` so the dark analyst app is untouched.
 - **Colours:** the tokens change in `theme.css`. Components already read colours only from tokens.
@@ -13,7 +13,7 @@
 
 **Tech Stack:** React 19, TypeScript, Vite, Vitest with jsdom and Testing Library, plain CSS (`theme.css`), and `lucide-react`.
 
-**Spec:** `docs/superpowers/specs/2026-09-23-intrinsica-fake-door-design.md`, revision 2026-09-29: §4, §5, §5.2, §5.4, §5.7, §5.8, §11. It was approved by the user on 2026-09-29.
+**Spec:** `docs/superpowers/specs/2026-09-23-intrinsica-fake-door-design.md`, revision 2026-09-29: §4, §5, §5.2, §5.4, §5.7, §5.8, §11. It was approved by the user on 2026-09-29, including the later additions: Moat on 0–10 (§5.2, §5.3, §5.4, §7) and the separate events spreadsheet (§9).
 
 ## Global Constraints
 
@@ -39,7 +39,9 @@
   - fill: head aqua `#66fff7` | azure `#3d8bff`, slot yellow `#fae842` | violet `#440ab8`, split at x = 50 and y = 53;
   - 42 px in the nav; the wordmark is 23 px with an 11 px gap.
 - **The mark appears only in the nav logo and the favicon**, never on result cards or comparison rows.
-- **Test gate:** `cd frontend && npx vitest run` green. `npx tsc -b` clean. `npx eslint .` must add no problems over the branch baseline of 6.
+- **Moat's engine stays on 0–100:** `backend/moat/scoring.py`, its calibration, the stored Sheets values and the analyst app are not touched. Only `backend/landing/contract.py` converts to 0–10.
+- **Funnel events never go to `GOOGLE_SHEETS_ID`**, the Agent Stock spreadsheet. They go only to `INTRINSICA_EVENTS_SHEET_ID`.
+- **Test gate:** `cd backend && python -m pytest -q` green, plus `cd frontend && npx vitest run` green. `npx tsc -b` clean. `npx eslint .` must add no problems over the branch baseline of 6.
 
 ## Review Focus
 
@@ -571,8 +573,8 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 export interface AssessmentGroup {
   title: string
   question: string        // one plain line under the title
-  weight: string          // shown on the closed row: '35%', '40 pts', 'typically 40–60%', '6 factors · scored 1–5'
-  share: number | null    // fixed share for the mini bar (Quality %, Moat pts); null for ranges
+  weight: string          // shown on the closed row: '35%', '40%', 'typically 40–60%', '6 factors · scored 1–5'
+  share: number | null    // fixed share for the mini bar (Quality and Moat %); null for ranges
   metrics: string[]       // one chip each
   hi: string              // a few words
   lo: string
@@ -657,7 +659,7 @@ Finally, append these tests inside the `describe`:
     expect(q.groups.map(g => g.weight)).toEqual(['35%', '30%', '15%', '20%'])
     expect(q.groups.map(g => g.share)).toEqual([35, 30, 15, 20])
     expect(q.groups.map(g => g.metrics.length)).toEqual([7, 4, 3, 5])
-    expect(m.groups.map(g => g.weight)).toEqual(['40 pts', '50 pts', '10 pts'])
+    expect(m.groups.map(g => g.weight)).toEqual(['40%', '50%', '10%'])
     expect(m.groups.map(g => g.share)).toEqual([40, 50, 10])
     expect(m.groups.map(g => g.metrics.length)).toEqual([2, 3, 1])
     expect(fv.groups.map(g => g.weight)).toEqual(['typically 40–60%', 'typically 20–40%', '0–20%', '0–60%'])
@@ -671,7 +673,7 @@ Finally, append these tests inside the `describe`:
   it('carries the scale strip and its line for each assessment', () => {
     expect(FRAMEWORK.map(a => a.bands)).toEqual([
       ['below 5 · Weak', '5–7 · Moderate', '7–8 · Strong', '8–9 · Excellent', '9+ · Top-decile'],
-      ['below 40 · Little or none', '40–59 · Narrow', '60–79 · Established', '80+ · Wide'],
+      ['below 4 · Little or none', '4–6 · Narrow', '6–8 · Established', '8+ · Wide'],
       [],
       ['below 0.5× · Value Trap', '0.5–0.8× · Risk-Favored', '0.8–1.3× · Balanced', '1.3–2.0× · Reward-Favored', '2.0×+ · Asymmetric Upside'],
     ])
@@ -694,6 +696,13 @@ Finally, append these tests inside the `describe`:
   })
 ```
 
+Also change the test `'carries the scale pill the spec names for each assessment'`, because Moat moves to 0–10:
+
+```ts
+    expect(FRAMEWORK.map(a => a.scale)).toEqual(
+      ['0–10 · sector-aware', '0–10', '$ per share', 'ratio · 0.2–5.0×'])
+```
+
 Leave `'names no moat source it cannot measure'` as it is. The new Moat copy still says "economic profit" through the `note`, and in the `what` field, which is unchanged.
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -703,7 +712,7 @@ Expected: FAIL. The shape tests report missing `bands` and `question`, and the c
 
 - [ ] **Step 3: Implement**
 
-In `framework.ts`, replace the two interfaces with the ones in **Produces** above, keeping the comments to the house style. Then replace each assessment's `hiLabel`, `loLabel`, `groups` and `note`, and add `bands` after `groups`. Leave `name`, `color`, `question`, `scale` and `what` exactly as they are.
+In `framework.ts`, replace the two interfaces with the ones in **Produces** above, keeping the comments to the house style. Then replace each assessment's `hiLabel`, `loLabel`, `groups` and `note`, and add `bands` after `groups`. Leave `name`, `color`, `question`, `scale` and `what` exactly as they are, with one exception: Moat's `scale` changes from `'0–100'` to `'0–10'`.
 
 ```ts
   // Quality
@@ -728,17 +737,17 @@ In `framework.ts`, replace the two interfaces with the ones in **Produces** abov
   // Moat
     hiLabel: 'High', loLabel: 'Low',
     groups: [
-      { title: 'Magnitude', question: 'How far above its cost of capital does it earn?', weight: '40 pts', share: 40,
-        metrics: ['ROIC level (up to 20 pts)', 'Economic spread, ROIC − WACC (up to 20 pts)'],
+      { title: 'Magnitude', question: 'How far above its cost of capital does it earn?', weight: '40%', share: 40,
+        metrics: ['ROIC level (20%)', 'Economic spread, ROIC − WACC (20%)'],
         hi: 'returns far above the cost of capital', lo: 'returns that merely match it' },
-      { title: 'Durability', question: 'Does the edge last, year after year?', weight: '50 pts', share: 50,
-        metrics: ['Persistence of economic profit (25 pts)', 'Consistency of returns (10 pts)', 'Margin durability (15 pts)'],
+      { title: 'Durability', question: 'Does the edge last, year after year?', weight: '50%', share: 50,
+        metrics: ['Persistence of economic profit (25%)', 'Consistency of returns (10%)', 'Margin durability (15%)'],
         hi: 'a decade of above-cost returns, margins that hold', lo: 'a good spell inside a cyclical swing' },
-      { title: 'Cash-backing', question: 'Does the profit turn into cash?', weight: '10 pts', share: 10,
-        metrics: ['Free-cash-flow conversion (10 pts)'],
+      { title: 'Cash-backing', question: 'Does the profit turn into cash?', weight: '10%', share: 10,
+        metrics: ['Free-cash-flow conversion (10%)'],
         hi: 'profit that becomes cash', lo: 'profit that stays on paper' },
     ],
-    bands: ['below 40 · Little or none', '40–59 · Narrow', '60–79 · Established', '80+ · Wide'],
+    bands: ['below 4 · Little or none', '4–6 · Narrow', '6–8 · Established', '8+ · Wide'],
     note: 'An economic-profit gate caps any company that does not out-earn its cost of capital.',
 
   // Fair Value
@@ -1429,7 +1438,336 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
-### Task 8: Whole-branch verification in the real page
+### Task 8: Moat on a 0–10 scale (landing contract, card, breakdown)
+
+**Files:**
+- Modify: `backend/landing/contract.py` (`_moat`, lines 124–157)
+- Modify: `backend/tests/test_landing_contract.py` (lines 130–136 and 246–256)
+- Modify: `frontend/src/landing/types.ts` (`MoatFactor`, lines 33–42)
+- Modify: `frontend/src/landing/format.ts` (`moatTier`, line 103)
+- Modify: `frontend/src/landing/components/ResultCard.tsx` (lines 108 and 169)
+- Modify: `frontend/src/landing/components/Breakdown.tsx` (`MOAT_TIPS` lines 34–41, `MoatPanel` 169–211, `headline` 308)
+- Modify the tests that carry Moat fixtures: `format.test.ts`, `ResultCard.test.tsx`, `Breakdown.test.tsx`, `OpenBreakdown.test.tsx`, `LandingPage.test.tsx`
+
+**Interfaces:**
+- Consumes: the engine's `moat_score` (0–100) and `moat_breakdown.pillars` / `maxima` (points), both unchanged.
+- Produces: the landing payload's new Moat shape:
+  - `moat.score` is 0–10 with one decimal;
+  - `moat.factors[]` is `{ label, group, display, score, weight_pct }`, where `score` is 0–10 with one decimal or null;
+  - `points` and `max_points` are no longer sent.
+
+  In TypeScript:
+
+```ts
+export interface MoatFactor {
+  label: string
+  /** Magnitude, Durability or Cash-backing — the three pillar groups. */
+  group: string
+  /** The input the pillar was scored from, formatted ("55%", "9 of 10 yrs"). */
+  display: string | null
+  /** 0–10: the pillar's points ÷ its maximum × 10 (spec §7, 2026-09-29). */
+  score: number | null
+  weight_pct: number
+}
+```
+
+- [ ] **Step 1: Write the failing backend tests**
+
+In `backend/tests/test_landing_contract.py`, replace `test_moat_factor_weight_is_its_share_of_the_available_points` (line 130) with:
+
+```python
+def test_moat_is_sent_on_a_0_to_10_scale():
+    r = _result()
+    p = build_ticker_payload(r)
+    assert p["moat"]["score"] == round(r["screener"]["moat_score"] / 10, 1)
+
+
+def test_moat_factor_carries_a_0_to_10_score_and_its_weight_not_raw_points():
+    p = build_ticker_payload(_result())
+    a1 = next(f for f in p["moat"]["factors"] if f["label"].startswith("ROIC level"))
+    assert a1["score"] == 9.0          # 18 of 20 points
+    assert "points" not in a1 and "max_points" not in a1
+    # weight_pct is rounded to 2dp like every sibling weight field
+    assert a1["weight_pct"] == pytest.approx(20 / 65 * 100, abs=0.01)
+```
+
+In `test_a_moat_pillar_without_a_maximum_is_omitted_not_nulled` (line 247), keep its arrange/act lines, and replace its final `assert all(f["max_points"] is not None …)` with:
+
+```python
+    assert all(f["score"] is None or 0 <= f["score"] <= 10 for f in p["moat"]["factors"])
+```
+
+If `_result()` does not put `moat_score` under `r["screener"]`, read the fixture at the top of the file and use the path it uses. Then run `grep -n "points" backend/tests/test_landing_contract.py`, and move any other `["points"]` or `["max_points"]` assertion to `["score"]` the same way.
+
+- [ ] **Step 2: Run the backend tests to verify they fail**
+
+Run: `cd backend && python -m pytest tests/test_landing_contract.py -q`
+Expected: FAIL. The Moat score is still on 0–100, and `a1["score"]` raises KeyError.
+
+- [ ] **Step 3: Implement the contract**
+
+In `backend/landing/contract.py` `_moat`, replace the factor dict and the returned score:
+
+```python
+        pts = _finite(points)
+        factors.append({
+            "label": MOAT_FACTOR_LABELS.get(code, humanize(code)),
+            # Pillar codes group by their letter: A magnitude, B durability, C cash.
+            "group": MOAT_GROUP_LABELS.get(str(code)[:1], "Other"),
+            "display": moat_figure(code, inputs.get(code)),
+            # Spec §7 (2026-09-29): the landing page shows Moat on 0–10 like Quality.
+            # The engine keeps its 100-point model; only this contract converts.
+            "score": None if pts is None or not max_points else round(pts / max_points * 10, 1),
+            "weight_pct": round(max_points / available * 100, 2),
+        })
+    raw = _finite(sc.get("moat_score"))
+    return {
+        "score": None if raw is None else round(raw / 10, 1),
+```
+
+Keep the rest of the returned dict (`gated`, `excluded`, `factors`) unchanged.
+
+- [ ] **Step 4: Run the backend tests to verify they pass**
+
+Run: `cd backend && python -m pytest tests/test_landing_contract.py tests/test_landing_router.py tests/test_landing_cache.py -q`
+Expected: PASS.
+
+- [ ] **Step 5: Write the failing frontend tests**
+
+**`format.test.ts`:** replace the `moatTier(80)` / `moatTier(79)` assertions (lines 146–147, and any sibling `moatTier(…)` lines) with:
+
+```ts
+    expect(moatTier(8)).toBe('Wide')
+    expect(moatTier(7.9)).toBe('Established')
+    expect(moatTier(6)).toBe('Established')
+    expect(moatTier(5.9)).toBe('Narrow')
+    expect(moatTier(4)).toBe('Narrow')
+    expect(moatTier(3.9)).toBe('Little or none')
+```
+
+**`ResultCard.test.tsx`:** change the fixture in `row()` to `moat: { score: 9.5, gated: false, excluded: [], factors: [] }`, and append:
+
+```tsx
+describe('ResultCard — Moat on 0–10 (spec §5.2)', () => {
+  it('shows Moat like Quality: one decimal out of 10, with its tier', () => {
+    const { container } = show()
+    const tile = Array.from(container.querySelectorAll('.rc-tile'))[1]
+    expect(tile).toHaveTextContent('9.5')
+    expect(tile).toHaveTextContent('/10')
+    expect(tile).not.toHaveTextContent('/100')
+    expect(tile).toHaveTextContent('Wide')
+  })
+})
+```
+
+Then move every existing Moat assertion in that file to 0–10 (`grep -n "95\|/100\|moat" frontend/src/landing/components/ResultCard.test.tsx`): 95 becomes 9.5, "/100" becomes "/10", and every other Moat `score:` in a fixture is divided by 10. The expected tier words stay the same.
+
+**`Breakdown.test.tsx`, `OpenBreakdown.test.tsx` and `LandingPage.test.tsx`:** in every Moat fixture:
+- replace `points: P, max_points: M` with `score: P / M × 10`, rounded to one decimal. For example, `points: 4, max_points: 20` becomes `score: 2`;
+- divide the Moat block's own `score` by 10.
+
+Find them all with `grep -n "max_points\|moat:" <file>`. Then add to `Breakdown.test.tsx` a Moat-tab test. Copy the render call from that file's existing Moat-tab test (`grep -n "tab={1}" frontend/src/landing/components/Breakdown.test.tsx`), and give its row this `moat`:
+
+```tsx
+const MOAT_0_10: MoatBlock = {
+  score: 7.2, gated: false, excluded: [],
+  factors: [
+    { label: 'ROIC level', group: 'Magnitude', display: '31%', score: 9, weight_pct: 20 },
+    { label: 'Free-cash-flow conversion', group: 'Cash-backing', display: '80%', score: 5, weight_pct: 10 },
+  ],
+}
+```
+
+and assert:
+
+```tsx
+    const panel = document.querySelector('.bd')!
+    expect(panel).toHaveTextContent('7.2 / 10')
+    expect(panel).not.toHaveTextContent('/ 100')
+    expect(panel).toHaveTextContent('9/10')        // the ROIC level Score cell
+    expect(panel).toHaveTextContent('9.0 / 10')    // the Magnitude group row
+    expect(panel).toHaveTextContent('20%')
+```
+
+(`MoatBlock` is imported from `../types`.)
+
+- [ ] **Step 6: Run the frontend tests to verify they fail**
+
+Run: `cd frontend && npx vitest run src/landing`
+Expected: FAIL, in `format.test` (the tiers) and `ResultCard.test` ("/100" is still rendered). `npx tsc -b` also reports the unknown `score` on `MoatFactor`.
+
+- [ ] **Step 7: Implement the frontend**
+
+- **`types.ts`:** replace `MoatFactor` with the interface in **Interfaces** above.
+- **`format.ts`:**
+
+```ts
+/** Moat tiers on the 0–10 scale (spec §5.2, 2026-09-29). */
+export function moatTier(v: number | null): string | null {
+  if (!finite(v)) return null
+  if (v >= 8) return 'Wide'
+  if (v >= 6) return 'Established'
+  if (v >= 4) return 'Narrow'
+  return 'Little or none'
+}
+```
+
+- **`ResultCard.tsx`:**
+  - line 108: `value={num(m, 1)} unit="/10" visual={<Gauge v={m} max={10} color="var(--mo)" />}`;
+  - line 169: `value={num(m, 1)}`.
+- **`Breakdown.tsx`:**
+  - `headline`: `if (i === 1) return num(row.moat?.score ?? null, 1)`.
+  - `MOAT_TIPS`: turn each "Worth N points" / "Worth N of the 100 points" into "N% of the Moat score". Keep the rest of each sentence, and change "the more points" to "the higher it scores". The comment above the map should say the weights are public and shown as %.
+  - `MoatPanel`: replace the summary, the hint, the group roll-up, the factor score cell and the total row:
+
+```tsx
+        <span className="big">{num(m.score, 1)} / 10</span>
+        {tier && <span className={m.score !== null && m.score >= 6 ? 'pill good' : 'pill'}>{tier}</span>}
+```
+
+```tsx
+        <span className="hint">Hover a factor for what it measures</span>
+```
+
+```tsx
+        {groups.map(g => {
+          const fs = m.factors.filter(f => f.group === g)
+          const scored = fs.filter(f => f.score !== null)
+          const sw = scored.reduce((a, f) => a + f.weight_pct, 0)
+          const gs = sw > 0 ? scored.reduce((a, f) => a + (f.score as number) * f.weight_pct, 0) / sw : null
+          const w = fs.reduce((a, f) => a + f.weight_pct, 0)
+          return (
+            <GroupRows key={g} title={g} score={`${num(gs, 1)} / 10`} w={weight(w)}>
+              {fs.map((f, i) => (
+                <tr key={`${i}-${f.label}`}>
+                  <td>{MOAT_TIPS[f.label] ? <Tip label={f.label} tip={MOAT_TIPS[f.label]} /> : f.label}</td>
+                  <td className="d">{f.display ?? DASH}</td>
+                  <td className="s"><Score v={f.score} max={10} /></td>
+                  <td className="w">{weight(f.weight_pct)}</td>
+                </tr>
+              ))}
+            </GroupRows>
+          )
+        })}
+        <tr className="tot">
+          <td>Moat score</td><td />
+          <td className="s">{num(m.score, 1)} / 10</td>
+          <td className="w">100%</td>
+        </tr>
+```
+
+- [ ] **Step 8: Run everything to verify it passes**
+
+Run: `cd frontend && npx vitest run src/landing && npx tsc -b`, then `cd backend && python -m pytest -q`
+Expected: all green. If `funnel.test.tsx` or `copy-guard.test.ts` carries a Moat fixture with `points`, `tsc` or the run points at it. Move it the same way.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add backend/landing/contract.py backend/tests/test_landing_contract.py frontend/src/landing/types.ts frontend/src/landing/format.ts frontend/src/landing/format.test.ts frontend/src/landing/components/ResultCard.tsx frontend/src/landing/components/ResultCard.test.tsx frontend/src/landing/components/Breakdown.tsx frontend/src/landing/components/Breakdown.test.tsx frontend/src/landing/components/OpenBreakdown.test.tsx frontend/src/landing/LandingPage.test.tsx
+git commit -m "feat(landing): Moat on a 0–10 scale, like Quality (engine unchanged, contract converts)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 9: Funnel events to a dedicated Intrinsica spreadsheet
+
+**Files:**
+- Modify: `backend/services/events_sheets.py` (the import at line 5, plus a new `_sheet_id`)
+- Modify: `backend/tests/test_events_sheets.py` (append tests)
+- Modify: `backend/.env.example`, `render.yaml`, `DEPLOY.md` (document the new variable)
+
+**Interfaces:**
+- Consumes: nothing new.
+- Produces: `events_sheets._sheet_id() -> str`, which reads `INTRINSICA_EVENTS_SHEET_ID` and raises `RuntimeError` when it is unset. The existing tests patch `events_sheets._sheet_id` by that exact name, so they keep working.
+
+- [ ] **Step 1: Write the failing tests**
+
+First read `backend/tests/test_events_sheets.py` lines 1–40. Note its event factory, its `_fake_service()`, and how it resets `events_sheets._queue` between tests. Then append:
+
+```python
+def test_events_go_to_the_intrinsica_sheet_never_the_agent_stock_one(monkeypatch):
+    monkeypatch.setenv("GOOGLE_SHEETS_ID", "agent-stock")
+    monkeypatch.setenv("INTRINSICA_EVENTS_SHEET_ID", "intrinsica-events")
+    assert events_sheets._sheet_id() == "intrinsica-events"
+
+
+def test_an_unset_events_sheet_never_falls_back_to_agent_stock(monkeypatch):
+    monkeypatch.setenv("GOOGLE_SHEETS_ID", "agent-stock")
+    monkeypatch.delenv("INTRINSICA_EVENTS_SHEET_ID", raising=False)
+    with pytest.raises(RuntimeError, match="INTRINSICA_EVENTS_SHEET_ID"):
+        events_sheets._sheet_id()
+
+
+@pytest.mark.asyncio
+async def test_with_no_events_sheet_events_stay_queued_and_nothing_is_written(monkeypatch):
+    monkeypatch.setenv("GOOGLE_SHEETS_ID", "agent-stock")
+    monkeypatch.delenv("INTRINSICA_EVENTS_SHEET_ID", raising=False)
+    monkeypatch.setattr(events_sheets, "_queue", [])
+    monkeypatch.setattr(events_sheets, "_oldest", None)
+    svc = _fake_service()
+    with patch.object(events_sheets, "_get_service", return_value=svc):
+        events_sheets._queue.append(["2026-09-29T00:00:00Z", "page_view", "v1", "{}"])
+        written = await events_sheets.flush_events()
+    assert written == 0
+    assert len(events_sheets._queue) == 1          # kept for a later flush, bounded by _MAX_QUEUE
+    svc.spreadsheets().values().append.assert_not_called()
+```
+
+If `_fake_service()` is not a `MagicMock` whose `append` can be asserted, check the append the way the existing tests at lines 104–140 do, and keep the assertion's meaning: nothing was appended.
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `cd backend && python -m pytest tests/test_events_sheets.py -q`
+Expected: FAIL. `_sheet_id()` returns `"agent-stock"`, because it is still `services.sheets._sheet_id`.
+
+- [ ] **Step 3: Implement**
+
+In `backend/services/events_sheets.py`, drop `_sheet_id` from the `from services.sheets import …` line, and add after the constants:
+
+```python
+_EVENTS_SHEET_ENV = "INTRINSICA_EVENTS_SHEET_ID"
+
+
+def _sheet_id() -> str:
+    """The dedicated Intrinsica events spreadsheet (spec §9, 2026-09-29). Never the
+    Agent Stock spreadsheet (GOOGLE_SHEETS_ID): that is the analyst tool's own, and
+    visitors' tickers and emails do not belong in it. Unset means no sink: the flush
+    fails and flush_events keeps the rows queued (bounded by _MAX_QUEUE)."""
+    sid = os.environ.get(_EVENTS_SHEET_ENV, "").strip()
+    if not sid:
+        raise RuntimeError(f"{_EVENTS_SHEET_ENV} is not set; funnel events are not being stored")
+    return sid
+```
+
+`flush_events` already catches sink failures and requeues. If it does not already log the exception, add a `logging.getLogger(__name__).warning(...)` in that `except`. Guard it with a module-level `_warned = False` flag, so it is logged once per process and a missing variable is visible, not silent.
+
+Document the variable:
+- **`backend/.env.example`:** add `INTRINSICA_EVENTS_SHEET_ID=` with the comment `# dedicated spreadsheet for landing-page funnel events; share it with the service account`.
+- **`render.yaml`:** add `- key: INTRINSICA_EVENTS_SHEET_ID` with `sync: false`, beside `GOOGLE_SHEETS_ID` in the backend service's `envVars`.
+- **`DEPLOY.md`:** add one line next to `GOOGLE_SHEETS_ID`, saying what the variable is and that the sheet must be shared with the service account.
+
+- [ ] **Step 4: Run the tests to verify they pass**
+
+Run: `cd backend && python -m pytest tests/test_events_sheets.py tests/test_events_router.py -q && python -m pytest -q`
+Expected: all green.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add backend/services/events_sheets.py backend/tests/test_events_sheets.py backend/.env.example render.yaml DEPLOY.md
+git commit -m "feat(events): funnel events go to a dedicated Intrinsica spreadsheet, never the Agent Stock one
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+When reporting, tell the user they need to do three things: create the spreadsheet, share it with the service account's email, and set `INTRINSICA_EVENTS_SHEET_ID` locally and in the deployment. Until then, events are only held in memory.
+
+---
+
+### Task 10: Whole-branch verification in the real page
 
 **Files:** none are created. Fixes land in the files of the task that owns them, with a failing test first.
 
@@ -1439,7 +1777,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Run the full gate**
 
-Run: `cd frontend && npx vitest run > ../.superpowers/brand-gate.log 2>&1; tail -5 ../.superpowers/brand-gate.log; npx tsc -b; npx eslint . | tail -3`
+Run: `cd frontend && npx vitest run > ../.superpowers/brand-gate.log 2>&1; tail -5 ../.superpowers/brand-gate.log; npx tsc -b; npx eslint . | tail -3`, then `cd backend && python -m pytest -q | tail -3`
 Expected:
 - vitest: all files pass;
 - tsc: no output;
@@ -1459,6 +1797,7 @@ Start the dev servers with `cd backend && python -m uvicorn main:app --port 8000
 - **Pricing:** bold teal "Full / Yes" cells and the FREE badge.
 - **Favicon:** the tab shows the keyhole.
 - **Why section:** identical to before, emoji included.
+- **Moat:** 9.5 /10 on the card, and the breakdown's Moat tab is on 0–10.
 
 Headless screenshots are taken without scrolling, and the reveal only hides blocks below the fold. So to see the sections themselves, take the screenshot with `--force-prefers-reduced-motion` (Chrome flag), or check the page in the companion. **Do not open extra browser windows for the user.**
 
@@ -1485,6 +1824,8 @@ Tell the user what shipped, the gate results with numbers, and the screenshots c
   | §5.4 rows and strip | Tasks 4–5 |
   | §5.7 teal cells, badge and checks | Tasks 1 and 3 |
   | §5.8 share image and meta | Task 7 |
+  | §5.2 / §5.3 / §7 Moat on 0–10 | Task 8 (copy in Task 4) |
+  | §9 events spreadsheet | Task 9 |
   | §11 tests | inside each task |
 
   The fonts are unchanged, so no task is needed for them.

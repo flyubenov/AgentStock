@@ -40,6 +40,10 @@
 >
 > The fonts are unchanged. Mock-ups and their builders are in `.superpowers/brainstorm/brand/`; the colour
 > measurements (CIEDE2000 and colour-blind simulation) are in `colours.py`.
+>
+> **Added 2026-09-29, user decisions:**
+> - **Moat is shown on a 0–10 scale**, like Quality (§5.2, §5.3, §5.4, §7). The engine keeps its 100-point model; the landing contract divides by 10.
+> - **Funnel events move to a dedicated Intrinsica spreadsheet** (§9). They never go to the Agent Stock spreadsheet again. The demo's analyses were already never saved.
 - **Author:** f_lub (with Claude)
 - **Branch:** `01-fake-door-test`
 - **Source material:** `MonetizationPlan/Agent_Stock_Smoke_Fake_Test_Monetization_Plan.md`, `MonetizationPlan/FreeProUnlimited.md`, `MonetizationPlan/NewPlatformName-Branding-Positioning.txt`
@@ -231,7 +235,7 @@ The questions still live in each Framework detail panel (§5.4). A "numbers band
   - a pill on the right, set by the run's `source`: "Live example · computed just now" (pulsing dot) for a **sample** run (the page-load AAPL and the Compare chip), "Your analysis" for a **typed** run. *(Clarified 2026-09-27: a Compare-chip comparison is a sample, so it is not labelled "Your analysis".)*
 - **Tiles:** a 2×2 grid in the order Quality, Moat (top row, the business), then Fair Value, Reward / Risk (bottom row, the price). Each tile has:
   - a coloured dot and the name;
-  - the big number with its unit (`7.8 /10`, `95 /100`, `$159`, `1.1 ×`);
+  - the big number with its unit (`7.8 /10`, `9.5 /10`, `$159`, `1.1 ×`). *Moat revised 2026-09-29 from `95 /100`: see §7.*
   - one small visual:
     - Quality and Moat: a gauge bar;
     - Fair Value: two bars, fair value against price on one scale;
@@ -239,7 +243,7 @@ The questions still live in each Framework detail panel (§5.4). A "numbers band
   - a caption.
 - **Tile captions** come from the product's **existing** tier labels. No new wording is introduced.
   - Quality: `qualityTier` (Top-decile / Excellent / Strong / Moderate / Weak).
-  - Moat: `moatTier` (Wide / Established / Narrow / Little or none).
+  - Moat: `moatTier` (Wide / Established / Narrow / Little or none), on the 0–10 scale: 8.0+ Wide · 6.0–7.9 Established · 4.0–5.9 Narrow · below 4 Little or none.
   - Fair Value: "Fair value N% below price" / "Fair value N% above price" (or "Fair value at price" when it rounds to 0), coloured with the % vs price bands below. *(Corrected 2026-09-27: the approved wording, "Price N% above fair value", reversed the base of the percentage. `gap_pct` is measured against the price.)*
   - Reward / Risk: the engine's tier (e.g. Balanced, Reward-Favored).
 - **Footer:** "Click any score for its full breakdown ↓".
@@ -312,9 +316,7 @@ with one panel below. Every panel is the same four-column table:
   score and its weight. Metrics are **equally weighted inside a category**, so a metric's
   weight = category weight ÷ number of active metrics. A metric excluded by a calibration is
   shown **struck through at 0%** and the remainder are re-weighted.
-- **Moat:** factors with `points / max`, which is also the weight (40 / 50 / 10 across
-  Magnitude / Durability / Cash-backing). Hover tooltips explain what each factor measures —
-  concept only, never thresholds. The economic-profit gate is shown as a Moat-wide cap check.
+- **Moat** *(revised 2026-09-29: 0–10 scale)*: the same table as Quality. Each factor shows its figure, a **0–10 score** and its weight %. The three groups carry 40 / 50 / 10 % across Magnitude / Durability / Cash-backing, and each group row shows its weighted 0–10 score. The total row reads "Moat score · x.x / 10 · 100%". A factor's 0–10 score is its points ÷ its maximum × 10, so the weights are the old point maxima. Hover tooltips explain what each factor measures, with its weight as a %: concept only, never thresholds. The economic-profit gate is shown as a Moat-wide cap check. The gate's cap is 3.5 on this scale.
 - **Fair Value:** `Method | Value | Contribution | Weight` per method in the blend, rolling up
   to **one exact blended number** — never a range. The blend used is named.
 - **Reward / Risk:** all 6 reward and 6 risk factors, each scored 1–5 with its config weight;
@@ -380,12 +382,12 @@ on the tabs — they are in the panel.
 **Detail panel** — one per assessment, and **identical in shape across all four** (this
 consistency is a requirement; they had drifted):
 
-1. Name + **scale** pill (`0–10 · sector-aware`, `0–100`, `$ per share`, `ratio · 0.2–5.0×`).
+1. Name + **scale** pill (`0–10 · sector-aware`, `0–10` for Moat since 2026-09-29, `$ per share`, `ratio · 0.2–5.0×`).
 2. The question (the only place in this section it appears), then a one-line "what it
    measures".
 3. **Categories as collapsed rows**. *Revised 2026-09-29, user decision, variant A. Four categories, each with a metric list and two "Scores high / Scores low" sentences, read as a wall of text.* Each category is one row, styled like a calibration row and **collapsed by default**:
    - **Row, closed:** the category name, then a one-line plain question under it. On the right sit the weight and a chevron.
-     - Where the weight is a fixed share (Quality %, Moat points), the weight also gets a small bar in the assessment's colour, scaled to the largest category in that panel.
+     - Where the weight is a fixed share (Quality and Moat %), the weight also gets a small bar in the assessment's colour, scaled to the largest category in that panel.
      - Where it is a range ("typically 40–60%", "6 factors"), the text alone is shown.
    - **Row, open:** the metrics as chips, then one short line: **▲ High:** … · **▼ Low:** … (Fair Value: **▲ Weighted up:** … · **▼ Weighted down:** …).
    - Rows open and close independently, like the calibrations.
@@ -399,9 +401,9 @@ consistency is a requirement; they had drifted):
    | Quality · Returns on Capital (30%) | Does it earn more than its capital costs? | well above its cost of capital | barely matches it |
    | Quality · Balance-Sheet Strength (15%) | Can it weather a bad year? | little debt, capex easily funded | leverage that needs a kind cycle |
    | Quality · Shareholder Alignment (20%) | Are owners treated well? | buybacks, earnings that arrive as cash | steady dilution, paper earnings |
-   | Moat · Magnitude (40 pts) | How far above its cost of capital does it earn? | returns far above the cost of capital | returns that merely match it |
-   | Moat · Durability (50 pts) | Does the edge last, year after year? | a decade of above-cost returns, margins that hold | a good spell inside a cyclical swing |
-   | Moat · Cash-backing (10 pts) | Does the profit turn into cash? | profit that becomes cash | profit that stays on paper |
+   | Moat · Magnitude (40%) | How far above its cost of capital does it earn? | returns far above the cost of capital | returns that merely match it |
+   | Moat · Durability (50%) | Does the edge last, year after year? | a decade of above-cost returns, margins that hold | a good spell inside a cyclical swing |
+   | Moat · Cash-backing (10%) | Does the profit turn into cash? | profit that becomes cash | profit that stays on paper |
    | Fair Value · Cash-flow models | What will the business pay out over time? | steady, predictable cash flows | erratic cash flows, or pre-profit |
    | Fair Value · Earnings multiples | How is it priced against its earnings? | meaningful profits, comparable with peers | losses, or earnings distorted by amortization |
    | Fair Value · Sales multiples | What is growth worth before profit? | fast growth, no profit yet | a mature, profitable company |
@@ -411,7 +413,7 @@ consistency is a requirement; they had drifted):
 
 4. **Closing note becomes a scale strip.** Five or four tinted cells, tinted in the assessment's colour and deepening toward the best band. Under them is one short line:
    - **Quality:** below 5 Weak · 5–7 Moderate · 7–8 Strong · 8–9 Excellent · 9+ Top-decile. Line: "Each metric is scored against fixed thresholds; the category weights follow the sector profile (Tech / Growth shown)." The band names are `qualityTier`'s.
-   - **Moat:** below 40 Little or none · 40–59 Narrow · 60–79 Established · 80+ Wide. Line: "An economic-profit gate caps any company that does not out-earn its cost of capital."
+   - **Moat** *(0–10 since 2026-09-29)*: below 4 Little or none · 4–6 Narrow · 6–8 Established · 8+ Wide. Its scale pill becomes `0–10`, and the metric chips give weights as % (for example "ROIC level (20%)"). Line: "An economic-profit gate caps any company that does not out-earn its cost of capital."
    - **Fair Value:** no strip, because it has no score to band. Line: "The company's type sets the blend — a bank leans on price / book, a mega cap on cash flows. Every analysis shows the exact blend it used."
    - **Reward/Risk:** below 0.5× Value Trap · 0.5–0.8× Risk-Favored · 0.8–1.3× Balanced · 1.3–2.0× Reward-Favored · 2.0×+ Asymmetric Upside. Line: "Reward ÷ risk, clamped to 0.2–5.0×."
 5. **Calibrations for this assessment** as expandable rows: *When it applies* / *What it does*
@@ -580,8 +582,8 @@ Per analysed ticker the API must return:
 - **Quality:** the resolved profile id *and* its human label; per category the weight and
   earned points; per metric the raw figure (formatted + numeric), its 0–10 score, its
   effective weight, and an `excluded` flag naming the calibration that excluded it.
-- **Moat:** per factor the points earned and the max (= its weight), the pillar totals, and
-  whether the economic-profit gate capped the score.
+- **Moat** *(revised 2026-09-29)*: the score on a **0–10 scale**, one decimal (the engine's 0–100 score ÷ 10). Per factor: its 0–10 score (points ÷ maximum × 10, one decimal) and its weight % (maximum ÷ available points), but **no raw points**. Also whether the economic-profit gate capped the score.
+  - The conversion lives in `backend/landing/contract.py` only. The Moat engine (`backend/moat/scoring.py`), its calibration, the stored Sheets values and the analyst app keep the 0–100 scale unchanged.
 - **Fair Value:** the classified type (id + label), per method the returned value with its
   blend weight and contribution, and the single blended fair value. **One number, never a
   range** — the per-method optimistic / realistic / pessimistic scenarios exist internally but
@@ -677,8 +679,15 @@ FastAPI app — a new `backend/routers/events.py` registered like the other rout
 (`event`, `visitor_id`, `ts`, `props`). It is fire-and-forget from the client: a failed post
 must never block or break the funnel, and the endpoint always returns quickly.
 
+*Revised 2026-09-29 (user decision):* events are appended to a **dedicated Intrinsica spreadsheet**, named by the env var `INTRINSICA_EVENTS_SHEET_ID` and shared with the same service account. They are **never** written to the Agent Stock spreadsheet (`GOOGLE_SHEETS_ID`), which is the analyst tool's own. If the variable is unset:
+- events stay queued in memory, bounded by the queue cap;
+- a warning is logged once;
+- nothing falls back to another sheet.
+
+The demo's analyses themselves are never saved anywhere. The landing page runs the engines read-only (`_run_one_readonly`), and results live only in the in-memory landing cache.
+
 Storage follows the existing persistence pattern (`backend/services/*_sheets.py` → Google
-Sheets), appending one row per event to an events sheet — adequate for smoke-test volumes and
+Sheets), appending one row per event to the events sheet — adequate for smoke-test volumes and
 immediately analysable in a spreadsheet. Two caveats for the implementation plan: Sheets has
 write rate limits, so appends should be **batched / queued rather than one API call per
 event**; and if volume makes that awkward, swap the sink for a local append-only file or
