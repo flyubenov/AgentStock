@@ -1,3 +1,5 @@
+import BrandMark from './BrandMark'
+
 const SECTIONS = [
   { href: '#analyze', label: 'Analyze' },
   { href: '#how', label: 'Methodology' },
@@ -8,7 +10,7 @@ const SECTIONS = [
 
 /** The logo block, shared with the checkout's mini-nav. */
 export function Logo() {
-  return <div className="logo"><span className="mk" aria-hidden="true">I</span>Intrinsica</div>
+  return <div className="logo"><BrandMark size={42} />Intrinsica</div>
 }
 
 export default function Nav() {

@@ -35,9 +35,8 @@
 .intrinsica .nav { position: sticky; top: 0; z-index: 50; background: rgba(253,252,249,.88);
   backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
 .intrinsica .nav-in { max-width: 1120px; margin: 0 auto; padding: 14px 28px; display: flex; align-items: center; gap: 10px; }
-.intrinsica .logo { display: flex; align-items: center; gap: 9px; font: 700 20px var(--fh); letter-spacing: -.02em; }
-.intrinsica .logo .mk { width: 26px; height: 26px; border-radius: 7px; background: linear-gradient(135deg, var(--accent), #7c74f2);
-  display: grid; place-items: center; color: #fff; font: 700 14px var(--fh); }
+.intrinsica .logo { display: flex; align-items: center; gap: 11px; font: 700 23px var(--fh); letter-spacing: -.02em; }
+.intrinsica .logo .brandmark { display: block; flex: none; }
 .intrinsica .links { margin-left: auto; display: flex; align-items: center; gap: 24px; }
 .intrinsica .links a { font-size: 14px; color: var(--dim); cursor: pointer; }
 .intrinsica .links a:hover { color: var(--text); }
