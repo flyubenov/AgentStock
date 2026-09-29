@@ -98,6 +98,10 @@ def score(m: ScreenerMetrics, profile: str) -> tuple[float | None, dict]:
             maxima[name] = cap
 
     spread = _spread_blend(axis["spot"], axis["five"])
+    # The figure behind each pillar, for display only (landing/contract.py renders it
+    # in the breakdown's Data column). Nothing here feeds the score.
+    series = axis["series"] or []
+    inputs: dict = {"A1": axis["level"], "A2": spread}
     # A1 — ROIC/ROTE level
     add("A1", score_high(axis["level"], A1_ROIC_BANDS, 0.0), 20)
     # A2 — economic spread blend
@@ -109,12 +113,15 @@ def score(m: ScreenerMetrics, profile: str) -> tuple[float | None, dict]:
     # B1 — persistence: fraction of years the business out-earned its hurdle.
     # Capped on a thin blended spread so mere not-losing-money can't bank full B1.
     frac = persistence_fraction(axis["series"], axis["hurdle"])
+    inputs["B1"] = {"fraction": frac, "years": len(series)} if frac is not None else None
     b1 = (25.0 * frac) if frac is not None else None
     if b1 is not None and spread is not None and spread < B1_THIN_SPREAD_PP:
         b1 = min(b1, B1_THIN_SPREAD_CAP)
     add("B1", b1, 25)
     # B2 — consistency: low variability of the return series
-    add("B2", score_low(coef_of_variation(axis["series"]), B2_COV_BANDS, 0.0), 10)
+    cov = coef_of_variation(axis["series"])
+    inputs["B2"] = cov
+    add("B2", score_low(cov, B2_COV_BANDS, 0.0), 10)
     # B3 — margin durability. Excluded for lenders: yfinance's Gross Profit row
     # for a bank is a net-interest proxy, not a moat signal, and fires only by
     # accident of which lenders it populates -> renormalized out (mirrors C1).
@@ -122,12 +129,15 @@ def score(m: ScreenerMetrics, profile: str) -> tuple[float | None, dict]:
         excluded.append("B3 margin durability")
     else:
         add("B3", _margin_durability(m), 15)
+        inputs["B3"] = (m.gross_margin_trajectory if m.gross_margin_trajectory is not None
+                        else m.op_margin_trajectory)
 
     # C1 — cash-backing: FCF conversion. Structurally distorted for lenders and
     # heavy-capex reinvestors -> excluded and renormalized out (mirrors Quality).
     if is_fin or heavy_capex:
         excluded.append("C1 FCF conversion")
     elif m.fcf is not None and m.ebitda is not None and m.ebitda > 0:
+        inputs["C1"] = m.fcf / m.ebitda
         add("C1", score_high(m.fcf / m.ebitda, C1_FCF_BANDS, 0.0), 10)
 
     available = sum(maxima.values())
@@ -139,6 +149,7 @@ def score(m: ScreenerMetrics, profile: str) -> tuple[float | None, dict]:
         "available": available,
         "gated": False,
         "excluded": excluded,
+        "inputs": inputs,
     }
     series_len = len(axis["series"] or [])
     if series_len < MOAT_MIN_YEARS or len(pillars) < MOAT_MIN_PILLARS or available <= 0:

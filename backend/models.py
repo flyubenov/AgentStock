@@ -42,3 +42,10 @@ class Watchlist(BaseModel):
     name: str
     filter: dict = {}     # opaque serialized Filters blob (frontend owns the shape)
     created: str = ""
+
+
+class AnalyticsEvent(BaseModel):
+    event: str
+    visitor_id: str
+    ts: str | None = None
+    props: dict = {}

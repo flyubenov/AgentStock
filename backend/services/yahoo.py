@@ -27,15 +27,30 @@ _RATE_LIMIT_BACKOFF = 3.0
 # enough of those starve the pool and the whole batch freezes with no error.
 _HISTORY_TIMEOUT = float(os.getenv("YF_HISTORY_TIMEOUT", "30"))
 
+# TTL for the info cache below, in seconds. Kept short enough to dedupe the three
+# engines that each want the same ticker's info at the start of one run (they start
+# concurrently, seconds apart) while still letting the landing cache's multi-day slow
+# layer genuinely refresh instead of replaying a frozen dict for a process's lifetime.
+_INFO_TTL = float(os.getenv("YF_INFO_TTL", "900"))  # 15 minutes
+
+
+def _info_bucket() -> int:
+    """Changes every _INFO_TTL seconds, so an lru_cache entry keyed on an older
+    bucket can never be hit again and ages out via normal LRU eviction. Cheaper and
+    far less risky than replacing the memoisation with a bespoke TTL cache."""
+    return int(time.time() // _INFO_TTL)
+
 
 async def fetch_ticker_info(ticker: str) -> dict:
     """Async wrapper around yfinance Ticker.info (dedicated yfinance pool)."""
-    return await run_yf(_fetch_sync, ticker.upper())
+    return await run_yf(_fetch_sync, ticker.upper(), _info_bucket())
 
 
 @lru_cache(maxsize=256)
-def _fetch_sync(ticker: str) -> dict:
-    """Fetch yfinance info with retry on rate-limit. Cached per ticker per process."""
+def _fetch_sync(ticker: str, _bucket: int) -> dict:
+    """Fetch yfinance info with retry on rate-limit. Cached per ticker per process,
+    for as long as _bucket (see _info_bucket) stays the same -- i.e. up to _INFO_TTL
+    seconds."""
     for attempt in range(_RATE_LIMIT_RETRIES):
         try:
             t = yf.Ticker(ticker)
@@ -56,6 +71,51 @@ def _fetch_sync(ticker: str) -> dict:
                 continue
             raise
     raise RuntimeError(f"Failed to fetch {ticker} after {_RATE_LIMIT_RETRIES} attempts")
+
+
+async def fetch_quote(ticker: str) -> float | None:
+    """A fresh current price, for callers that need one that cannot be stale by more
+    than a single call -- unlike fetch_ticker_info above.
+
+    Deliberately NOT memoized (contrast _fetch_sync's @lru_cache, TTL-bucketed via
+    _info_bucket): _fetch_sync is memoised with a TTL, so it can legitimately serve a
+    price up to _INFO_TTL seconds old. That is fine for fetch_ticker_info's callers,
+    but not for the landing cache's fast-layer refresh (backend/landing/cache.py,
+    LANDING_FAST_TTL), which exists specifically to get a genuinely fresh price on
+    every call -- do not add an lru_cache here, that would reintroduce the same
+    TTL-bounded staleness this function exists to avoid.
+
+    yfinance's Ticker.fast_info was evaluated as the cheap-quote path first, but in
+    this yfinance version (1.3.0) fast_info.last_price internally triggers a full
+    1-year price-history fetch (yfinance.scrapers.quote.FastInfo._get_1y_prices)
+    before it will return anything -- that is not cheap, so this falls back to the
+    same single Ticker.info call fetch_ticker_info already uses, just unmemoized.
+    Never raises -- returns None when a price isn't available, which is the signal
+    the landing cache's degradation rule already treats as "keep serving the stale
+    entry".
+    """
+    return await run_yf(_fetch_quote_sync, ticker.upper())
+
+
+def _fetch_quote_sync(ticker: str) -> float | None:
+    for attempt in range(_RATE_LIMIT_RETRIES):
+        try:
+            info = yf.Ticker(ticker).info or {}
+            price = info.get("currentPrice") or info.get("regularMarketPrice")
+            return float(price) if price is not None else None
+        except Exception as e:
+            is_rate_limit = (
+                (_YFRateLimitError and isinstance(e, _YFRateLimitError))
+                or "rate" in str(e).lower()
+                or "too many" in str(e).lower()
+            )
+            if is_rate_limit:
+                note_rate_limit()  # let the batch orchestrator slow its pacing
+            if is_rate_limit and attempt < _RATE_LIMIT_RETRIES - 1:
+                time.sleep(_RATE_LIMIT_BACKOFF * (attempt + 1))
+                continue
+            return None
+    return None
 
 
 @lru_cache(maxsize=256)

@@ -1,0 +1,539 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* The approved design, ported from the brainstorm mock full-page-v21.html (spec:
+ * "the normative source for layout, copy and interaction"). Rules are the mock's own,
+ * value for value, scoped under .intrinsica so the dark analyst app is untouched.
+ * Where the React markup needs a class the mock never had (the demo-limit wall, the
+ * error notice, the row's keyboard button, the no-plan checkout state) it is added
+ * in the mock's vocabulary and marked as such. */
+.intrinsica {
+  --bg: #fdfcf9; --bg2: #f6f3ec; --bg3: #efebe2; --border: #e8e3d8; --border2: #ddd7ca;
+  --text: #141414; --dim: #57534b; --mute: #8c877c;
+  --accent: #0f5257; --accent-d: #0a3d41; --accent-soft: #e4eee9;
+  --pos: #16a34a; --neg: #dc2626; --warn: #d97706; --blue: #2563eb;
+  --q: #22c55e; --mo: #3d8bff; --fv: #d4b106; --rr: #440ab8;
+  --fh: 'Space Grotesk', sans-serif; --fb: 'Inter', sans-serif; --fm: 'JetBrains Mono', monospace;
+  --r: 16px; --sh: 0 1px 2px rgba(11,11,15,.05), 0 12px 30px rgba(11,11,15,.06);
+
+  /* index.css sets a global dark theme on :root and body; this page must render
+   * light, including native controls (inputs, carets, scrollbars, focus rings). */
+  color-scheme: light;
+  background: var(--bg); color: var(--text); font-family: var(--fb); line-height: 1.6;
+  min-height: 100vh;
+}
+.intrinsica *, .intrinsica *::before, .intrinsica *::after { box-sizing: border-box; margin: 0; padding: 0; }
+.intrinsica section, .intrinsica #analyze { scroll-margin-top: 64px; }
+.intrinsica .container { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+.intrinsica .pos { color: var(--pos); } .intrinsica .neg { color: var(--neg); } .intrinsica .mute { color: var(--mute); }
+.intrinsica .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+.intrinsica a { color: inherit; text-decoration: none; }
+.intrinsica button { font-family: inherit; }
+.intrinsica button:focus-visible, .intrinsica a:focus-visible, .intrinsica .tagwrap:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* nav */
+.intrinsica .nav { position: sticky; top: 0; z-index: 50; background: rgba(253,252,249,.88);
+  backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
+.intrinsica .nav-in { max-width: 1120px; margin: 0 auto; padding: 14px 28px; display: flex; align-items: center; gap: 10px; }
+.intrinsica .logo { display: flex; align-items: center; gap: 11px; font: 700 23px var(--fh); letter-spacing: -.02em; }
+.intrinsica .logo .brandmark { display: block; flex: none; }
+.intrinsica .links { margin-left: auto; display: flex; align-items: center; gap: 24px; }
+.intrinsica .links a { font-size: 14px; color: var(--dim); cursor: pointer; }
+.intrinsica .links a:hover { color: var(--text); }
+.intrinsica .links .cta { font: 600 14px var(--fb); color: #fff; background: var(--accent); padding: 9px 18px; border-radius: 10px; }
+.intrinsica .links .cta:hover { color: #fff; background: var(--accent-d); }
+@media (max-width: 720px) { .intrinsica .links a:not(.cta):not(.back) { display: none; } .intrinsica .nav-in { padding: 12px 16px; } }
+
+/* hero — promise + analyzer left, result card right (hero rework 2026-09-27) */
+.intrinsica .hero { padding: 56px 0 48px; }
+.intrinsica .hero-in { max-width: 1160px; margin: 0 auto; padding: 0 24px; display: grid; grid-template-columns: 1fr 1fr;
+  gap: 48px; align-items: start; }
+/* Top-aligned, not centred: the card grows while a run is in flight (live strip) and
+ * would otherwise push the input down under the cursor. The padding re-balances the
+ * two columns at rest. */
+.intrinsica .hero-l { padding-top: 36px; }
+.intrinsica .hero-h1 { font: 700 48px/1.08 var(--fh); letter-spacing: -.03em; text-wrap: balance; }
+.intrinsica .hero-sub { color: var(--dim); font-size: 17px; margin-top: 16px; max-width: 46ch; }
+.intrinsica .an-micro { font-size: 13px; color: var(--mute); margin-top: 10px; }
+@media (max-width: 900px) {
+  .intrinsica .hero-l { padding-top: 0; }
+  .intrinsica .hero { padding: 32px 0 36px; }
+  .intrinsica .hero-in { grid-template-columns: 1fr; gap: 26px; padding: 0 16px; }
+  .intrinsica .hero-h1 { font-size: 34px; }
+  .intrinsica .hero-sub { font-size: 15.5px; }
+}
+.intrinsica .sub { color: var(--dim); font-size: 16px; margin-top: 13px; }
+.intrinsica .analyzer { max-width: none; margin: 26px 0 0; }
+.intrinsica .an-row { display: flex; gap: 10px; background: var(--bg); border: 1.5px solid var(--border2); border-radius: 16px;
+  padding: 8px; box-shadow: var(--sh); transition: .15s; }
+.intrinsica .an-row:focus-within { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft), var(--sh); }
+.intrinsica .an-field { flex: 1; display: flex; align-items: center; padding: 0 16px; }
+.intrinsica .an-field input { width: 100%; border: none; outline: none; background: transparent; font: 500 16px var(--fb);
+  color: var(--text); padding: 14px 0; }
+.intrinsica .an-field input::placeholder { color: #a7a7b2; font-family: var(--fm); font-size: 14px; }
+.intrinsica .an-btn { border: none; border-radius: 11px; background: var(--accent); color: #fff; font: 700 15px var(--fb);
+  padding: 0 26px; cursor: pointer; white-space: nowrap; }
+.intrinsica .an-btn:hover { background: var(--accent-d); }
+.intrinsica .an-btn:disabled { opacity: .6; cursor: not-allowed; }
+.intrinsica .chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-start; margin-top: 15px; }
+.intrinsica .chips .lbl { font-size: 13px; color: var(--mute); }
+.intrinsica .chip { font: 600 13px var(--fm); color: var(--dim); background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 999px; padding: 6px 13px; cursor: pointer; }
+.intrinsica .chip:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.intrinsica .chip:disabled { opacity: .6; cursor: not-allowed; }
+/* Implementation-only: validation text, the used-up demo wall, a server notice. */
+.intrinsica .an-error { color: var(--neg); font-size: 13px; margin-top: 10px; }
+.intrinsica .an-wall { color: var(--dim); font-size: 15px; background: var(--accent-soft); border: 1px solid var(--border2);
+  border-radius: 16px; padding: 16px 18px; }
+.intrinsica .an-wall a { color: var(--accent); font-weight: 600; }
+.intrinsica .an-wall a:hover { text-decoration: underline; }
+.intrinsica .notice { color: var(--neg); font-size: 14px; margin-top: 12px; }
+
+.intrinsica .section { padding: 58px 0; border-top: 1px solid var(--border); }
+.intrinsica .stage { background: var(--bg2); }
+.intrinsica .kicker { font: 600 12px var(--fb); letter-spacing: .16em; text-transform: uppercase; color: var(--accent); margin-bottom: 12px; }
+.intrinsica .stitle { font: 700 30px var(--fh); letter-spacing: -.02em; margin-bottom: 12px; }
+.intrinsica .ssub { color: var(--dim); max-width: 700px; font-size: 16px; }
+.intrinsica .ssub + .ssub { margin-top: 10px; }
+
+/* the live "Computing in parallel" strip, at the top of the result card while a run is in flight */
+.intrinsica .runbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 12px; padding: 11px 15px; margin-bottom: 14px; font-size: 12.5px; color: var(--dim); box-shadow: var(--sh); }
+.intrinsica .runbar .rp { display: flex; align-items: center; gap: 7px; }
+.intrinsica .runbar .mini { width: 70px; height: 5px; border-radius: 999px; background: var(--bg3); overflow: hidden; }
+.intrinsica .runbar .total { margin-left: auto; color: var(--mute); }
+
+.intrinsica .gap-pos { color: var(--pos); } .intrinsica .gap-near { color: var(--blue); }
+.intrinsica .gap-warn { color: var(--warn); } .intrinsica .gap-neg { color: var(--neg); } .intrinsica .gap-none { color: var(--mute); }
+@media (max-width: 760px) { .intrinsica table.cmp { display: block; overflow-x: auto; } }
+
+/* breakdown · slim tabs, full width */
+.intrinsica .bd .tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border-bottom: 1px solid var(--border2); margin-bottom: 4px; }
+.intrinsica .bd .tab { min-width: 0; background: none; border: none; border-radius: 0; padding: 10px 4px 9px; cursor: pointer;
+  font: 600 12.5px var(--fb); color: var(--mute); border-bottom: 2px solid transparent; margin-bottom: -1px; display: flex;
+  align-items: baseline; gap: 7px; white-space: nowrap; overflow: hidden; text-align: left; }
+.intrinsica .bd .tab b { font: 600 13px var(--fm); color: var(--dim); }
+.intrinsica .bd .tab.on { color: var(--text); border-bottom-color: var(--accent); }
+.intrinsica .bd .tab.on b { color: var(--accent); }
+.intrinsica .bd .sum { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; padding: 10px 2px 6px; font-size: 12.5px; color: var(--dim); }
+.intrinsica .bd .sum .big { font: 700 16px var(--fm); color: var(--text); }
+.intrinsica .bd .sum .pill { font: 600 11px var(--fb); padding: 2px 9px; border-radius: 999px; background: var(--bg3); color: var(--dim); }
+.intrinsica .bd .sum .pill.good { background: #ecfdf3; color: var(--pos); }
+.intrinsica .bd .sum .pill.warn { background: #fff7ed; color: var(--warn); }
+.intrinsica .bd .sum .hint { margin-left: auto; color: var(--mute); font-size: 11.5px; }
+.intrinsica .bd .help { border-bottom: 1px dotted var(--mute); cursor: help; }
+.intrinsica .bd .bd-missing, .intrinsica .bd .bd-note { font-size: 12.5px; color: var(--mute); padding: 10px 2px 0; }
+.intrinsica .bd .bd-note b { color: var(--text); }
+.intrinsica table.bt { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.intrinsica table.bt th { font: 600 9.5px var(--fb); letter-spacing: .08em; text-transform: uppercase; color: var(--mute); text-align: right;
+  padding: 8px 10px 6px; border-bottom: 1px solid var(--border2); }
+.intrinsica table.bt th:first-child { text-align: left; }
+.intrinsica table.bt td { padding: 5px 10px; border-bottom: 1px solid #f2f3f6; text-align: right; white-space: nowrap; }
+.intrinsica table.bt td:first-child { text-align: left; white-space: normal; color: var(--dim); padding-left: 22px; }
+.intrinsica table.bt td.d { font: 500 12px var(--fm); color: var(--text); }
+.intrinsica table.bt td.w { font: 500 11.5px var(--fm); color: var(--mute); width: 78px; }
+.intrinsica table.bt td.s { width: 130px; }
+.intrinsica table.bt td.mono { font: 600 12px var(--fm); }
+.intrinsica table.bt tr.sec td { background: var(--bg2); border-bottom: 1px solid var(--border); padding-top: 7px; padding-bottom: 7px; }
+.intrinsica table.bt tr.sec td:first-child { padding-left: 10px; color: var(--text); font: 700 12px var(--fb); }
+.intrinsica table.bt tr.sec td.s { font: 700 12.5px var(--fm); color: var(--accent); }
+.intrinsica table.bt tr.sec td.w { font: 700 11.5px var(--fm); color: var(--text); }
+.intrinsica table.bt tr.off td { color: var(--mute); }
+.intrinsica table.bt tr.off td.d { text-decoration: line-through; }
+.intrinsica table.bt tr.tot td { border-top: 2px solid var(--border2); border-bottom: none; padding-top: 8px; font-weight: 700; color: var(--text); }
+.intrinsica table.bt tr.tot td:first-child { padding-left: 10px; }
+.intrinsica table.bt tr.tot td.s { font: 700 13px var(--fm); color: var(--accent); }
+.intrinsica .sc { display: inline-flex; align-items: center; gap: 8px; justify-content: flex-end; }
+.intrinsica .sc span { font: 600 12px var(--fm); min-width: 40px; text-align: right; }
+.intrinsica .sc .bar { width: 46px; height: 4px; border-radius: 999px; background: var(--bg3); overflow: hidden; flex: none; }
+.intrinsica .sc .bar i { display: block; height: 100%; background: var(--accent); }
+.intrinsica .sc .bar.lo i { background: var(--warn); }
+.intrinsica .sc .bar.risk i { background: #94a3b8; }
+.intrinsica .sc .bar.risk.hi i { background: var(--warn); }
+.intrinsica .xn { font: 600 10px var(--fb); color: var(--warn); background: #fff7ed; border: 1px solid #f5d9a8; border-radius: 999px;
+  padding: 1px 7px; cursor: help; text-decoration: none; display: inline-block; margin-left: 4px; }
+.intrinsica .ladder { display: flex; gap: 4px; margin-top: 12px; }
+.intrinsica .ladder .step { flex: 1; text-align: center; font: 600 10px var(--fb); padding: 6px 2px; border-radius: 6px;
+  background: var(--bg2); border: 1px solid var(--border); color: var(--mute); }
+.intrinsica .ladder .step.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.intrinsica .applied { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border2); }
+.intrinsica .applied .al { font: 600 10.5px var(--fb); letter-spacing: .06em; text-transform: uppercase; color: var(--mute);
+  margin-bottom: 7px; display: flex; align-items: center; gap: 6px; }
+.intrinsica .applied .al .ci { color: var(--warn); }
+.intrinsica .cal-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.intrinsica .cal { font-size: 12px; color: var(--dim); background: var(--bg); border: 1px solid var(--border); border-radius: 999px; padding: 5px 11px; }
+.intrinsica .cal.trig { color: var(--warn); background: #fff7ed; border-color: #f5d9a8; cursor: help; }
+@media (max-width: 700px) {
+  .intrinsica .bd .tabs { grid-template-columns: repeat(2, 1fr); }
+  .intrinsica table.bt td.s { width: auto; }
+  .intrinsica .sc .bar { display: none; }
+  .intrinsica .bd .sum .hint { margin-left: 0; }
+}
+
+/* tooltips: hover in the mock; here also keyboard focus, since the wrapper is
+   focusable, so a tip is never mouse-only. */
+.intrinsica .tagwrap { position: relative; display: inline-flex; }
+.intrinsica .tagwrap .tip { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: #0b0b0f;
+  color: #fff; font: 500 11.5px var(--fb); line-height: 1.45; padding: 8px 11px; border-radius: 8px; width: 220px; text-align: center;
+  opacity: 0; pointer-events: none; transition: opacity .12s; z-index: 40; box-shadow: 0 8px 22px rgba(0,0,0,.28);
+  white-space: normal; text-transform: none; letter-spacing: 0; }
+.intrinsica .tagwrap:hover .tip, .intrinsica .tagwrap:focus .tip, .intrinsica .tagwrap:focus-within .tip { opacity: 1; }
+.intrinsica .tagwrap .tip::after { content: ""; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+  border: 5px solid transparent; border-top-color: #0b0b0f; }
+.intrinsica .cal-chips .tagwrap .tip { width: 270px; text-align: left; }
+.intrinsica table.bt .tagwrap .tip, .intrinsica .bd .sum .tagwrap .tip, .intrinsica .cal-chips .tagwrap .tip {
+  left: 0; transform: none; text-align: left; width: 270px; }
+.intrinsica table.bt .tagwrap .tip::after, .intrinsica .bd .sum .tagwrap .tip::after, .intrinsica .cal-chips .tagwrap .tip::after {
+  left: 16px; transform: none; }
+
+/* how it works (Option A) */
+.intrinsica .ovcard { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); padding: 26px 28px; box-shadow: var(--sh); }
+/* overview: the lead, then the judgment note as a second paragraph (variant D3, option B) */
+.intrinsica .ovcard .ssub b { color: var(--text); }
+.intrinsica .ovcard .ssub.judg { margin-top: 12px; }
+.intrinsica .ovtail { margin-top: 16px; font-size: 13px; color: var(--mute); }
+/* assessment tabs joined to the top of the detail panel (variant D3) */
+.intrinsica .mbox { margin-top: 18px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); box-shadow: var(--sh); overflow: hidden; }
+.intrinsica .mpairs { display: grid; grid-template-columns: 1fr 1fr; background: var(--bg2); border-bottom: 1px solid var(--border); }
+.intrinsica .mpl { font: 600 11px var(--fb); letter-spacing: .08em; text-transform: uppercase; color: var(--dim);
+  text-align: center; padding: 10px 8px 4px; }
+.intrinsica .mpair + .mpair { border-left: 1px solid var(--border); }
+.intrinsica .mcards { display: grid; grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 600px) { .intrinsica .mpairs { grid-template-columns: 1fr; } .intrinsica .mpair + .mpair { border-left: 0; border-top: 1px solid var(--border); } }
+.intrinsica .qband { background: var(--accent); padding: 64px 0; text-align: center; }
+.intrinsica .qband h2 { font: 700 34px/1.15 var(--fh); letter-spacing: -.02em; text-wrap: balance; color: #fff; }
+.intrinsica .qband p { color: #cfe3e1; font-size: 17px; max-width: 62ch; margin: 12px auto 0; }
+@media (max-width: 600px) { .intrinsica .qband h2 { font-size: 26px; } .intrinsica .qband p { font-size: 15px; } }
+.intrinsica .mcard { background: transparent; border: 0; border-bottom: 3px solid transparent; padding: 13px 10px; cursor: pointer;
+  transition: .12s; color: var(--text); }
+.intrinsica .mcard:hover { background: var(--bg3); }
+.intrinsica .mcard.on { background: var(--bg); border-bottom-color: var(--accent); }
+.intrinsica .mcard .cn { font: 700 14px var(--fh); display: flex; align-items: center; justify-content: center; gap: 7px; }
+.intrinsica .mcard .cn .dot { width: 9px; height: 9px; }
+.intrinsica .mdetail { background: var(--bg); padding: 24px 26px; }
+.intrinsica .mdetail .dh { font: 700 21px var(--fh); margin-bottom: 4px; display: flex; align-items: center; gap: 9px; }
+.intrinsica .mdetail .dh .dot { width: 11px; height: 11px; }
+.intrinsica .mdetail .scale { font: 600 11px var(--fm); color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 3px 9px; }
+.intrinsica .mdetail .d-q { font: 600 15px var(--fh); color: var(--text); margin-top: 4px; }
+.intrinsica .mdetail .d-what { font-size: 15px; color: var(--dim); margin-bottom: 6px; }
+.intrinsica .crows { margin-top: 14px; }
+.intrinsica .crow { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; }
+.intrinsica .crow .ch { width: 100%; display: grid; grid-template-columns: 1fr auto 18px; align-items: center; gap: 14px;
+  padding: 12px 14px; background: none; border: 0; border-radius: 9px; text-align: left; color: inherit; font: inherit; cursor: pointer; }
+.intrinsica .crow .ch:hover { background: var(--bg2); }
+.intrinsica .crow .nm { display: block; font: 700 14px var(--fh); }
+.intrinsica .crow .cq { display: block; font-size: 13px; color: var(--dim); margin-top: 2px; }
+.intrinsica .crow .cw { display: flex; align-items: center; gap: 8px; font: 600 12px var(--fm); color: var(--dim); white-space: nowrap; }
+.intrinsica .crow .cbar { width: 70px; height: 6px; border-radius: 3px; background: var(--bg3); overflow: hidden; }
+.intrinsica .crow .cbar i { display: block; height: 100%; }
+.intrinsica .crow .chev { color: var(--mute); transition: transform .15s; }
+.intrinsica .crow.open .chev { transform: rotate(180deg); color: var(--accent); }
+.intrinsica .crow .cb { padding: 12px 14px 14px; border-top: 1px dashed var(--border); }
+.intrinsica .chips { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.intrinsica .chips li { font-size: 12px; background: var(--bg2); border: 1px solid var(--border); border-radius: 999px; padding: 3px 9px; }
+.intrinsica .chl { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: var(--dim); }
+.intrinsica .chl b { font-weight: 700; } .intrinsica .chl .up b { color: var(--pos); } .intrinsica .chl .dn b { color: var(--warn); }
+.intrinsica .bands { list-style: none; display: flex; gap: 4px; margin-top: 14px; font: 600 11.5px var(--fb); }
+.intrinsica .bands li { flex: 1; text-align: center; padding: 6px 4px; border-radius: 6px;
+  background: color-mix(in srgb, var(--c) var(--a), var(--bg)); }
+.intrinsica .note { margin-top: 8px; font-size: 12.5px; color: var(--mute); }
+@media (max-width: 600px) { .intrinsica .bands { flex-direction: column; } .intrinsica .crow .cbar { display: none; } }
+.intrinsica .cal-wrap { margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--border2); }
+.intrinsica .cal-title { font: 600 11px var(--fb); letter-spacing: .06em; text-transform: uppercase; color: var(--warn); margin-bottom: 10px; }
+.intrinsica .arow { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; position: relative; }
+.intrinsica .arow .ah { border-radius: 9px; display: flex; align-items: center; gap: 10px; padding: 12px 14px; cursor: pointer;
+  width: 100%; background: none; border: 0; text-align: left; }
+.intrinsica .arow .ah:hover { background: var(--bg3); }
+.intrinsica .arow .ah .nm { display: block; font: 700 14px var(--fh); }
+.intrinsica .arow .ah .sm { display: block; font-size: 12.5px; color: var(--dim); }
+.intrinsica .arow .ah .chev { margin-left: auto; color: var(--mute); transition: transform .15s; }
+.intrinsica .arow.open .chev { transform: rotate(180deg); color: var(--accent); }
+.intrinsica .arow.open .ah { border-radius: 9px 9px 0 0; }
+.intrinsica .arow .ab { border-radius: 0 0 9px 9px; padding: 0 14px 14px; border-top: 1px solid var(--border); }
+.intrinsica .arow .kv { margin-top: 12px; }
+.intrinsica .arow .kv .k { font: 600 10px var(--fb); letter-spacing: .06em; text-transform: uppercase; color: var(--mute); margin-bottom: 3px; }
+.intrinsica .arow .kv .k.when { color: var(--accent); }
+.intrinsica .arow .kv p { font-size: 13.5px; color: var(--dim); }
+.intrinsica .arow .ex { margin-top: 10px; font-size: 12px; color: var(--mute); background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 7px 11px; }
+.intrinsica .arow .ex b { color: var(--dim); }
+.intrinsica .arow .tags { margin-top: 11px; display: flex; gap: 6px; flex-wrap: wrap; }
+.intrinsica .arow .tags .tagwrap .tip { left: 0; transform: none; text-align: left; }
+.intrinsica .arow .tags .tagwrap .tip::after { left: 16px; transform: none; }
+.intrinsica .arow .tags .tagwrap:nth-child(n+3) .tip { left: auto; right: 0; }
+.intrinsica .arow .tags .tagwrap:nth-child(n+3) .tip::after { left: auto; right: 16px; }
+.intrinsica .tg { font: 600 10px var(--fb); border-radius: 999px; padding: 3px 9px; cursor: help; border: 1px solid transparent; }
+.intrinsica .tg.cond { color: var(--accent); background: var(--accent-soft); }
+.intrinsica .tg.guard { color: var(--pos); background: #ecfdf3; }
+.intrinsica .tg.live { color: var(--dim); background: var(--bg3); }
+
+/* why + workflow */
+.intrinsica .diff-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 8px; }
+.intrinsica .diff { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); padding: 20px; box-shadow: var(--sh); }
+.intrinsica .diff .ic { font-size: 20px; margin-bottom: 10px; }
+.intrinsica .diff h4 { font: 700 15px var(--fh); margin-bottom: 6px; }
+.intrinsica .diff p { font-size: 13px; color: var(--dim); }
+.intrinsica .diff.scale { border-top: 3px solid var(--accent); }
+.intrinsica .why-row { margin-top: 22px; }
+.intrinsica .why-lbl { font: 600 11px var(--fb); letter-spacing: .1em; text-transform: uppercase; color: var(--mute); margin-bottom: 10px;
+  display: flex; align-items: center; gap: 8px; }
+.intrinsica .workflow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 8px; }
+.intrinsica .wf { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); padding: 18px; box-shadow: var(--sh);
+  display: flex; flex-direction: column; }
+.intrinsica .wf .step { font: 600 11px var(--fb); color: var(--mute); }
+.intrinsica .wf h4 { font: 700 16px var(--fh); margin: 6px 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.intrinsica .wf p { font-size: 13px; color: var(--dim); }
+@media (max-width: 980px) { .intrinsica .workflow { grid-template-columns: repeat(2, 1fr); } }
+
+/* pricing */
+.intrinsica .billing-toggle { display: inline-flex; gap: 4px; background: var(--bg); border: 1px solid var(--border2); border-radius: 999px;
+  padding: 4px; margin-top: 16px; box-shadow: var(--sh); }
+.intrinsica .billing-toggle button { font: 600 13px var(--fb); border: none; background: transparent; color: var(--dim); padding: 8px 18px;
+  border-radius: 999px; cursor: pointer; }
+.intrinsica .billing-toggle button.on { background: var(--accent); color: #fff; }
+.intrinsica .save { font-size: 11px; opacity: .85; margin-left: 4px; }
+.intrinsica .price-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 24px; align-items: stretch; }
+.intrinsica .price-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); padding: 24px; box-shadow: var(--sh);
+  display: flex; flex-direction: column; }
+.intrinsica .price-card.featured { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft), var(--sh); }
+.intrinsica .pc-badge { font: 700 10px var(--fb); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+.intrinsica .pc-badge.free { color: var(--accent); }
+.intrinsica .price-card h3 { font: 700 18px var(--fh); }
+.intrinsica .pc-for { color: var(--mute); font-size: 13px; margin-bottom: 16px; }
+.intrinsica .price { font: 700 34px var(--fm); letter-spacing: -.02em; }
+.intrinsica .price .amt { font: inherit; }
+.intrinsica .price .per { font-size: 14px; color: var(--mute); font-weight: 500; }
+.intrinsica .price-alt { font-size: 13px; color: var(--mute); margin-top: 4px; }
+.intrinsica .feature-list { list-style: none; margin: 18px 0; display: flex; flex-direction: column; gap: 9px; }
+.intrinsica .feature-list li { font-size: 14px; color: var(--dim); display: flex; gap: 9px; }
+.intrinsica .feature-list .fl-check { color: var(--accent); flex: none; margin-top: 4px; }
+.intrinsica .btn-plan { width: 100%; height: 48px; margin-top: auto; border-radius: 11px; border: 1px solid var(--accent); background: transparent;
+  color: var(--accent); font: 700 15px var(--fb); cursor: pointer; }
+.intrinsica .btn-plan:hover { background: var(--accent-soft); }
+.intrinsica .price-card.featured .btn-plan { background: var(--accent); color: #fff; border: none; }
+.intrinsica .price-card.featured .btn-plan:hover { background: var(--accent-d); }
+/* The three cards share one set of rows (subgrid), so a title or for-line that wraps in
+ * one card pushes the same row down in all three: for-lines, prices, features and
+ * buttons stay level across the cards (user decision 2026-09-27). Seven rows = badge,
+ * title, for-line, price, price detail, features, button. Stacked on a phone, each card
+ * is its own block again. */
+@supports (grid-template-rows: subgrid) {
+  .intrinsica .price-grid { row-gap: 0; }
+  .intrinsica .price-card { display: grid; grid-row: span 7; grid-template-rows: subgrid; align-content: start; }
+  @media (max-width: 860px) {
+    .intrinsica .price-grid { row-gap: 16px; }
+    .intrinsica .price-card { display: flex; grid-row: auto; }
+  }
+}
+.intrinsica .compare { margin-top: 44px; border-top: 1px solid var(--border); padding-top: 36px; }
+.intrinsica .compare-h { font: 700 22px var(--fh); text-align: center; margin-bottom: 6px; }
+.intrinsica .compare-sub { text-align: center; color: var(--dim); font-size: 14px; margin-bottom: 24px; }
+.intrinsica table.cmp-plans { width: 100%; border-collapse: collapse; background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--r); overflow: hidden; box-shadow: var(--sh); font-size: 13.5px; }
+.intrinsica table.cmp-plans th, .intrinsica table.cmp-plans td { padding: 12px 14px; border-bottom: 1px solid var(--border); text-align: center; vertical-align: middle; }
+.intrinsica table.cmp-plans thead th { font: 700 13px var(--fh); background: var(--bg2); color: var(--text); }
+.intrinsica table.cmp-plans thead th.u { color: var(--accent); }
+/* The feature name is a `th scope="row"` for screen readers, and keeps the mock's
+   plain first-column look. */
+.intrinsica table.cmp-plans th:first-child, .intrinsica table.cmp-plans td:first-child { text-align: left; color: var(--dim); }
+.intrinsica table.cmp-plans tbody th { font-weight: 400; }
+.intrinsica table.cmp-plans tbody tr:last-child td, .intrinsica table.cmp-plans tbody tr:last-child th { border-bottom: none; }
+.intrinsica table.cmp-plans td.no { color: var(--mute); }
+.intrinsica table.cmp-plans td.on { color: var(--accent); font-weight: 700; }
+.intrinsica table.cmp-plans .sub { display: block; font-size: 11.5px; color: var(--mute); font-weight: 400; margin-top: 2px; }
+@media (max-width: 760px) { .intrinsica .cmp-wrap { overflow-x: auto; }
+  .intrinsica table.cmp-plans { min-width: 580px; } }
+
+/* checkout */
+.intrinsica .links a.back { cursor: pointer; }
+.intrinsica .checkout { max-width: 520px; margin: 0 auto; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r);
+  padding: 28px; box-shadow: var(--sh); }
+.intrinsica .co-line { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px dashed var(--border); font-size: 15px; }
+.intrinsica .co-line .lab { color: var(--dim); }
+.intrinsica .co-line .val { font-weight: 600; }
+.intrinsica .co-total { display: flex; justify-content: space-between; padding-top: 14px; font-size: 18px; font-weight: 700; }
+.intrinsica .co-total .val { color: var(--accent); font-family: var(--fm); }
+.intrinsica .btn-buy { display: block; width: 100%; height: 54px; line-height: 54px; margin-top: 18px; border: none; border-radius: 12px;
+  background: var(--accent); color: #fff; font: 700 16px var(--fb); cursor: pointer; text-align: center;
+  box-shadow: 0 6px 16px rgba(15,82,87,.28); }
+.intrinsica .btn-buy:hover { background: var(--accent-d); }
+.intrinsica .co-fine { margin-top: 12px; font-size: 12px; color: var(--mute); text-align: center; }
+.intrinsica .disclosure { margin-top: 20px; padding: 22px; border-radius: 12px; border: 1px solid #bbf7d0; background: #f0fdf4; }
+.intrinsica .disclosure h2 { font: 700 17px var(--fh); color: var(--pos); margin-bottom: 8px; }
+.intrinsica .disclosure h2 { display: flex; align-items: center; gap: 8px; }
+.intrinsica .disclosure .co-check { flex: none; }
+.intrinsica .disclosure p { font-size: 14px; color: var(--dim); }
+.intrinsica .disclosure a { color: var(--accent); font-weight: 600; }
+.intrinsica .disclosure .email { margin-top: 14px; display: flex; gap: 8px; }
+.intrinsica .disclosure .email input { flex: 1; min-width: 0; height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--border2);
+  background: var(--bg); font-size: 14px; font-family: var(--fb); color: var(--text); }
+.intrinsica .disclosure .email input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.intrinsica .disclosure .email button { height: 44px; padding: 0 18px; border: none; border-radius: 10px; background: var(--accent); color: #fff;
+  font-weight: 700; cursor: pointer; }
+.intrinsica .opt { display: block; font-size: 12px; color: var(--mute); margin-top: 8px; }
+.intrinsica .opt.ok { color: var(--pos); }
+/* Implementation-only: the state for a link that names no real plan. */
+.intrinsica .co-none { font-size: 14px; color: var(--dim); }
+
+/* footer */
+.intrinsica .footer { border-top: 1px solid var(--border); padding: 40px 0 64px; }
+.intrinsica .footer .legal { font-size: 12px; color: var(--mute); max-width: 720px; }
+.intrinsica .footer .legal b { color: var(--dim); }
+.intrinsica .footer .sec { margin-top: 12px; font-size: 13px; color: var(--dim); }
+
+@media (max-width: 860px) {
+  .intrinsica .diff-grid, .intrinsica .price-grid { grid-template-columns: 1fr; }
+  .intrinsica .workflow { grid-template-columns: repeat(2, 1fr); }
+  .intrinsica .stitle { font-size: 24px; }
+}
+@media (max-width: 560px) {
+  .intrinsica .container { padding: 0 16px; }
+  .intrinsica .an-row { flex-direction: column; }
+  .intrinsica .an-btn { height: 46px; }
+  .intrinsica .workflow { grid-template-columns: 1fr; }
+  .intrinsica .disclosure .email { flex-direction: column; }
+  .intrinsica .checkout { padding: 20px 16px; }
+}
+
+/* Loading state (variant E, user decision 2026-09-26): the Analyze button spins and
+ * counts, a multi-ticker run shows the live "Computing in parallel" strip, and the
+ * previous result dims until the new one lands. */
+.intrinsica .an-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 150px; }
+.intrinsica .an-btn .spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(255,255,255,.45);
+  border-top-color: #fff; animation: in-spin .7s linear infinite; flex: none; }
+@keyframes in-spin { to { transform: rotate(360deg); } }
+.intrinsica .runbar .wait { color: var(--accent); }
+.intrinsica .runbar .total { font-family: var(--fm); }
+.intrinsica .runbar .mini.ind { position: relative; background: #dfe6df; }
+.intrinsica .runbar .mini.ind > span { position: absolute; left: 0; top: 0; width: 40%; background: var(--accent);
+  border-radius: 999px; animation: in-sweep 1.1s ease-in-out infinite; }
+@keyframes in-sweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+.intrinsica .stale { opacity: .45; transition: opacity .2s; }
+@media (prefers-reduced-motion: reduce) {
+  .intrinsica .an-btn .spin, .intrinsica .runbar .mini.ind > span { animation: none; }
+  .intrinsica .runbar .mini.ind > span { width: 50%; }
+}
+
+/* Watchlist star + toast (user decision 2026-09-26, variant E). The star sits beside
+ * the ticker in the result card (its rule lives with the card); no lock
+ * icon, on purpose. The toast is fixed, so the layout never moves; on a phone it spans
+ * the width above the home indicator, elsewhere it is a centred card. Its link and
+ * close button are 44px tall touch targets. */
+.intrinsica .wtoast { position: fixed; z-index: 60; left: 50%; transform: translateX(-50%);
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: min(440px, calc(100% - 32px));
+  display: flex; align-items: center; gap: 6px 12px; padding: 8px 6px 8px 16px; border-radius: 12px;
+  background: var(--text); color: #fff; box-shadow: 0 10px 30px rgba(11,11,15,.28); font-size: 13.5px; line-height: 1.45;
+  animation: in-toast .22s ease-out; }
+.intrinsica .wtoast p { flex: 1; }
+.intrinsica .wtoast a { color: #9fd3cf; font-weight: 700; white-space: nowrap; min-height: 44px; display: inline-flex; align-items: center; }
+.intrinsica .wtoast .x { background: none; border: 0; color: #b8b8c4; cursor: pointer; width: 44px; height: 44px; flex: none;
+  font-size: 15px; border-radius: 8px; }
+.intrinsica .wtoast .x:hover { color: #fff; background: rgba(255,255,255,.08); }
+@keyframes in-toast { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@media (max-width: 480px) {
+  .intrinsica .wtoast { flex-wrap: wrap; align-items: flex-start; }
+  .intrinsica .wtoast p { flex-basis: calc(100% - 56px); padding-top: 4px; }
+  .intrinsica .wtoast .x { order: 1; margin-top: -4px; }
+  .intrinsica .wtoast a { order: 2; }
+}
+@media (prefers-reduced-motion: reduce) { .intrinsica .wtoast { animation: none; } }
+
+/* Result card — the hero's right column (hero rework 2026-09-27). One ticker: four
+ * tiles; two or three: a compact comparison. Mock: .superpowers/brainstorm/hero/. */
+.intrinsica .rc { background: var(--bg); border: 1px solid var(--border2); border-radius: 18px; padding: 18px 20px 14px;
+  box-shadow: 0 1px 2px rgba(11,11,15,.05), 0 24px 60px rgba(11,11,15,.10); text-align: left; }
+.intrinsica .rc .runbar { margin: 0 0 12px; box-shadow: none; }
+.intrinsica .rc-empty { min-height: 280px; display: grid; place-items: center; color: var(--mute); font-size: 14px; text-align: center; }
+.intrinsica .rc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+  padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.intrinsica .rc-head .tk { font: 700 20px var(--fh); }
+.intrinsica .rc-head .co { color: var(--dim); font-size: 14px; }
+.intrinsica .rc-head .px { font: 500 13px var(--fm); color: var(--mute); margin-top: 2px; }
+.intrinsica .rc-pill { display: inline-flex; align-items: center; gap: 7px; font: 600 11.5px var(--fb); border-radius: 99px;
+  padding: 5px 10px; white-space: nowrap; }
+.intrinsica .rc-pill.live { color: var(--pos); background: #ecfdf3; }
+.intrinsica .rc-pill.live i { width: 7px; height: 7px; border-radius: 50%; background: var(--pos); animation: rc-pulse 1.6s ease-in-out infinite; }
+.intrinsica .rc-pill.yours { color: var(--accent); background: var(--accent-soft); }
+@keyframes rc-pulse { 50% { opacity: .3; } }
+.intrinsica .rc .watch { background: none; border: 1px solid var(--border2); cursor: pointer; color: var(--dim); font: 400 14px var(--fb);
+  line-height: 1; padding: 4px 7px; border-radius: 7px; vertical-align: 2px; }
+.intrinsica .rc .watch:hover, .intrinsica .rc .watch:focus-visible { color: var(--warn); background: var(--bg3); }
+.intrinsica .rc .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+.intrinsica .rc-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); margin: 12px 0;
+  border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.intrinsica .rc-tile { background: var(--bg); border: 0; padding: 13px 15px; text-align: left; cursor: pointer; display: flex;
+  flex-direction: column; gap: 0; font: inherit; color: inherit; position: relative; }
+.intrinsica .rc-tile .tile-chev { position: absolute; right: 12px; top: 12px; color: var(--mute); }
+.intrinsica .rc-tile:hover { background: var(--bg2); }
+/* Inset: the tile grid clips its edges and each tile paints over its neighbour's
+ * outline, so the default 2px-outside focus ring would be hidden (final review). */
+.intrinsica .rc-tile:focus-visible { outline-offset: -3px; }
+.intrinsica .rc-tile.on { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
+.intrinsica .rc-tile.on::after { color: var(--accent); }
+.intrinsica .rc-tile .n { font: 600 13px var(--fb); display: flex; align-items: center; }
+.intrinsica .rc-tile .v { font: 700 32px/1.1 var(--fh); letter-spacing: -.02em; margin-top: 6px; }
+.intrinsica .rc-tile .v small { font: 500 13px var(--fm); color: var(--mute); margin-left: 3px; }
+.intrinsica .rc-tile .c { font-size: 12.5px; color: var(--dim); margin-top: 8px; }
+.intrinsica .rc-g { display: block; height: 6px; background: var(--bg3); border-radius: 9px; margin-top: 10px; overflow: hidden; }
+.intrinsica .rc-g b, .intrinsica .rc-pair .t b { display: block; height: 100%; border-radius: 9px; }
+.intrinsica .rc-pair { display: grid; gap: 4px; margin-top: 10px; }
+.intrinsica .rc-pair .r { display: grid; grid-template-columns: 58px 1fr 40px; align-items: center; gap: 8px; font-size: 11px; color: var(--mute); }
+.intrinsica .rc-pair .t { height: 6px; background: var(--bg3); border-radius: 9px; overflow: hidden; }
+.intrinsica .rc-pair em { font: 500 11px var(--fm); font-style: normal; color: var(--dim); text-align: right; }
+.intrinsica .rc-foot { font-size: 12.5px; color: var(--mute); padding-top: 10px; border-top: 1px solid var(--border); }
+.intrinsica .rc-cmp { margin: 8px 0 10px; }
+.intrinsica .rc-cols, .intrinsica .rc-row { display: grid; grid-template-columns: 1.35fr repeat(4, 1fr); gap: 8px; align-items: start; }
+.intrinsica .rc-cols { font: 600 11.5px var(--fb); color: var(--dim); padding: 6px 8px; }
+.intrinsica .rc-row { padding: 11px 8px; border-top: 1px solid var(--border); cursor: pointer; }
+.intrinsica .rc-row:hover { background: var(--bg2); }
+.intrinsica .rc-row.on { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.intrinsica .rc-id { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.intrinsica .rc-open { background: none; border: 0; padding: 0; font: 700 15px var(--fh); color: inherit; cursor: pointer; }
+.intrinsica .rc-id .nm { flex-basis: 100%; font-size: 11.5px; color: var(--mute); }
+.intrinsica .rc-id .chev { display: none; }
+.intrinsica .rc-cell b { display: block; font: 700 18px var(--fh); }
+.intrinsica .rc-cell .s { display: block; font-size: 11.5px; color: var(--dim); margin-top: 2px; }
+.intrinsica .rc-cell.best b { color: var(--accent); }
+@media (max-width: 600px) {
+  .intrinsica .rc { padding: 16px 14px 12px; }
+  .intrinsica .rc-tile { padding: 12px; }
+  .intrinsica .rc-tile .v { font-size: 28px; }
+  .intrinsica .rc-pair .r { grid-template-columns: 40px 1fr 32px; gap: 5px; font-size: 10px; }
+  .intrinsica .rc-cols { grid-template-columns: repeat(4, 1fr); font-size: 11px; }
+  .intrinsica .rc-cols > span:first-child { display: none; }
+  .intrinsica .rc-row { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .intrinsica .rc-id { grid-column: 1 / -1; }
+  .intrinsica .rc-id .nm { flex-basis: auto; }
+  .intrinsica .rc-id .chev { display: inline; margin-left: auto; color: var(--mute); }
+  .intrinsica .rc-cell { background: var(--bg2); border-radius: 8px; padding: 7px 8px; }
+  .intrinsica .rc-cell b { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { .intrinsica .rc-pill.live i { animation: none; } }
+
+/* Breakdown dock — opens full-width under the hero (hero rework 2026-09-27). */
+.intrinsica .bk-dock { background: var(--bg2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.intrinsica .bk-in { max-width: 1160px; margin: 0 auto; padding: 22px 24px 26px; }
+.intrinsica .bk-head { display: flex; align-items: baseline; gap: 8px; font-size: 15px; color: var(--dim); margin-bottom: 12px; }
+.intrinsica .bk-head b { font: 700 18px var(--fh); color: var(--text); }
+.intrinsica .bk-x { margin-left: auto; background: none; border: 1px solid var(--border2); border-radius: 8px; padding: 6px 12px;
+  font: 600 13px var(--fb); color: var(--dim); cursor: pointer; min-height: 36px; }
+.intrinsica .bk-x:hover { color: var(--text); background: var(--bg); }
+.intrinsica .bk-dock .bd { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 6px 16px 18px; }
+@media (max-width: 600px) { .intrinsica .bk-in { padding: 18px 16px 22px; } }
+/* The % vs price colour must beat the card's own caption colour (spec 5.2). */
+.intrinsica .rc .gap-pos { color: var(--pos); } .intrinsica .rc .gap-near { color: var(--blue); }
+.intrinsica .rc .gap-warn { color: var(--warn); } .intrinsica .rc .gap-neg { color: var(--neg); }
+@media (max-width: 600px) {
+  .intrinsica .rc-head { flex-wrap: wrap; }
+  .intrinsica .rc-head > div { flex: 1 1 100%; }
+}
+.intrinsica .rc .watch svg, .intrinsica .wtoast .x svg { display: block; }
+.intrinsica .rc .watch { display: inline-grid; place-items: center; }
+.intrinsica .bk-x svg { display: inline-block; vertical-align: -2px; }
+
+/* Spec §4 Motion. `.rv` is only ever added by reveal.ts, so without the script
+ * nothing is hidden. */
+.intrinsica .rv { opacity: 0; transform: translateY(32px);
+  transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); }
+.intrinsica .rv.in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .intrinsica .rv { opacity: 1; transform: none; transition: none; } }

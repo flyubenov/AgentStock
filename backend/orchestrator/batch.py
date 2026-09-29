@@ -29,11 +29,15 @@ def _pacing_delay() -> float:
     return PACING_SECONDS * (PACING_PRESSURE_MULT if rate_limit_pressure() else 1.0)
 
 
-async def _run_one(ticker: str) -> dict:
+async def _run_one(ticker: str, persist: bool = True) -> dict:
     """Run all three pipelines for one ticker; upsert FV first (so the Database row
     exists for the Q/R mirrors), then the screener, then risk-reward. No pipeline's
     failure aborts another — each is gathered with return_exceptions and its write is
-    independently guarded."""
+    independently guarded.
+
+    persist=False runs the same three engines and returns the same shape but writes
+    nothing to Sheets — the public landing page's demo runs are read-only toward the
+    analyst app's Database (see _run_one_readonly)."""
     fv_task = asyncio.create_task(engine_run(ticker))
     sc_task = asyncio.create_task(screener_run(ticker))
     rr_task = asyncio.create_task(risk_reward_run(ticker))
@@ -59,7 +63,7 @@ async def _run_one(ticker: str) -> dict:
         # skipped the upsert, leaving Sheets holding the very fair value the guard had
         # just rejected — ASTS kept serving $1.15 after the engine declined it, and no
         # amount of recalculating could clear it. A stale row is worse than a blank one.
-        if fv_res.status != "failed" or fv_res.current_price is not None:
+        if persist and (fv_res.status != "failed" or fv_res.current_price is not None):
             try:
                 await upsert_result(fv_res)
             except Exception as e:
@@ -70,7 +74,7 @@ async def _run_one(ticker: str) -> dict:
         errors.append(f"screener: {sc_res}")
     else:
         sc_dump = sc_res.model_dump()
-        if sc_res.status != "failed":
+        if persist and sc_res.status != "failed":
             try:
                 await upsert_screener_result(sc_res)
             except Exception as e:
@@ -85,7 +89,7 @@ async def _run_one(ticker: str) -> dict:
         errors.append(f"risk_reward: {rr_res}")
     else:
         rr_dump = rr_res.model_dump()
-        if rr_res.status == "completed":
+        if persist and rr_res.status == "completed":
             try:
                 await upsert_risk_reward_result(rr_res)
             except Exception as e:
@@ -106,6 +110,14 @@ async def _run_one_guarded(ticker: str) -> dict:
     On timeout asyncio raises TimeoutError, which the worker turns into a
     ticker_error — the ticker fails fast and the run keeps going."""
     return await asyncio.wait_for(_run_one(ticker), PER_TICKER_TIMEOUT)
+
+
+async def _run_one_readonly(ticker: str) -> dict:
+    """_run_one_guarded for the public landing page: the same engines and the same
+    timeout, but NOTHING is written to Sheets. An anonymous visitor must never be able
+    to create or overwrite rows in the analyst app's Database, and a landing run has no
+    use for the write anyway — the landing cache holds what it needs."""
+    return await asyncio.wait_for(_run_one(ticker, persist=False), PER_TICKER_TIMEOUT)
 
 
 async def run_batch(tickers: list[str], job_id: str,

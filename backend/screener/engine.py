@@ -2,7 +2,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from screener.data import fetch_screener_inputs
 from screener.metrics import compute_metrics
-from screener.scoring import score
+from screener.scoring import score, section_metric_details
 from moat.scoring import score as moat_score
 from screener.models import ScreenerResult
 
@@ -23,7 +23,10 @@ async def run(ticker: str) -> ScreenerResult:
             ticker=t, company_name=inp.info.get("shortName") or inp.info.get("longName"),
             last_evaluated=now, sector=metrics.sector, industry=industry,
             sector_profile=profile,
-            section_scores=sections, metrics=metrics.model_dump(),
+            section_scores=sections,
+            metric_details={k: [d.model_dump() for d in v]
+                            for k, v in section_metric_details(metrics, profile).items()},
+            metrics=metrics.model_dump(),
             score_breakdown=breakdown, moat_score=moat, moat_breakdown=moat_breakdown,
             status="failed", errors=["insufficient data for a quality score"],
         )
@@ -31,7 +34,10 @@ async def run(ticker: str) -> ScreenerResult:
         ticker=t, company_name=inp.info.get("shortName") or inp.info.get("longName"),
         last_evaluated=now, quality_score=quality, sector=metrics.sector,
         industry=industry,
-        sector_profile=profile, section_scores=sections, metrics=metrics.model_dump(),
+        sector_profile=profile, section_scores=sections,
+        metric_details={k: [d.model_dump() for d in v]
+                        for k, v in section_metric_details(metrics, profile).items()},
+        metrics=metrics.model_dump(),
         score_breakdown=breakdown, moat_score=moat, moat_breakdown=moat_breakdown,
         status="completed", errors=[],
     )

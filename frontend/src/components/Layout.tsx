@@ -9,7 +9,7 @@ export default function Layout({ children }: LayoutProps) {
   const { pathname } = useLocation()
 
   const navItems = [
-    { href: '/', label: 'Analyse' },
+    { href: '/app', label: 'Analyse' },
     { href: '/database', label: 'Database' },
   ]
 
@@ -18,8 +18,8 @@ export default function Layout({ children }: LayoutProps) {
       <header className="border-b border-[#1e1e2a] bg-[#111118]">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-blue-400 font-bold text-lg tracking-wider">STOCK EVALUATOR</span>
-            <span className="text-slate-600 text-xs">AI-Powered Analysis</span>
+            <span className="text-blue-400 font-bold text-lg tracking-wider">INTRINSICA</span>
+            <span className="text-slate-600 text-xs">Fundamental Stock Analysis</span>
           </div>
           <nav className="flex gap-6">
             {navItems.map(item => (

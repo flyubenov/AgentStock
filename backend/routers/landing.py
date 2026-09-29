@@ -1,0 +1,63 @@
+from __future__ import annotations
+import asyncio
+from fastapi import APIRouter
+from pydantic import BaseModel
+
+from services.yahoo import validate_ticker
+from landing.cache import get_analysis
+from landing.contract import build_ticker_payload
+
+router = APIRouter()
+
+# The demo allowance (spec section 10). It is also the Free plan's per-run cap.
+MAX_TICKERS = 3
+
+
+class LandingAnalyzeRequest(BaseModel):
+    tickers: list[str] = []
+
+
+@router.post("/landing/analyze")
+async def analyze(req: LandingAnalyzeRequest):
+    seen: list[str] = []
+    for raw in req.tickers:
+        t = raw.strip().upper()
+        if t and t not in seen:
+            seen.append(t)
+
+    if not seen:
+        return {"results": [], "invalid": [], "error": "Enter at least one ticker."}
+    if len(seen) > MAX_TICKERS:
+        # Checked before validation and before any engine run.
+        return {"results": [], "invalid": [],
+                "error": f"Up to {MAX_TICKERS} tickers per analysis run."}
+
+    checks = await asyncio.gather(*[validate_ticker(t) for t in seen])
+    valid = [t for t, ok in zip(seen, checks) if ok]
+    invalid = [t for t, ok in zip(seen, checks) if not ok]
+    if not valid:
+        return {"results": [], "invalid": invalid, "error": None}
+
+    # get_analysis (backend/landing/cache.py) serves fundamentals from a 3-day cache
+    # and price/Reward-Risk from a shorter one (LANDING_FAST_TTL). On this public,
+    # unauthenticated endpoint a hung yfinance call must never hold a worker open
+    # indefinitely, on either path: a cold/expired slow fill still goes through
+    # _run_one_readonly's own asyncio.wait_for, and cache.py wraps its own fast-layer
+    # quote refresh in a short asyncio.wait_for of its own. Either one timing out
+    # raises, which the exception branch below degrades to a per-ticker error instead
+    # of wedging the whole request.
+    runs = await asyncio.gather(*[get_analysis(t) for t in valid], return_exceptions=True)
+
+    results = []
+    for ticker, run in zip(valid, runs):
+        if isinstance(run, Exception):
+            # One dead pipeline must not sink the whole grid. Tag with a prefix
+            # build_ticker_payload's error mapping does not recognize so it falls
+            # back to the generic label — the exception text (`run`) itself must
+            # never reach the payload (contract.py's _public_error strips it).
+            results.append(build_ticker_payload(
+                {"ticker": ticker, "errors": [f"landing: {run}"], "status": "failed"}))
+        else:
+            results.append(build_ticker_payload(run))
+
+    return {"results": results, "invalid": invalid, "error": None}

@@ -1,5 +1,5 @@
 from __future__ import annotations
-from screener.models import ScreenerMetrics
+from screener.models import MetricDetail, ScreenerMetrics
 
 
 def score_high(value: float | None, bands: list[tuple[float, float]], below: float) -> float | None:
@@ -233,40 +233,67 @@ def _acq_leverage_distorted(m: ScreenerMetrics) -> bool:
             and m.net_debt_ebitda is not None and m.net_debt_ebitda > 0)
 
 
-def _section_iii(m: ScreenerMetrics, profile: str, heavy_capex: bool = False,
-                 exclude_acq_leverage: bool = False) -> float | None:
+def _detail(label: str, raw: float | None, score: float | None,
+            excluded_by: str | None = None) -> MetricDetail:
+    """A metric excluded by a calibration carries no score, so `_mean` skips it and the
+    surviving metrics in its section re-weight automatically."""
+    if excluded_by:
+        return MetricDetail(label=label, raw=raw, score=None,
+                            excluded=True, excluded_by=excluded_by)
+    return MetricDetail(label=label, raw=raw, score=score)
+
+
+def _section_iii_details(m: ScreenerMetrics, profile: str, heavy_capex: bool = False,
+                         exclude_acq_leverage: bool = False) -> list[MetricDetail]:
     p = PROFILES[profile]
+    is_fin = profile == "FINANCIALS"
     # leverage_score reads a non-positive ratio as net cash (10/10). That inference only
     # holds when the *numerator* is negative. A negative ratio produced by a negative
     # *denominator* means the opposite: real debt with no EBITDA / FCF to service it
     # (TEM: +$635M net debt over -$185M EBITDA = -3.43, scored 10/10). The ratio carries
     # no leverage information there, so leave it unscored. A None denominator is
     # unknown, not negative — keep the existing behaviour.
-    nde = (leverage_score(m.net_debt_ebitda, p["P"])
-           if (m.ebitda is None or m.ebitda > 0) else None)
-    ndf = (leverage_score(m.net_debt_fcf, p["Q"])
-           if (m.fcf is None or m.fcf > 0) else None)
-    ocf = score_high(m.ocf_capex, OCF_CAPEX_BANDS, 0)
+    # For a lender/insurer the leverage pivots are undefined, so leverage_score returns
+    # None anyway; naming the reason here only records *why* the metric is absent.
+    nde_by = ("Not meaningful at negative EBITDA"
+              if (m.ebitda is not None and m.ebitda <= 0)
+              else "Financials basis" if is_fin else None)
+    ndf_by = ("Not meaningful at negative FCF"
+              if (m.fcf is not None and m.fcf <= 0)
+              else "Financials basis" if is_fin else None)
+    nde = None if nde_by else leverage_score(m.net_debt_ebitda, p["P"])
+    ndf = None if ndf_by else leverage_score(m.net_debt_fcf, p["Q"])
+    ocf, ocf_by = score_high(m.ocf_capex, OCF_CAPEX_BANDS, 0), None
+    # The drops below compare the two leverage *scores*, so they are applied after the
+    # scores exist — not folded into the expressions that produce them.
     if exclude_acq_leverage:
-        # A dominant fresh acquisition's full debt measured against pre-consolidation
-        # trailing EBITDA / FCF overstates leverage -> judge the balance sheet on the
-        # undistorted OCF / CapEx coverage instead.
-        nde = None
-        ndf = None
+        # A dominant fresh acquisition carries full deal debt measured against
+        # pre-consolidation trailing EBITDA / FCF, which overstates leverage -> judge
+        # the balance sheet on the undistorted OCF / CapEx coverage instead.
+        nde, nde_by = None, nde_by or "Recent acquisition"
+        ndf, ndf_by = None, ndf_by or "Recent acquisition"
     elif heavy_capex:
         # Capex is deliberately consuming FCF, so the FCF-derived coverage/leverage
         # metrics are unrepresentative -> judge the balance sheet on EBITDA leverage.
-        ndf = None
-        ocf = None
+        ndf, ndf_by = None, ndf_by or "Heavy capex cycle"
+        ocf, ocf_by = None, ocf_by or "Heavy capex cycle"
     # Balance-Sheet Dual-Check: FCF-based debt looks far worse than EBITDA-based
     # AND EBITDA leverage is healthy (<2.5) -> treat ND/FCF as capex-cycle noise.
     elif (nde is not None and ndf is not None and m.net_debt_ebitda is not None
             and m.net_debt_ebitda < 2.5 and ndf < nde - 2):
-        ndf = None  # drop the noisy metric
-    return _mean([nde, ndf, ocf])
+        ndf, ndf_by = None, ndf_by or "Balance-sheet dual-check"  # drop the noisy metric
+    return [
+        _detail("Net debt / EBITDA", m.net_debt_ebitda, nde, nde_by),
+        _detail("Net debt / FCF", m.net_debt_fcf, ndf, ndf_by),
+        _detail("Operating cash flow / capex", m.ocf_capex, ocf, ocf_by),
+    ]
 
 
-def section_scores(m: ScreenerMetrics, profile: str) -> dict[str, float | None]:
+def section_metric_details(m: ScreenerMetrics,
+                           profile: str) -> dict[str, list[MetricDetail]]:
+    """Per-metric label, raw figure and 0-10 score for each Quality section.
+    `section_scores` is derived from this, so the headline and the breakdown table
+    cannot drift apart."""
     # For a lender/insurer, free-cash-flow and operating-cash-flow derived metrics are
     # structurally distorted (loan originations dominate cash flows), so they are
     # excluded from scoring — the same principle already applied to the Section III
@@ -274,23 +301,33 @@ def section_scores(m: ScreenerMetrics, profile: str) -> dict[str, float | None]:
     # capex eats its FCF gets the same treatment for the FCF-derived metrics.
     is_fin = profile == "FINANCIALS"
     heavy_capex = _heavy_capex_distortion(m)
-    exclude_fcf = is_fin or heavy_capex
+    exclude_fcf = ("Financials basis" if is_fin else
+                   "Heavy-capex FCF exclusion" if heavy_capex else None)
     # Depressed trailing GAAP EPS (amortization / patent-cliff trough) makes the
     # trailing EPS-growth metric measure the accounting trough, not the business.
-    exclude_eps_growth = _earnings_distorted(m)
+    exclude_eps = "Forward-EPS swap" if _earnings_distorted(m) else None
     # A dominant fresh acquisition's intangible amortization depresses the operating
     # margin and collapses its trajectory (see _acq_margin_distorted) — the same
     # amortization that the ROIC adjustment strips from the Section II numerator.
-    exclude_acq_margin = _acq_margin_distorted(m)
-    section_i = _mean([
-        score_high(m.revenue_cagr_3y, GROWTH_BANDS, 0),
-        None if exclude_eps_growth else score_high(m.eps_cagr_3y, GROWTH_BANDS, 0),
-        None if exclude_fcf else score_high(m.fcf_cagr_3y, FCF_CAGR_BANDS, 1),
-        None if exclude_fcf else score_high(m.fcf_margin, FCF_MARGIN_BANDS, 0),
-        None if exclude_acq_margin else score_high(m.op_margin, MARGIN_LEVEL_BANDS, 0),
-        None if exclude_acq_margin else score_high(m.op_margin_trajectory, TRAJECTORY_BANDS, 1),
-        score_high(m.gross_margin, GROSS_MARGIN_BANDS, 2),
-    ])
+    exclude_acq = "Dominant fresh-acquisition" if _acq_margin_distorted(m) else None
+
+    section_i = [
+        _detail("Revenue growth (3-yr)", m.revenue_cagr_3y,
+                score_high(m.revenue_cagr_3y, GROWTH_BANDS, 0)),
+        _detail("EPS growth (3-yr)", m.eps_cagr_3y,
+                score_high(m.eps_cagr_3y, GROWTH_BANDS, 0), exclude_eps),
+        _detail("FCF growth (3-yr)", m.fcf_cagr_3y,
+                score_high(m.fcf_cagr_3y, FCF_CAGR_BANDS, 1), exclude_fcf),
+        _detail("FCF margin", m.fcf_margin,
+                score_high(m.fcf_margin, FCF_MARGIN_BANDS, 0), exclude_fcf),
+        _detail("Operating margin", m.op_margin,
+                score_high(m.op_margin, MARGIN_LEVEL_BANDS, 0), exclude_acq),
+        _detail("Operating-margin trajectory", m.op_margin_trajectory,
+                score_high(m.op_margin_trajectory, TRAJECTORY_BANDS, 1), exclude_acq),
+        _detail("Gross margin", m.gross_margin,
+                score_high(m.gross_margin, GROSS_MARGIN_BANDS, 2)),
+    ]
+
     # Acquisition-distorted names score ROIC (and its WACC spread) on tangible invested
     # capital, so goodwill/amortization from a past deal isn't read as poor capital
     # efficiency. ROTE (already tangible-based) is unchanged.
@@ -300,23 +337,42 @@ def section_scores(m: ScreenerMetrics, profile: str) -> dict[str, float | None]:
         spread_val = (m.roic_ex_goodwill - m.wacc) if (m.wacc is not None) else m.roic_wacc_spread
     else:
         roic_ttm_val, roic_5y_val, spread_val = m.roic_ttm, m.roic_5y_avg, m.roic_wacc_spread
-    section_ii = _mean([
-        score_high(roic_ttm_val, ROIC_BANDS, 0),
-        score_high(roic_5y_val, ROIC_BANDS, 0),
-        score_high(spread_val, SPREAD_BANDS, 0),
-        score_high(m.rote, ROTE_BANDS, 1),
-    ])
-    section_iv = _mean([
-        score_low(m.shares_cagr_3y, SHARES_BANDS, 1),
-        score_low(m.sbc_pct_rev, SBC_BANDS, 0),
-        None if is_fin else score_high(m.earnings_quality, EQ_BANDS, 1.5),
-        score_high(m.insider_ownership, INSIDER_BANDS, 2),
-        score_high(m.shareholder_yield, YIELD_BANDS, 1.5),
-    ])
-    return {"I": section_i, "II": section_ii,
-            "III": _section_iii(m, profile, heavy_capex,
-                                exclude_acq_leverage=_acq_leverage_distorted(m)),
-            "IV": section_iv}
+
+    section_ii = [
+        _detail("ROIC (trailing)", roic_ttm_val,
+                score_high(roic_ttm_val, ROIC_BANDS, 0)),
+        _detail("ROIC (5-yr average)", roic_5y_val,
+                score_high(roic_5y_val, ROIC_BANDS, 0)),
+        _detail("Economic spread (ROIC - WACC)", spread_val,
+                score_high(spread_val, SPREAD_BANDS, 0)),
+        _detail("Return on tangible equity", m.rote,
+                score_high(m.rote, ROTE_BANDS, 1)),
+    ]
+
+    section_iii = _section_iii_details(
+        m, profile, heavy_capex,
+        exclude_acq_leverage=_acq_leverage_distorted(m))
+
+    section_iv = [
+        _detail("Share-count trend (3-yr)", m.shares_cagr_3y,
+                score_low(m.shares_cagr_3y, SHARES_BANDS, 1)),
+        _detail("Stock comp % of revenue", m.sbc_pct_rev,
+                score_low(m.sbc_pct_rev, SBC_BANDS, 0)),
+        _detail("Earnings quality (FCF / net income)", m.earnings_quality,
+                score_high(m.earnings_quality, EQ_BANDS, 1.5),
+                "Financials basis" if is_fin else None),
+        _detail("Insider ownership", m.insider_ownership,
+                score_high(m.insider_ownership, INSIDER_BANDS, 2)),
+        _detail("Shareholder yield", m.shareholder_yield,
+                score_high(m.shareholder_yield, YIELD_BANDS, 1.5)),
+    ]
+
+    return {"I": section_i, "II": section_ii, "III": section_iii, "IV": section_iv}
+
+
+def section_scores(m: ScreenerMetrics, profile: str) -> dict[str, float | None]:
+    details = section_metric_details(m, profile)
+    return {k: _mean([d.score for d in v]) for k, v in details.items()}
 
 
 MIN_SCORED_SUBSCORES = 6
