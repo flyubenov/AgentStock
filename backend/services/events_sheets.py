@@ -1,11 +1,25 @@
 from __future__ import annotations
-import asyncio, json, os, time
+import asyncio, json, logging, os, time
 
 from models import AnalyticsEvent
-from services.sheets import _get_service, _sheet_id, _execute, _run_sheets
+from services.sheets import _get_service, _execute, _run_sheets
+
+log = logging.getLogger(__name__)
 
 _EVENTS_TAB = "Events"
 _EVENTS_HEADERS = ["Timestamp", "Event", "VisitorId", "Props"]
+_EVENTS_SHEET_ENV = "INTRINSICA_EVENTS_SHEET_ID"
+
+
+def _sheet_id() -> str:
+    """The dedicated Intrinsica events spreadsheet (spec §9, 2026-09-29). Never the
+    Agent Stock spreadsheet (GOOGLE_SHEETS_ID): that is the analyst tool's own, and
+    visitors' tickers and emails do not belong in it. Unset means no sink: the flush
+    fails and flush_events keeps the rows queued (bounded by _MAX_QUEUE)."""
+    sid = os.environ.get(_EVENTS_SHEET_ENV, "").strip()
+    if not sid:
+        raise RuntimeError(f"{_EVENTS_SHEET_ENV} is not set; funnel events are not being stored")
+    return sid
 
 # Sheets rate-limits writes, so events are queued and appended in batches rather
 # than one API call per click. The queue is flushed when ANY of these happens:
@@ -31,6 +45,7 @@ _oldest: float | None = None       # time.monotonic() of the oldest queued row
 _dropped = 0
 _lock = asyncio.Lock()
 _now = time.monotonic              # indirection so tests can move the clock
+_warned = False                    # a failing sink is logged once per process, not per flush
 
 
 def _trim_locked() -> None:
@@ -96,7 +111,7 @@ async def flush_events() -> int:
     sink is unavailable — the failure is swallowed, never propagated, so a dead
     Sheets backend can't turn into a broken request for whoever triggered the
     flush (e.g. record_event's own auto-flush)."""
-    global _oldest
+    global _oldest, _warned
     async with _lock:
         rows, _queue[:] = list(_queue), []
         taken_oldest, _oldest = _oldest, None
@@ -104,7 +119,12 @@ async def flush_events() -> int:
         return 0
     try:
         await _run_sheets(_append_sync, rows)
-    except Exception:
+    except Exception as exc:
+        # Logged once per process: an unset INTRINSICA_EVENTS_SHEET_ID or an unshared
+        # sheet must be visible in the logs, but not repeated on every retry.
+        if not _warned:
+            _warned = True
+            log.warning("funnel events not written, kept queued for a later flush: %s", exc)
         # Never lose the funnel to a Sheets outage — put them back for the next flush,
         # still bounded by _MAX_QUEUE. The age clock restarts rather than resuming:
         # keeping the original age would make every following request retry a Sheets

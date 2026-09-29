@@ -19,6 +19,8 @@ services:
         value: "3.12.7"
       - key: GOOGLE_SHEETS_ID          # your spreadsheet id
         sync: false
+      - key: INTRINSICA_EVENTS_SHEET_ID  # landing funnel events sheet, shared with the service account
+        sync: false
       - key: GOOGLE_SHEETS_CREDS_JSON  # paste the full service-account JSON
         sync: false
       - key: CORS_ORIGINS              # e.g. https://agentstock-frontend.onrender.com

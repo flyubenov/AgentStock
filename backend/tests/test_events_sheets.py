@@ -206,3 +206,31 @@ def test_shutdown_writes_whatever_is_still_queued(monkeypatch):
     assert events_sheets._queue == []
     rows = svc.spreadsheets.return_value.values.return_value.append.call_args.kwargs["body"]["values"]
     assert rows[0][1] == "payment_button_clicked"
+
+
+# --- Spec §9 (2026-09-29): a dedicated Intrinsica events spreadsheet ---
+def test_events_go_to_the_intrinsica_sheet_never_the_agent_stock_one(monkeypatch):
+    monkeypatch.setenv("GOOGLE_SHEETS_ID", "agent-stock")
+    monkeypatch.setenv("INTRINSICA_EVENTS_SHEET_ID", "intrinsica-events")
+    assert events_sheets._sheet_id() == "intrinsica-events"
+
+
+def test_an_unset_events_sheet_never_falls_back_to_agent_stock(monkeypatch):
+    monkeypatch.setenv("GOOGLE_SHEETS_ID", "agent-stock")
+    monkeypatch.delenv("INTRINSICA_EVENTS_SHEET_ID", raising=False)
+    with pytest.raises(RuntimeError, match="INTRINSICA_EVENTS_SHEET_ID"):
+        events_sheets._sheet_id()
+
+
+@pytest.mark.asyncio
+async def test_with_no_events_sheet_events_stay_queued_and_nothing_is_written(monkeypatch):
+    monkeypatch.setenv("GOOGLE_SHEETS_ID", "agent-stock")
+    monkeypatch.delenv("INTRINSICA_EVENTS_SHEET_ID", raising=False)
+    svc = _fake_service()
+    append = svc.spreadsheets.return_value.values.return_value.append
+    with patch.object(events_sheets, "_get_service", return_value=svc):
+        events_sheets._queue.append(["2026-09-29T00:00:00Z", "page_view", "v1", "{}"])
+        written = await flush_events()
+    assert written == 0
+    assert len(events_sheets._queue) == 1          # kept for a later flush, bounded by _MAX_QUEUE
+    append.assert_not_called()

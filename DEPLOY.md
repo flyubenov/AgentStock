@@ -35,6 +35,7 @@ This repo ships configs for three hosting paths so you can compare them:
 | Var | Required | Purpose |
 |-----|----------|---------|
 | `GOOGLE_SHEETS_ID` | yes | The spreadsheet the app uses as its DB |
+| `INTRINSICA_EVENTS_SHEET_ID` | for the landing page | A separate spreadsheet for the landing page's funnel events (never the `GOOGLE_SHEETS_ID` one). Share it with the service account's `client_email` as Editor; the `Events` tab is created on first write. Unset: events stay in memory and a warning is logged |
 | `GOOGLE_SHEETS_CREDS_JSON` | cloud | The **entire** service-account JSON, as one env value |
 | `GOOGLE_SHEETS_CREDS_PATH` | local only | Path to the key file (default `./credentials/service_account.json`); ignored when `GOOGLE_SHEETS_CREDS_JSON` is set |
 | `CORS_ORIGINS` | cloud | Comma-separated allowed frontend origin(s), e.g. `https://your-frontend.vercel.app` |
