@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { CALIBRATIONS, FRAMEWORK, OVERVIEW, TAB_PAIRS } from '../content/framework'
 import Tip from './Tip'
 import type { AssessmentId } from '../types'
@@ -38,6 +38,14 @@ export default function Framework({ tab, onTab }: {
   // pushes the second one's trigger off the screen that opened it. Purely local
   // presentation state, unlike `tab`, which the whole page shares.
   const [openCal, setOpenCal] = useState<string | null>(null)
+  // Which category rows are open, by title. Collapsed by default and
+  // independent of each other, like the calibrations (spec 5.4 item 3).
+  const [openGroups, setOpenGroups] = useState<ReadonlySet<string>>(() => new Set())
+  const toggleGroup = (title: string) => setOpenGroups(prev => {
+    const next = new Set(prev)
+    if (next.has(title)) next.delete(title); else next.add(title)
+    return next
+  })
   // A calibration can affect two assessments — Tangible-ROIC is listed under
   // both Quality and Moat — so without this an expanded row follows the reader
   // across a tab switch and greets them already open on a panel they have only
@@ -51,8 +59,10 @@ export default function Framework({ tab, onTab }: {
   if (shownTab !== tab) {
     setShownTab(tab)
     setOpenCal(null)
+    setOpenGroups(new Set())
   }
   const a = FRAMEWORK[tab]
+  const maxShare = Math.max(0, ...a.groups.map(g => g.share ?? 0))
   const cals = CALIBRATIONS.filter(c => c.affects.includes(a.name))
 
   return (
@@ -114,15 +124,48 @@ export default function Framework({ tab, onTab }: {
             <div className="d-q">{a.question}</div>
             <div className="d-what">{a.what}</div>
 
-            {a.groups.map(g => (
-              <div key={g.title} className="grpblock">
-                <div className="grp">{g.title}<span className="wt2">{g.weight}</span></div>
-                <div className="gmetrics">{g.metrics}</div>
-                <div className="gwhen"><b className="up">{a.hiLabel}:</b> {g.hi}</div>
-                <div className="gwhen"><b className="dn">{a.loLabel}:</b> {g.lo}</div>
-              </div>
-            ))}
+            <div className="crows">
+              {a.groups.map(g => {
+                const open = openGroups.has(g.title)
+                return (
+                  <div key={g.title} className={open ? 'crow open' : 'crow'}>
+                    <button type="button" className="ch" aria-expanded={open}
+                            onClick={() => toggleGroup(g.title)}>
+                      <span>
+                        <span className="nm">{g.title}</span>
+                        <span className="cq">{g.question}</span>
+                      </span>
+                      <span className="cw">
+                        {g.weight}
+                        {g.share !== null && maxShare > 0 && (
+                          <span className="cbar" aria-hidden="true">
+                            <i style={{ width: `${Math.round((g.share / maxShare) * 100)}%`, background: a.color }} />
+                          </span>
+                        )}
+                      </span>
+                      <ChevronDown className="chev" size={16} aria-hidden="true" />
+                    </button>
+                    {open && (
+                      <div className="cb">
+                        <ul className="chips">{g.metrics.map(m => <li key={m}>{m}</li>)}</ul>
+                        <p className="chl">
+                          <span className="up"><span aria-hidden="true">▲ </span><b>{a.hiLabel}:</b> {g.hi}</span>
+                          <span className="dn"><span aria-hidden="true">▼ </span><b>{a.loLabel}:</b> {g.lo}</span>
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
 
+            {a.bands.length > 0 && (
+              <ol className="bands" style={{ '--c': a.color } as CSSProperties}>
+                {a.bands.map((b, i) => (
+                  <li key={b} style={{ '--a': `${Math.round(10 + (60 * i) / Math.max(1, a.bands.length - 1))}%` } as CSSProperties}>{b}</li>
+                ))}
+              </ol>
+            )}
             <p className="note">{a.note}</p>
 
             <div className="cal-wrap">

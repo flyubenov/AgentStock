@@ -785,7 +785,7 @@ describe('LandingPage framework section (task 11)', () => {
     expect(detail(container).querySelector('.dh')).toHaveTextContent('Quality')
     await userEvent.click(tile('Moat'))
     expect(detail(container).querySelector('.dh')).toHaveTextContent('Moat')
-    expect(detail(container)).toHaveTextContent('40 of 100 points')
+    expect(detail(container)).toHaveTextContent('Cash-backing')
   })
 
   it('moves an already-open breakdown panel when a framework card is clicked', async () => {

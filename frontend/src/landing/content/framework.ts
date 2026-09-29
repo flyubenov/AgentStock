@@ -14,8 +14,15 @@
 
 export interface AssessmentGroup {
   title: string
+  /** One plain line under the title, shown on the closed row. */
+  question: string
+  /** Shown on the closed row: '35%', '40%', 'typically 40–60%', '6 factors · scored 1–5'. */
   weight: string
-  metrics: string
+  /** The fixed share behind the row's mini bar (Quality and Moat, in %); null for ranges. */
+  share: number | null
+  /** One chip each. */
+  metrics: string[]
+  /** A few words each, after ▲ High / ▼ Low. */
   hi: string
   lo: string
 }
@@ -26,9 +33,13 @@ export interface AssessmentContent {
   question: string
   scale: string
   what: string
+  /** 'High' / 'Low' (Fair Value: 'Weighted up' / 'Weighted down'). */
   hiLabel: string
   loLabel: string
   groups: AssessmentGroup[]
+  /** The scale strip's cells, worst → best; empty for Fair Value, which has no score. */
+  bands: string[]
+  /** The one line under the strip. */
   note: string
 }
 
@@ -51,51 +62,48 @@ export const FRAMEWORK: AssessmentContent[] = [
     question: 'How strong is the underlying business?',
     scale: '0–10 · sector-aware',
     what: 'A composite of the fundamentals that make a business good, weighted to the sector profile of the company.',
-    hiLabel: 'Scores high', loLabel: 'Scores low',
+    hiLabel: 'High', loLabel: 'Low',
     groups: [
-      { title: 'Growth & Margins', weight: '35% of the score · 7 metrics',
-        metrics: 'Revenue / EPS / FCF growth (3-yr) · operating & gross margin · margin trend · FCF margin',
-        hi: 'revenue compounds and margins hold or widen while it does.',
-        lo: 'growth stalls, or margins slide to pay for it.' },
-      { title: 'Returns on Capital', weight: '30% of the score · 4 metrics',
-        metrics: 'ROIC (trailing & 5-yr) · ROIC − WACC spread · return on tangible equity',
-        hi: 'the business earns well above what its capital costs, year after year.',
-        lo: 'returns merely match the cost of capital.' },
-      { title: 'Balance-Sheet Strength', weight: '15% of the score · 3 metrics',
-        metrics: 'Net debt / EBITDA · net debt / FCF · operating cash flow / capex',
-        hi: 'little net debt, with cash flow covering capex several times over.',
-        lo: 'leverage that depends on the cycle staying friendly.' },
-      { title: 'Shareholder Alignment', weight: '20% of the score · 5 metrics',
-        metrics: 'Share-count trend · stock comp % of revenue · earnings quality (FCF / net income) · insider ownership · shareholder yield',
-        hi: 'a shrinking share count, modest stock comp, earnings that arrive as cash.',
-        lo: 'steady dilution, or earnings that never become cash.' },
+      { title: 'Growth & Margins', question: 'Is it growing — and profitably?', weight: '35%', share: 35,
+        metrics: ['Revenue growth (3-yr)', 'EPS growth (3-yr)', 'FCF growth (3-yr)', 'Operating margin', 'Gross margin', 'Margin trend', 'FCF margin'],
+        hi: 'compounding revenue, margins holding', lo: 'stalled growth, margins sliding' },
+      { title: 'Returns on Capital', question: 'Does it earn more than its capital costs?', weight: '30%', share: 30,
+        metrics: ['ROIC (trailing)', 'ROIC (5-yr)', 'ROIC − WACC spread', 'Return on tangible equity'],
+        hi: 'well above its cost of capital', lo: 'barely matches it' },
+      { title: 'Balance-Sheet Strength', question: 'Can it weather a bad year?', weight: '15%', share: 15,
+        metrics: ['Net debt / EBITDA', 'Net debt / FCF', 'Operating cash flow / capex'],
+        hi: 'little debt, capex easily funded', lo: 'leverage that needs a kind cycle' },
+      { title: 'Shareholder Alignment', question: 'Are owners treated well?', weight: '20%', share: 20,
+        metrics: ['Share-count trend', 'Stock comp % of revenue', 'Earnings quality (FCF / net income)', 'Insider ownership', 'Shareholder yield'],
+        hi: 'buybacks, earnings that arrive as cash', lo: 'steady dilution, paper earnings' },
     ],
-    note: 'Every metric is scored against fixed thresholds and averaged inside its category; the categories are then weighted by profile — Tech / Growth (shown), Balanced, Defensive / Income, Industrial / Cyclical, Financials, REIT. As a rough read: 9+ is top-decile, 8–9 excellent, 7–8 strong, below 5 weak.',
+    bands: ['below 5 · Weak', '5–7 · Moderate', '7–8 · Strong', '8–9 · Excellent', '9+ · Top-decile'],
+    note: 'Each metric is scored against fixed thresholds; the category weights follow the sector profile (Tech / Growth shown).',
+
   },
   {
     name: 'Moat', color: 'var(--mo)',
     question: 'How durable are its competitive advantages?',
-    scale: '0–100',
+    scale: '0–10',
     // Deliberately says what this is NOT without naming a moat source the engine
     // cannot measure — see framework.test.ts, "names no moat source it cannot
     // measure". Nothing here claims to read network effects or switching costs.
     what: 'Durability of economic profit — how consistently the business out-earns its cost of capital. Not a narrative or reputation score.',
-    hiLabel: 'Scores high', loLabel: 'Scores low',
+    hiLabel: 'High', loLabel: 'Low',
     groups: [
-      { title: 'Magnitude', weight: '40 of 100 points',
-        metrics: 'ROIC level (up to 20 pts) · economic spread, ROIC − WACC (up to 20 pts)',
-        hi: 'returns far above the cost of capital.',
-        lo: 'returns that merely match it.' },
-      { title: 'Durability', weight: '50 of 100 points',
-        metrics: 'Persistence of economic profit (25 pts) · consistency of returns (10 pts) · margin durability (15 pts)',
-        hi: 'a decade of above-cost returns, with margins that hold.',
-        lo: 'a good couple of years inside a cyclical swing.' },
-      { title: 'Cash-backing', weight: '10 of 100 points',
-        metrics: 'Free-cash-flow conversion (10 pts)',
-        hi: 'profit that turns into cash.',
-        lo: 'profit that never leaves the income statement.' },
+      { title: 'Magnitude', question: 'How far above its cost of capital does it earn?', weight: '40%', share: 40,
+        metrics: ['ROIC level (20%)', 'Economic spread, ROIC − WACC (20%)'],
+        hi: 'returns far above the cost of capital', lo: 'returns that merely match it' },
+      { title: 'Durability', question: 'Does the edge last, year after year?', weight: '50%', share: 50,
+        metrics: ['Persistence of economic profit (25%)', 'Consistency of returns (10%)', 'Margin durability (15%)'],
+        hi: 'a decade of above-cost returns, margins that hold', lo: 'a good spell inside a cyclical swing' },
+      { title: 'Cash-backing', question: 'Does the profit turn into cash?', weight: '10%', share: 10,
+        metrics: ['Free-cash-flow conversion (10%)'],
+        hi: 'profit that becomes cash', lo: 'profit that stays on paper' },
     ],
-    note: 'Points add up to the 0–100 score: roughly 80+ reads as a wide moat, 60–79 established, 40–59 narrow, below 40 little or none. An economic-profit gate caps any company that does not out-earn its cost of capital.',
+    bands: ['below 4 · Little or none', '4–6 · Narrow', '6–8 · Established', '8+ · Wide'],
+    note: 'An economic-profit gate caps any company that does not out-earn its cost of capital.',
+
   },
   {
     name: 'Fair Value', color: 'var(--fv)',
@@ -106,44 +114,42 @@ export const FRAMEWORK: AssessmentContent[] = [
     // in the blend. Same panel shape, different vocabulary (spec 5.4 item 3).
     hiLabel: 'Weighted up', loLabel: 'Weighted down',
     groups: [
-      { title: 'Cash-flow models', weight: 'typically 40–60% of the blend',
-        metrics: 'Discounted cash flow · free cash flow to equity',
-        hi: 'cash flows are established and predictable — the anchor for most profitable businesses.',
-        lo: 'cash flows are erratic, or the company is pre-profit.' },
-      { title: 'Earnings multiples', weight: 'typically 20–40%',
-        metrics: 'EV / EBITDA · P / E (forward earnings when trailing ones are distorted)',
-        hi: 'profits are meaningful and comparable across peers.',
-        lo: 'earnings are negative, or distorted by acquisition amortization.' },
-      { title: 'Sales multiples', weight: '0–20%',
-        metrics: 'EV / Sales',
-        hi: 'a fast-growing company is not earning yet.',
-        lo: 'the company is mature and profitable.' },
-      { title: 'Income & asset models', weight: '0–60%',
-        metrics: 'Dividend discount · price / book · residual income · net asset value',
-        hi: 'the company is a dividend payer, a lender or asset-heavy.',
-        lo: 'the business is asset-light.' },
+      { title: 'Cash-flow models', question: 'What will the business pay out over time?', weight: 'typically 40–60%', share: null,
+        metrics: ['Discounted cash flow', 'Free cash flow to equity'],
+        hi: 'steady, predictable cash flows', lo: 'erratic cash flows, or pre-profit' },
+      { title: 'Earnings multiples', question: 'How is it priced against its earnings?', weight: 'typically 20–40%', share: null,
+        metrics: ['EV / EBITDA', 'P / E (forward earnings when trailing ones are distorted)'],
+        hi: 'meaningful profits, comparable with peers', lo: 'losses, or earnings distorted by amortization' },
+      { title: 'Sales multiples', question: 'What is growth worth before profit?', weight: '0–20%', share: null,
+        metrics: ['EV / Sales'],
+        hi: 'fast growth, no profit yet', lo: 'a mature, profitable company' },
+      { title: 'Income & asset models', question: 'What do its dividends or assets say?', weight: '0–60%', share: null,
+        metrics: ['Dividend discount', 'Price / book', 'Residual income', 'Net asset value'],
+        hi: 'dividend payers, lenders, asset-heavy names', lo: 'asset-light businesses' },
     ],
-    note: 'The company is classified first, and the classification sets the blend — a mega cap leans on cash-flow models plus EV / EBITDA, a bank on price / book plus residual income, an asset-heavy name on net asset value. Every analysis shows the exact blend it used and what each method returned.',
+    bands: [],
+    note: 'The company’s type sets the blend — a bank leans on price / book, a mega cap on cash flows. Every analysis shows the exact blend it used.',
+
   },
   {
     name: 'Reward / Risk', color: 'var(--rr)',
     question: 'Is the price today worth the downside?',
     scale: 'ratio · 0.2–5.0×',
     what: 'Connects intrinsic value to the live market price and the downside — a great business is not automatically a great investment at any price.',
-    hiLabel: 'Scores high', loLabel: 'Scores low',
+    hiLabel: 'High', loLabel: 'Low',
     groups: [
-      { title: 'Reward axis', weight: '6 factors · scored 1–5',
-        metrics: 'Discount to 52-week high (24%) · valuation (18%) · growth (18%) · RSI (16%) · profitability (12%) · analyst upside (8–18%, weighted by how many analysts agree)',
-        hi: 'a growing, profitable business is trading well below its highs.',
-        lo: 'the price is full, with little left to re-rate.' },
+      { title: 'Reward axis', question: 'How much upside is left?', weight: '6 factors · scored 1–5', share: null,
+        metrics: ['Discount to 52-week high (24%)', 'Valuation (18%)', 'Growth (18%)', 'RSI (16%)', 'Profitability (12%)',
+                  'Analyst upside (8–18%, weighted by how many analysts agree)'],
+        hi: 'a growing business well below its highs', lo: 'a full price, little left to re-rate' },
       // The direction has to be stated outright, exactly as the breakdown
       // panel's own risk axis does: on this one category a high score is bad.
-      { title: 'Risk axis · a high score here is the bad one', weight: '6 factors · scored 1–5',
-        metrics: 'Volatility (22%) · leverage (18%) · trend vs 200-day (18%) · burn / margin (15%) · beta (15%) · liquidity (12%)',
-        hi: 'leverage and volatility stack up.',
-        lo: 'light debt, a steady price, a business that funds itself.' },
+      { title: 'Risk axis · a high score here is the bad one', question: 'How much can go wrong?', weight: '6 factors · scored 1–5', share: null,
+        metrics: ['Volatility (22%)', 'Leverage (18%)', 'Trend vs 200-day (18%)', 'Burn / margin (15%)', 'Beta (15%)', 'Liquidity (12%)'],
+        hi: 'leverage and volatility stacking up', lo: 'light debt, a steady price, self-funded' },
     ],
-    note: 'Reward ÷ risk, clamped to 0.2–5.0×. Roughly: 2.0× and above is Asymmetric Upside, 1.3–2.0× Reward-Favored, 0.8–1.3× Balanced, 0.5–0.8× Risk-Favored, below that a Value Trap.',
+    bands: ['below 0.5× · Value Trap', '0.5–0.8× · Risk-Favored', '0.8–1.3× · Balanced', '1.3–2.0× · Reward-Favored', '2.0×+ · Asymmetric Upside'],
+    note: 'Reward ÷ risk, clamped to 0.2–5.0×.',
   },
 ]
 
@@ -159,11 +165,15 @@ export const OVERVIEW = {
     after: 'Same data, same score.',
   },
   /** Said plainly because it is true: three of the four assessments are judgments,
-   *  not quantities with a correct value. Intrinsica's scores are the product of its
-   *  own methodology, and the page's transparency is what makes that honest. */
+   *  not quantities with a correct value. Reworded 2026-09-29 (user decision): the
+   *  old "no single agreed way" read as if Intrinsica had no settled method, so the
+   *  note now states the method as fixed — the same for every company. */
   judgment: {
     title: 'Intrinsica’s own method.',
-    body: 'There is no single agreed way to score a company’s quality, its moat, or the reward it offers against its risk. Intrinsica takes the fundamentals that matter for each, weights them by its own methodology and condenses them into one comparable score. Each score opens up to the inputs and weights behind it.',
+    body: 'Quality, Moat and Reward/Risk aren’t printed in any filing; they have to be assessed. ' +
+      'Intrinsica assesses them with one fixed methodology: it takes the fundamentals that matter for each, ' +
+      'weights them and condenses them into a single score, the same way for every company. ' +
+      'Each score opens up to the inputs and weights behind it.',
   },
   tail: 'Click an assessment for every category, weight and calibration.',
 }
