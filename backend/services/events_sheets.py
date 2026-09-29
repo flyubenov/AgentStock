@@ -119,6 +119,16 @@ async def flush_events() -> int:
         return 0
     try:
         await _run_sheets(_append_sync, rows)
+    except asyncio.CancelledError:
+        # Shutdown cancels flush_loop, possibly mid-write. CancelledError is not an
+        # Exception, so without this the rows already taken off the queue would be
+        # lost with the task. Put them back synchronously (no await, so nothing can
+        # interleave on the event loop), and let the cancellation proceed; the
+        # lifespan's final flush_events() then writes them.
+        _queue[:0] = rows
+        _trim_locked()
+        _oldest = _now() if _queue else None
+        raise
     except Exception as exc:
         # Logged once per process: an unset INTRINSICA_EVENTS_SHEET_ID or an unshared
         # sheet must be visible in the logs, but not repeated on every retry.

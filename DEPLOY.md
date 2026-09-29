@@ -69,7 +69,7 @@ gcloud run deploy agentstock-backend \
   --source ./backend \
   --region us-central1 \
   --allow-unauthenticated \
-  --set-env-vars "GOOGLE_SHEETS_ID=YOUR_SHEET_ID,CORS_ORIGINS=https://TEMP" \
+  --set-env-vars "GOOGLE_SHEETS_ID=YOUR_SHEET_ID,INTRINSICA_EVENTS_SHEET_ID=YOUR_EVENTS_SHEET_ID,CORS_ORIGINS=https://TEMP" \
   --set-env-vars "GOOGLE_SHEETS_CREDS_JSON=$(tr -d '\n' < backend/credentials/service_account.json)"
 ```
 

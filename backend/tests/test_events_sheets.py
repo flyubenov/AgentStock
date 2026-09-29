@@ -234,3 +234,25 @@ async def test_with_no_events_sheet_events_stay_queued_and_nothing_is_written(mo
     assert written == 0
     assert len(events_sheets._queue) == 1          # kept for a later flush, bounded by _MAX_QUEUE
     append.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_a_flush_cancelled_mid_write_puts_its_rows_back(monkeypatch):
+    """Shutdown cancels flush_loop; if that lands while a write is in flight, the
+    rows already taken off the queue must go back, not vanish with the task."""
+    monkeypatch.setattr(events_sheets, "_BATCH_SIZE", 100)
+    await record_event(_ev(1))
+    started = asyncio.Event()
+
+    async def hang(*_a, **_k):
+        started.set()
+        await asyncio.Event().wait()                   # a Sheets call that never returns
+
+    monkeypatch.setattr(events_sheets, "_run_sheets", hang)
+    task = asyncio.create_task(flush_events())
+    await started.wait()
+    assert events_sheets._queue == []                  # taken, in flight
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
+    assert [r[1] for r in events_sheets._queue] == ["event-1"]
