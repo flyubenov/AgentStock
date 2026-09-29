@@ -11,7 +11,8 @@ export const REVEAL_SELECTOR = [
   '#why .kicker', '#why .stitle', '#why .ssub', '#why .why-lbl', '#why .diff',
   '#workflow .kicker', '#workflow .stitle', '#workflow .ssub', '#workflow .wf',
   '#pricing .kicker', '#pricing .stitle', '#pricing .ssub', '#pricing .price-card', '#pricing .compare',
-  '.footer',
+  // Not the footer: it carries the disclaimer, and being short and last on the
+  // page it may never cross the observer's threshold on a very tall viewport.
 ].join(', ')
 export const STAGGER_MS = 90
 export const STAGGER_STEPS = 4

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { startReveal, STAGGER_MS } from './reveal'
+import { REVEAL_SELECTOR, startReveal, STAGGER_MS } from './reveal'
 
 type IOCb = (entries: { isIntersecting: boolean; target: Element }[]) => void
 let observed: Element[] = []
@@ -94,5 +94,14 @@ describe('startReveal (spec §4 Motion)', () => {
     stop()
     expect(disconnected).toBe(true)
     expect(document.querySelectorAll('.rv')).toHaveLength(0)
+  })
+
+  // The footer carries the not-investment-advice disclaimer. It is short, and at
+  // the very bottom of a tall viewport it may never cross the observer's
+  // threshold, so it must never be hidden in the first place.
+  it('never hides the footer', () => {
+    document.body.innerHTML = '<footer class="footer"><p>Not personalized investment advice.</p></footer>'
+    expect(document.querySelector('.footer')!.matches(REVEAL_SELECTOR)).toBe(false)
+    expect(document.querySelector('.footer p')!.matches(REVEAL_SELECTOR)).toBe(false)
   })
 })
