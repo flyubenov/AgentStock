@@ -176,7 +176,7 @@ describe('Why and Workflow — page rules', () => {
   })
 
   // Spec section 8 rules 3 and 5. A per-metric cut-off reads "ROIC > 15% scores
-  // 8"; the published outcome bands ("Moat 80+") carry no inequality operator,
+  // 8"; the published outcome bands ("Moat 8+") carry no inequality operator,
   // which is what separates the two here as it does in Framework.test.tsx.
   it.each(sections)('%s leaks no internal identifier, module name or scoring cut-off',
     (_n, mount) => {
@@ -199,5 +199,15 @@ describe('Why and Workflow — page rules', () => {
     expect(container.querySelector('form')).toBeNull()
     expect(container.querySelector('textarea')).toBeNull()
     expect(container.querySelector('[title]')).toBeNull()
+  })
+})
+
+// Spec §5.2 / §7 (2026-09-29): Moat is shown on 0–10, so the screener example
+// quotes the Wide band on that scale (user decision 2026-09-29).
+describe('Why — the screener example uses the 0–10 Moat scale', () => {
+  it('says Moat 8+, never the old 80+', () => {
+    const { container } = render(<Why />)
+    expect(container).toHaveTextContent('“Moat 8+ and trading below fair value”')
+    expect(container.textContent).not.toMatch(/Moat 80\+/)
   })
 })

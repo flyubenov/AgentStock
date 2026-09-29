@@ -257,7 +257,7 @@ describe('Pricing', () => {
   })
 
   // Spec section 8, and the same two regexes Framework.test.tsx and
-  // WhyWorkflow.test.tsx use. An outcome band ("Moat 80+") carries no inequality
+  // WhyWorkflow.test.tsx use. An outcome band ("Moat 8+") carries no inequality
   // operator; a published cut-off does, which is what separates them.
   it('leaks no banned word, internal identifier or scoring cut-off', () => {
     const { container } = show()

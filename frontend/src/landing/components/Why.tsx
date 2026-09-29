@@ -7,8 +7,9 @@
  *  assessment or reads a result.
  *
  *  The copy rules that bind every string below (spec section 8): never the word
- *  "signal"; never "Risk/Reward"; no scoring cut-offs. "Moat 80+" is the published
- *  outcome band (spec 5.4 item 4) used as a screener example — written "80+"
+ *  "signal"; never "Risk/Reward"; no scoring cut-offs. "Moat 8+" is the published
+ *  outcome band (spec 5.4 item 4, on the 0–10 scale since 2026-09-29) used as a
+ *  screener example — written "8+"
  *  rather than the mock's operator form, which the copy guard reads as a cut-off.
  *
  *  The card icons are decorative and hidden from screen readers, so an emoji is
@@ -33,7 +34,7 @@ const SCALE: Card[] = [
   { icon: '⚡', title: 'Re-evaluate whole watchlists',
     body: 'Submit 25, 50 or 100+ stocks in one run — results stream in as each finishes.' },
   { icon: '🧭', title: 'Discover what fits your criteria',
-    body: 'Screen hundreds of stocks by Quality, Moat, Fair Value and Reward/Risk — e.g. “Moat 80+ and trading below fair value”.' },
+    body: 'Screen hundreds of stocks by Quality, Moat, Fair Value and Reward/Risk — e.g. “Moat 8+ and trading below fair value”.' },
   { icon: '🔔', title: 'Automated monitoring',
     body: 'Intrinsica re-checks your universe on a schedule and flags “What changed?” when an assessment crosses your threshold.' },
 ]
