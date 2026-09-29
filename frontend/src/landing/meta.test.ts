@@ -14,7 +14,10 @@ describe('page metadata and share image', () => {
     expect(meta('property', 'og:title')).toBe('Intrinsica — Judge the business. Then judge the price.')
     expect(meta('property', 'og:description')).toBe(
       'Intrinsica answers with four scores from the fundamentals: Quality, Moat, Fair Value and Reward/Risk. Every input and weight is on show.')
-    expect(meta('property', 'og:image')).toBe('/og-image.png')
+    // Absolute: Facebook, LinkedIn and X do not resolve a relative og:image.
+    expect(meta('property', 'og:image')).toBe('https://intrinsica.io/og-image.png')
+    expect(meta('property', 'og:url')).toBe('https://intrinsica.io/')
+    expect(meta('name', 'twitter:image')).toBe('https://intrinsica.io/og-image.png')
     expect(meta('property', 'og:type')).toBe('website')
     expect(meta('name', 'twitter:card')).toBe('summary_large_image')
     expect(meta('name', 'description')).toBe(meta('property', 'og:description'))
