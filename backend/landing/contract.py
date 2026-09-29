@@ -130,24 +130,26 @@ def _moat(sc: dict | None) -> dict | None:
     inputs = bd.get("inputs") or {}
     factors = []
     for code, points in pillars.items():
-        # Controller addition 3: MoatBlock.factors[].max_points is a non-null number
-        # on the frontend (Task 7). moat/scoring.py always gives a pillar that exists
-        # a matching maximum, but if one is ever missing, omit the factor rather than
-        # emit a null max_points.
+        # moat/scoring.py always gives a pillar that exists a matching maximum; if
+        # one is ever missing, the pillar has no scale to be scored on or weighted
+        # by, so it is omitted rather than sent with a guessed score.
         max_points = maxima.get(code)
         if max_points is None:
             continue
+        pts = _finite(points)
         factors.append({
             "label": MOAT_FACTOR_LABELS.get(code, humanize(code)),
             # Pillar codes group by their letter: A magnitude, B durability, C cash.
             "group": MOAT_GROUP_LABELS.get(str(code)[:1], "Other"),
             "display": moat_figure(code, inputs.get(code)),
-            "points": _round(points),
-            "max_points": max_points,
+            # Spec §7 (2026-09-29): the landing page shows Moat on 0–10 like Quality.
+            # The engine keeps its 100-point model; only this contract converts.
+            "score": None if pts is None or not max_points else round(pts / max_points * 10, 1),
             "weight_pct": round(max_points / available * 100, 2),
         })
+    raw = _finite(sc.get("moat_score"))
     return {
-        "score": _round(sc.get("moat_score"), 1),
+        "score": None if raw is None else round(raw / 10, 1),
         "gated": bool(bd.get("gated")),
         # moat/scoring.py's `excluded` entries are raw pillar codes with a trailing
         # description ("B3 margin durability") — map the code through

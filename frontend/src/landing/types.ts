@@ -36,8 +36,8 @@ export interface MoatFactor {
   group: string
   /** The input the pillar was scored from, formatted ("55%", "9 of 10 yrs"). */
   display: string | null
-  points: number | null
-  max_points: number
+  /** 0–10: the pillar's points ÷ its maximum × 10 (spec §7, 2026-09-29). */
+  score: number | null
   weight_pct: number
 }
 

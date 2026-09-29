@@ -9,8 +9,8 @@ const GLYPHS = /[☆✕✓▾]/
 const ROW: TickerPayload = {
   ticker: 'AMD', company_name: 'Advanced Micro Devices, Inc.', price: 630.63,
   quality: { score: 7.2, fundamentals_composite: 7.2, profile_label: 'Tech / Growth', categories: [] },
-  moat: { score: 25, gated: false, excluded: [],
-          factors: [{ label: 'ROIC level', group: 'Magnitude', display: '9.8%', points: 4, max_points: 20, weight_pct: 20 }] },
+  moat: { score: 2.5, gated: false, excluded: [],
+          factors: [{ label: 'ROIC level', group: 'Magnitude', display: '9.8%', score: 2, weight_pct: 20 }] },
   fair_value: null, reward_risk: null, calibrations: [], errors: [],
 }
 

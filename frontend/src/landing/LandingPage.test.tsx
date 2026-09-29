@@ -310,9 +310,9 @@ describe('LandingPage demo limit — only a successful typed run counts (fix rou
 // a moat, a gap and a ratio (as this one first did) cannot tell a working
 // best-in-column highlight from a broken one.
 const COMPARE_FIXTURE = {
-  AAPL: { quality: 8.0, moat: 81, gap: 5, ratio: 2.4, value: 110 },
-  MSFT: { quality: 9.5, moat: 72, gap: -3, ratio: 0.8, value: 120 },
-  NVDA: { quality: 7.0, moat: 45, gap: 12, ratio: 1.1, value: 130 },
+  AAPL: { quality: 8.0, moat: 8.1, gap: 5, ratio: 2.4, value: 110 },
+  MSFT: { quality: 9.5, moat: 7.2, gap: -3, ratio: 0.8, value: 120 },
+  NVDA: { quality: 7.0, moat: 4.5, gap: 12, ratio: 1.1, value: 130 },
 }
 
 function compareRow(ticker: keyof typeof COMPARE_FIXTURE, over: { company_name?: string } = {}) {
@@ -369,11 +369,11 @@ describe('LandingPage compare chip (controller addition 2)', () => {
     const rowOf = (t: string) => within(cardOf()).getByRole('button', { name: t }).closest('.rc-row') as HTMLElement
     const cell = (t: string, text: string) => within(rowOf(t)).getByText(text).closest('.rc-cell')!
     expect(cell('MSFT', '9.5')).toHaveClass('best')
-    expect(cell('AAPL', '81')).toHaveClass('best')
+    expect(cell('AAPL', '8.1')).toHaveClass('best')
     expect(cell('NVDA', '+12%')).toHaveClass('best')
     expect(cell('AAPL', '2.4×')).toHaveClass('best')
     expect(cell('AAPL', '8.0')).not.toHaveClass('best')
-    expect(cell('NVDA', '45')).not.toHaveClass('best')
+    expect(cell('NVDA', '4.5')).not.toHaveClass('best')
     expect(cardOf().querySelectorAll('.rc-cell.best')).toHaveLength(4)
   })
 
@@ -658,9 +658,8 @@ const BREAKDOWN_ROW: TickerPayload = {
                   weight_pct: 17.5, excluded: false, excluded_by: null }],
     }],
   },
-  moat: { score: 90, gated: false, excluded: [],
-          factors: [{ label: 'ROIC level', group: 'Magnitude', display: '55%', points: 18,
-                      max_points: 20, weight_pct: 20 }] },
+  moat: { score: 9, gated: false, excluded: [],
+          factors: [{ label: 'ROIC level', group: 'Magnitude', display: '55%', score: 9, weight_pct: 20 }] },
   fair_value: { value: 211, gap_pct: -9.05, type_label: 'Mega Cap', methods: [] },
   reward_risk: { ratio: 0.9, tier: 'Balanced', reward_score: 2.8, risk_score: 3.1,
                  reward: [], risk: [] },

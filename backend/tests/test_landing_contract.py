@@ -55,7 +55,7 @@ def test_headline_values_are_carried_through():
     p = build_ticker_payload(_result())
     assert p["ticker"] == "AAPL"
     assert p["quality"]["score"] == 9.1
-    assert p["moat"]["score"] == 90.0
+    assert p["moat"]["score"] == 9.0
     assert p["fair_value"]["value"] == 211.0
     assert p["reward_risk"]["ratio"] == 0.9
 
@@ -127,12 +127,18 @@ def test_fair_value_methods_carry_value_weight_and_contribution():
     assert sum(m["contribution"] for m in p["fair_value"]["methods"]) == pytest.approx(211.0, abs=0.5)
 
 
-def test_moat_factor_weight_is_its_share_of_the_available_points():
+def test_moat_is_sent_on_a_0_to_10_scale():
+    r = _result()
+    p = build_ticker_payload(r)
+    assert p["moat"]["score"] == round(r["screener"]["moat_score"] / 10, 1)
+
+
+def test_moat_factor_carries_a_0_to_10_score_and_its_weight_not_raw_points():
     p = build_ticker_payload(_result())
     a1 = next(f for f in p["moat"]["factors"] if f["label"].startswith("ROIC level"))
-    assert (a1["points"], a1["max_points"]) == (18.0, 20)
-    # weight_pct is rounded to 2dp like every sibling weight field, so compare with a
-    # tolerance rather than to the unrounded 20/65*100.
+    assert a1["score"] == 9.0          # 18 of 20 points
+    assert "points" not in a1 and "max_points" not in a1
+    # weight_pct is rounded to 2dp like every sibling weight field
     assert a1["weight_pct"] == pytest.approx(20 / 65 * 100, abs=0.01)
 
 
@@ -243,7 +249,7 @@ def test_calibrations_never_carry_a_raw_internal_reason_string():
     assert "Heavy-capex FCF exclusion" not in p["calibrations"]
 
 
-# --- Controller addition 3: max_points stays non-null ---
+# --- Controller addition 3: a pillar without a maximum is dropped ---
 def test_a_moat_pillar_without_a_maximum_is_omitted_not_nulled():
     r = _result()
     r["screener"]["moat_breakdown"] = {
@@ -253,7 +259,7 @@ def test_a_moat_pillar_without_a_maximum_is_omitted_not_nulled():
     }
     p = build_ticker_payload(r)
     labels = [f["label"] for f in p["moat"]["factors"]]
-    assert all(f["max_points"] is not None for f in p["moat"]["factors"])
+    assert all(f["score"] is None or 0 <= f["score"] <= 10 for f in p["moat"]["factors"])
     assert len(p["moat"]["factors"]) == 2
 
 

@@ -10,7 +10,7 @@ function row(over: Partial<TickerPayload> = {}): TickerPayload {
   return {
     ticker: 'AAPL', company_name: 'Apple Inc.', price: 341.07,
     quality: { score: 7.8, fundamentals_composite: 7.84, profile_label: 'Tech / Growth', categories: [] },
-    moat: { score: 95, gated: false, excluded: [], factors: [] },
+    moat: { score: 9.5, gated: false, excluded: [], factors: [] },
     fair_value: { value: 158.83, gap_pct: -53.43, type_label: 'Mega Cap', methods: [] },
     reward_risk: { ratio: 1.06, tier: 'Balanced', reward_score: 2.13, risk_score: 2.01, reward: [], risk: [] },
     calibrations: [], errors: [],
@@ -45,7 +45,7 @@ describe('ResultCard — tiles view (one ticker)', () => {
     const tiles = screen.getAllByRole('button', { name: /^(Quality|Moat|Fair Value|Reward \/ Risk)/ })
     expect(tiles.map(t => t.textContent)).toEqual([
       expect.stringMatching(/^Quality.*7\.8.*\/10.*Strong/),
-      expect.stringMatching(/^Moat.*95.*\/100.*Wide/),
+      expect.stringMatching(/^Moat.*9\.5.*\/10.*Wide/),
       expect.stringMatching(/^Fair Value.*\$159.*Fair value 53% below price/),
       expect.stringMatching(/^Reward \/ Risk.*1\.1.*×.*Balanced/),
     ])
@@ -106,17 +106,17 @@ describe('ResultCard — tiles view (one ticker)', () => {
 const trio = () => [
   row({ ticker: 'NVDA', company_name: 'NVIDIA Corporation', price: 225.07,
         quality: { score: 9.2, fundamentals_composite: 9.2, profile_label: 'Tech / Growth', categories: [] },
-        moat: { score: 69.8, gated: false, excluded: [], factors: [] },
+        moat: { score: 6.98, gated: false, excluded: [], factors: [] },
         fair_value: { value: 172.62, gap_pct: -23.31, type_label: null, methods: [] },
         reward_risk: { ratio: 1.85, tier: 'Reward-Favored', reward_score: 3.7, risk_score: 2, reward: [], risk: [] } }),
   row({ ticker: 'AMD', company_name: 'Advanced Micro Devices, Inc.', price: 630.63,
         quality: { score: 7.2, fundamentals_composite: 7.2, profile_label: 'Tech / Growth', categories: [] },
-        moat: { score: 25, gated: false, excluded: [], factors: [] },
+        moat: { score: 2.5, gated: false, excluded: [], factors: [] },
         fair_value: { value: 308.92, gap_pct: -51.01, type_label: null, methods: [] },
         reward_risk: { ratio: 1.08, tier: 'Balanced', reward_score: 2.7, risk_score: 2.5, reward: [], risk: [] } }),
   row({ ticker: 'AVGO', company_name: 'Broadcom Inc.', price: 352.81,
         quality: { score: 8.8, fundamentals_composite: 8.8, profile_label: 'Tech / Growth', categories: [] },
-        moat: { score: 86.5, gated: false, excluded: [], factors: [] },
+        moat: { score: 8.65, gated: false, excluded: [], factors: [] },
         fair_value: { value: 216.1, gap_pct: -38.75, type_label: null, methods: [] },
         reward_risk: { ratio: 1.88, tier: 'Reward-Favored', reward_score: 3.8, risk_score: 2, reward: [], risk: [] } }),
 ]
@@ -127,14 +127,14 @@ describe('ResultCard — comparison view (two or three tickers)', () => {
     expect(container.querySelector('.rc-head')).toHaveTextContent('Comparing 3')
     const rows = container.querySelectorAll('.rc-row')
     expect(rows).toHaveLength(3)
-    expect(rows[0]).toHaveTextContent(/NVDA.*9\.2.*Top-decile.*70.*Established.*\$173.*−23%.*1\.9×.*Reward-Favored/)
+    expect(rows[0]).toHaveTextContent(/NVDA.*9\.2.*Top-decile.*7\.0.*Established.*\$173.*−23%.*1\.9×.*Reward-Favored/)
     expect(rows[1]).toHaveTextContent(/AMD.*Little or none/)
   })
   it('highlights the best value per column, and only there', () => {
     const { container } = show({ rows: trio() })
     const cellsOf = (t: string) => within(screen.getByRole('button', { name: t }).closest('.rc-row') as HTMLElement)
     expect(cellsOf('NVDA').getByText('9.2').closest('.rc-cell')).toHaveClass('best')   // quality
-    expect(cellsOf('AVGO').getByText('87').closest('.rc-cell')).toHaveClass('best')    // moat
+    expect(cellsOf('AVGO').getByText('8.7').closest('.rc-cell')).toHaveClass('best')    // moat
     expect(cellsOf('NVDA').getByText('−23%').closest('.rc-cell')).toHaveClass('best')  // gap: -23 is highest
     expect(cellsOf('AVGO').getByText('1.9×').closest('.rc-cell')).toHaveClass('best')  // 1.88 > 1.85
     expect(container.querySelectorAll('.rc-cell.best')).toHaveLength(4)
@@ -205,5 +205,16 @@ describe('ResultCard — line icons (spec §4)', () => {
     const tiles = Array.from(container.querySelectorAll('.rc-tile'))
     expect(tiles).toHaveLength(4)
     for (const t of tiles) expect(t.querySelector('svg.tile-chev')).toBeInTheDocument()
+  })
+})
+
+describe('ResultCard — Moat on 0–10 (spec §5.2)', () => {
+  it('shows Moat like Quality: one decimal out of 10, with its tier', () => {
+    const { container } = show()
+    const tile = Array.from(container.querySelectorAll('.rc-tile'))[1]
+    expect(tile).toHaveTextContent('9.5')
+    expect(tile).toHaveTextContent('/10')
+    expect(tile).not.toHaveTextContent('/100')
+    expect(tile).toHaveTextContent('Wide')
   })
 })

@@ -100,11 +100,12 @@ export function qualityTier(v: number | null): string | null {
   return 'Weak'
 }
 
+/** Moat tiers on the 0–10 scale (spec §5.2, 2026-09-29). */
 export function moatTier(v: number | null): string | null {
   if (!finite(v)) return null
-  if (v >= 80) return 'Wide'
-  if (v >= 60) return 'Established'
-  if (v >= 40) return 'Narrow'
+  if (v >= 8) return 'Wide'
+  if (v >= 6) return 'Established'
+  if (v >= 4) return 'Narrow'
   return 'Little or none'
 }
 

@@ -28,16 +28,17 @@ const TABS = ['Quality', 'Moat', 'Fair Value', 'Reward / Risk'] as const
  *  adjustment and gets explained. */
 const COMPOSITE_TOLERANCE = 0.05
 
-/** Concept only, never a threshold (spec section 8 rule 3). The point maxima are
- *  public — they are the pillar weights. Keyed by backend/landing/labels.py's
+/** Concept only, never a threshold (spec section 8 rule 3). The pillar weights
+ *  are public and shown as % of the Moat score (spec §7, 2026-09-29: the landing
+ *  page reads Moat on 0–10, so no raw points). Keyed by backend/landing/labels.py's
  *  MOAT_FACTOR_LABELS. */
 const MOAT_TIPS: Record<string, string> = {
-  'ROIC level': 'Worth 20 of the 100 points. How much profit the business earns on the capital it employs — the more it earns per dollar invested, the more points.',
-  'Economic spread (ROIC - WACC)': 'Worth 20 points. Whether those returns beat what the capital costs. Earning above the cost of capital creates value; earning below it destroys value, however large the company.',
-  'Persistence of economic profit': 'Worth 25 points, the largest single factor. How long the business has kept earning above its cost of capital: one good year is luck, a decade of them suggests something competitors cannot copy.',
-  'Consistency of returns': 'Worth 10 points. How steady those returns are year to year, rather than swinging with the cycle.',
-  'Margin durability': 'Worth 15 points. Whether margins hold up or expand over time instead of eroding under competition.',
-  'Free-cash-flow conversion': 'Worth 10 points. How much of the reported profit turns into actual cash — a moat that never shows up as cash is an accounting one.',
+  'ROIC level': '20% of the Moat score. How much profit the business earns on the capital it employs — the more it earns per dollar invested, the higher it scores.',
+  'Economic spread (ROIC - WACC)': '20% of the Moat score. Whether those returns beat what the capital costs. Earning above the cost of capital creates value; earning below it destroys value, however large the company.',
+  'Persistence of economic profit': '25% of the Moat score, the largest single factor. How long the business has kept earning above its cost of capital: one good year is luck, a decade of them suggests something competitors cannot copy.',
+  'Consistency of returns': '10% of the Moat score. How steady those returns are year to year, rather than swinging with the cycle.',
+  'Margin durability': '15% of the Moat score. Whether margins hold up or expand over time instead of eroding under competition.',
+  'Free-cash-flow conversion': '10% of the Moat score. How much of the reported profit turns into actual cash — a moat that never shows up as cash is an accounting one.',
 }
 
 const GATE_TIP = 'A Moat-wide check: a business that does not earn above its cost of capital has its Moat capped. Passed means no cap was applied.'
@@ -173,27 +174,28 @@ function MoatPanel({ m }: { m: MoatBlock }) {
   return (
     <>
       <div className="sum">
-        <span className="big">{num(m.score, 0)} / 100</span>
-        {tier && <span className={m.score !== null && m.score >= 60 ? 'pill good' : 'pill'}>{tier}</span>}
+        <span className="big">{num(m.score, 1)} / 10</span>
+        {tier && <span className={m.score !== null && m.score >= 6 ? 'pill good' : 'pill'}>{tier}</span>}
         <span>
           <Tip label={m.gated ? 'Economic-profit gate ✗ Moat capped' : 'Economic-profit gate ✓ passed'}
                tip={GATE_TIP} />
         </span>
-        <span className="hint">Hover a factor for how its points are earned</span>
+        <span className="hint">Hover a factor for what it measures</span>
       </div>
       <Table cols={FACTOR_COLS}>
         {groups.map(g => {
           const fs = m.factors.filter(f => f.group === g)
-          const earned = fs.reduce((a, f) => a + (f.points ?? 0), 0)
-          const max = fs.reduce((a, f) => a + f.max_points, 0)
+          const scored = fs.filter(f => f.score !== null)
+          const sw = scored.reduce((a, f) => a + f.weight_pct, 0)
+          const gs = sw > 0 ? scored.reduce((a, f) => a + (f.score as number) * f.weight_pct, 0) / sw : null
           const w = fs.reduce((a, f) => a + f.weight_pct, 0)
           return (
-            <GroupRows key={g} title={g} score={`${num(earned, 0)} / ${max}`} w={weight(w)}>
+            <GroupRows key={g} title={g} score={`${num(gs, 1)} / 10`} w={weight(w)}>
               {fs.map((f, i) => (
                 <tr key={`${i}-${f.label}`}>
                   <td>{MOAT_TIPS[f.label] ? <Tip label={f.label} tip={MOAT_TIPS[f.label]} /> : f.label}</td>
                   <td className="d">{f.display ?? DASH}</td>
-                  <td className="s"><Score v={f.points} max={f.max_points} /></td>
+                  <td className="s"><Score v={f.score} max={10} /></td>
                   <td className="w">{weight(f.weight_pct)}</td>
                 </tr>
               ))}
@@ -202,7 +204,7 @@ function MoatPanel({ m }: { m: MoatBlock }) {
         })}
         <tr className="tot">
           <td>Moat score</td><td />
-          <td className="s">{num(m.score, 0)} / 100</td>
+          <td className="s">{num(m.score, 1)} / 10</td>
           <td className="w">100%</td>
         </tr>
       </Table>
@@ -305,7 +307,7 @@ function RewardRiskPanel({ rr }: { rr: RewardRiskBlock }) {
 
 function headline(row: TickerPayload, i: AssessmentId): string {
   if (i === 0) return num(row.quality?.score ?? null, 1)
-  if (i === 1) return num(row.moat?.score ?? null, 0)
+  if (i === 1) return num(row.moat?.score ?? null, 1)
   if (i === 2) return dollars(row.fair_value?.value ?? null)
   const r = row.reward_risk?.ratio ?? null
   return r === null || !Number.isFinite(r) ? DASH : `${num(r, 1)}×`

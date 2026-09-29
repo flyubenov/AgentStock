@@ -109,7 +109,7 @@ function TilesView({ r, open, onTile }: { r: TickerPayload; open: OpenState | nu
             value={num(q, 1)} unit="/10" visual={<Gauge v={q} max={10} color="var(--q)" />}
             caption={qualityTier(q) ?? ''} />
       <Tile i={1} on={on(1)} onClick={() => onTile(r.ticker, 1)}
-            value={num(m, 0)} unit="/100" visual={<Gauge v={m} max={100} color="var(--mo)" />}
+            value={num(m, 1)} unit="/10" visual={<Gauge v={m} max={10} color="var(--mo)" />}
             caption={moatTier(m) ?? ''} />
       <Tile i={2} on={on(2)} onClick={() => onTile(r.ticker, 2)}
             value={dollars(fv)}
@@ -170,7 +170,7 @@ function CompareView({ rows, open, onRow, onWatch }: {
               <span className="chev" aria-hidden="true">▾</span>
             </span>
             <Cell best={is(q, bq)} value={num(q, 1)} sub={qualityTier(q) ?? ''} />
-            <Cell best={is(m, bm)} value={num(m, 0)} sub={moatTier(m) ?? ''} />
+            <Cell best={is(m, bm)} value={num(m, 1)} sub={moatTier(m) ?? ''} />
             <Cell best={is(gap, bg)} value={dollars(r.fair_value?.value ?? null)}
                   sub={gapPct(gap)} subClass={gapClass(gap)} />
             <Cell best={is(rr, br)} value={finite(rr) ? `${num(rr, 1)}×` : DASH}

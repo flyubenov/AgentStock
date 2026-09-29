@@ -3,7 +3,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import Breakdown from './Breakdown'
 import { ASSESSMENTS } from './Hero'
-import type { AssessmentId, QualityBlock, TickerPayload } from '../types'
+import type { AssessmentId, MoatBlock, QualityBlock, TickerPayload } from '../types'
 
 // The fixtures below mirror what backend/landing/contract.py actually emits, not
 // the engine's internal vocabulary. In particular `excluded_by` and the
@@ -39,9 +39,8 @@ function payload(over: Partial<TickerPayload> = {}): TickerPayload {
     ticker: 'AAPL', company_name: 'Apple Inc.', price: 232,
     quality: quality(),
     moat: {
-      score: 90, gated: false, excluded: [],
-      factors: [{ label: 'ROIC level', group: 'Magnitude', display: '55%', points: 18,
-                  max_points: 20, weight_pct: 20 }],
+      score: 9, gated: false, excluded: [],
+      factors: [{ label: 'ROIC level', group: 'Magnitude', display: '55%', score: 9, weight_pct: 20 }],
     },
     fair_value: {
       value: 211, gap_pct: -9.05, type_label: 'Mega Cap',
@@ -92,7 +91,7 @@ describe('Breakdown tabs', () => {
     const { container } = show()
     const values = Array.from(container.querySelectorAll('.bd .tabs button b'))
       .map(b => b.textContent)
-    expect(values).toEqual(['9.1', '90', '$211', '0.9×'])
+    expect(values).toEqual(['9.1', '9.0', '$211', '0.9×'])
   })
 
   it('marks the open tab as pressed and the others as not', () => {
@@ -206,38 +205,37 @@ describe('Breakdown — Quality headline vs. its own categories', () => {
 })
 
 describe('Breakdown — Moat', () => {
-  it('shows moat factors as points over their max, with the figure behind them', () => {
+  it('shows moat factors out of 10, with the figure behind them', () => {
     const { container } = show(payload(), 1)
-    expect(screen.getByText('18/20')).toBeInTheDocument()
+    expect(screen.getByText('9/10')).toBeInTheDocument()
     expect(screen.getByText('55%')).toBeInTheDocument()
-    // Grouped under its pillar, whose shaded row totals the group.
+    // Grouped under its pillar, whose shaded row rolls the group up on 0–10.
     const sec = container.querySelector('tr.sec')!
     expect(sec).toHaveTextContent('Magnitude')
-    expect(sec).toHaveTextContent('18 / 20')
+    expect(sec).toHaveTextContent('9.0 / 10')
   })
 
   it('explains a factor in concept only, in a tooltip', () => {
     show(payload(), 1)
-    const tip = screen.getByText(/Worth 20 of the 100 points/)
+    const tip = screen.getByText(/^20% of the Moat score\./)
     expect(tip).toHaveAttribute('role', 'tooltip')
-    // Concept, never a cut-off: no "x% earns y points" in the explanation.
-    expect(tip.textContent).not.toMatch(/\d+\s*%/)
+    // The weight leads (it is public); the explanation after it is concept only,
+    // never a cut-off: no "x% earns y" once the weight sentence is set aside.
+    expect(tip.textContent!.replace(/^\d+% of the Moat score[^.]*\./, '')).not.toMatch(/\d+\s*%/)
   })
 
   it('names the pillars left out of the score in readable words', () => {
     show(payload({
-      moat: { score: 70, gated: false, excluded: ['Margin durability'],
-              factors: [{ label: 'ROIC level', group: 'Magnitude', display: null, points: 18,
-                          max_points: 20, weight_pct: 20 }] },
+      moat: { score: 7, gated: false, excluded: ['Margin durability'],
+              factors: [{ label: 'ROIC level', group: 'Magnitude', display: null, score: 9, weight_pct: 20 }] },
     }), 1)
     expect(screen.getByText(/re-weighted out: Margin durability/)).toBeInTheDocument()
   })
 
   it('says whether the economic-profit gate capped the score', () => {
     const gated = {
-      score: 25, gated: true, excluded: [],
-      factors: [{ label: 'ROIC level', group: 'Magnitude', display: null, points: 4,
-                  max_points: 20, weight_pct: 20 }],
+      score: 2.5, gated: true, excluded: [],
+      factors: [{ label: 'ROIC level', group: 'Magnitude', display: null, score: 2, weight_pct: 20 }],
     }
     const { unmount } = show(payload({ moat: gated }), 1)
     expect(screen.getByText(/gate ✗ Moat capped/)).toBeInTheDocument()
@@ -381,8 +379,7 @@ describe('Breakdown — calibrations and absent assessments', () => {
         }],
       }),
       moat: { score: null, gated: false, excluded: [],
-              factors: [{ label: 'ROIC level', group: 'Magnitude', display: null, points: null,
-                          max_points: 20, weight_pct: 20 }] },
+              factors: [{ label: 'ROIC level', group: 'Magnitude', display: null, score: null, weight_pct: 20 }] },
       fair_value: { value: null, gap_pct: null, type_label: null,
                     methods: [{ label: 'Discounted cash flow', value: null,
                                 weight_pct: 0, contribution: null }] },
@@ -419,5 +416,27 @@ describe('Breakdown — calibrations and absent assessments', () => {
     const { container } = show()
     expect(container.querySelector('input')).not.toBeInTheDocument()
     expect(container.querySelector('form')).not.toBeInTheDocument()
+  })
+})
+
+// Spec §7 (2026-09-29): the landing contract sends Moat on 0–10, with each
+// pillar scored 0–10 and weighted — never raw points out of 100.
+const MOAT_0_10: MoatBlock = {
+  score: 7.2, gated: false, excluded: [],
+  factors: [
+    { label: 'ROIC level', group: 'Magnitude', display: '31%', score: 9, weight_pct: 20 },
+    { label: 'Free-cash-flow conversion', group: 'Cash-backing', display: '80%', score: 5, weight_pct: 10 },
+  ],
+}
+
+describe('Breakdown — Moat on 0–10 (spec §7)', () => {
+  it('shows the score, each pillar and each group out of 10, weights in %', () => {
+    show(payload({ moat: MOAT_0_10 }), 1)
+    const panel = document.querySelector('.bd')!
+    expect(panel).toHaveTextContent('7.2 / 10')
+    expect(panel).not.toHaveTextContent('/ 100')
+    expect(panel).toHaveTextContent('9/10')        // the ROIC level Score cell
+    expect(panel).toHaveTextContent('9.0 / 10')    // the Magnitude group row
+    expect(panel).toHaveTextContent('20%')
   })
 })
