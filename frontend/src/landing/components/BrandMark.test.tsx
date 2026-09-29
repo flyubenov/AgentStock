@@ -3,7 +3,8 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import BrandMark, { KEYHOLE, MARK } from './BrandMark'
+import BrandMark from './BrandMark'
+import { KEYHOLE, MARK } from './mark'
 import { Logo } from './Nav'
 
 describe('BrandMark (spec §4)', () => {
