@@ -7,6 +7,8 @@ import userEvent from '@testing-library/user-event'
 import Pricing from './Pricing'
 import { COMPARE_ROWS, PLANS } from '../content/plans'
 
+const GLYPHS = /[☆✕✓▾]/
+
 /** Every negative assertion below is anchored: a real string and a real element
  *  are asserted first, so a Pricing that rendered nothing could not satisfy the
  *  guard by being empty. That matters most for the card/payment guard — this
@@ -296,7 +298,10 @@ describe('Pricing', () => {
       for (const cls of el.classList) used.add(cls)
     }
     expect(used.size).toBeGreaterThan(15)
-    const unstyled = [...used].filter(c => !new RegExp(`\\.${c}(?![\\w-])`).test(css))
+    // lucide-react stamps its own `lucide` / `lucide-<name>` classes on every
+    // icon; they are the library's, not ours to style (spec §4 line icons).
+    const unstyled = [...used].filter(c => !/^lucide(-|$)/.test(c))
+      .filter(c => !new RegExp(`\\.${c}(?![\\w-])`).test(css))
     expect(unstyled).toEqual([])
   })
 
@@ -341,5 +346,17 @@ describe('Pricing', () => {
                onView={vi.fn()} />)).not.toThrow()
     expect(screen.getByText('Choose your plan')).toBeInTheDocument()
     expect(screen.getByText('$18.00')).toBeInTheDocument()
+  })
+})
+
+describe('Pricing — line icons (spec §4)', () => {
+  it('checks each plan bullet with a drawn check, text unchanged', () => {
+    const { container } = render(<Pricing billing="annual" onBilling={vi.fn()} onChoose={vi.fn()} />)
+    const bullets = Array.from(container.querySelectorAll('.feature-list li'))
+    expect(bullets.length).toBeGreaterThan(0)
+    for (const li of bullets) {
+      expect(li.firstElementChild).toHaveClass('fl-check')
+      expect(li.textContent).not.toMatch(GLYPHS)
+    }
   })
 })

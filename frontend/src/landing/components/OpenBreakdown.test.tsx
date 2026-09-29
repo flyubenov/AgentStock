@@ -4,6 +4,8 @@ import userEvent from '@testing-library/user-event'
 import OpenBreakdown from './OpenBreakdown'
 import type { TickerPayload } from '../types'
 
+const GLYPHS = /[☆✕✓▾]/
+
 const ROW: TickerPayload = {
   ticker: 'AMD', company_name: 'Advanced Micro Devices, Inc.', price: 630.63,
   quality: { score: 7.2, fundamentals_composite: 7.2, profile_label: 'Tech / Growth', categories: [] },
@@ -51,5 +53,12 @@ describe('OpenBreakdown', () => {
       .mockReturnValue({ top: 200, bottom: 800 } as DOMRect)
     render(<OpenBreakdown row={ROW} tab={0} onTab={vi.fn()} onClose={vi.fn()} />)
     expect(scroll).not.toHaveBeenCalled()
+  })
+
+  it('closes with a drawn × and keeps the name Close', () => {
+    render(<OpenBreakdown row={ROW} tab={1} onTab={vi.fn()} onClose={vi.fn()} />)
+    const x = screen.getByRole('button', { name: 'Close' })
+    expect(x.querySelector('svg.lucide-x')).toBeInTheDocument()
+    expect(x.textContent).not.toMatch(GLYPHS)
   })
 })

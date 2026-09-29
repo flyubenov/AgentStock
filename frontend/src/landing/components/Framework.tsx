@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { CALIBRATIONS, FRAMEWORK, OVERVIEW, TAB_PAIRS } from '../content/framework'
 import Tip from './Tip'
 import type { AssessmentId } from '../types'
+import { ChevronDown } from 'lucide-react'
 
 /** What each calibration tag means, shown as the mock's hover tooltip (also on
  *  keyboard focus — see Tip). */
@@ -138,7 +139,7 @@ export default function Framework({ tab, onTab }: {
                         <span className="nm">{c.name}</span>
                         <span className="sm">{c.summary}</span>
                       </span>
-                      <span className="chev" aria-hidden="true">▾</span>
+                      <ChevronDown className="chev" size={16} aria-hidden="true" />
                     </button>
                     {open && (
                       <div className="ab">

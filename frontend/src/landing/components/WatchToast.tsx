@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { X } from 'lucide-react'
 
 /** How long the watchlist toast stays up unless dismissed (user decision). */
 export const WATCH_TOAST_MS = 10_000
@@ -24,7 +25,7 @@ export default function WatchToast({ onClose }: { onClose: () => void }) {
         <b>Watchlists require an Intrinsica account.</b> Start with Free.
       </p>
       <a href="#pricing" onClick={onClose}>See plans →</a>
-      <button type="button" className="x" aria-label="Dismiss" onClick={onClose}>✕</button>
+      <button type="button" className="x" aria-label="Dismiss" onClick={onClose}><X size={16} aria-hidden="true" /></button>
     </div>
   )
 }

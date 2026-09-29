@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { COMPARE_ROWS, PERIODS, PLANS, priceFor, type Billing } from '../content/plans'
+import { Check } from 'lucide-react'
 
 /** The pricing section (spec 5.7): three plan cards over a billing toggle, then
  *  the canonical plan matrix. Each card's for-line says who the plan is for; the
@@ -98,7 +99,9 @@ export default function Pricing({ billing, onBilling, onChoose, onView }: {
                 </div>
                 <div className="price-alt">{price.sub}</div>
                 <ul className="feature-list">
-                  {p.features.map(f => <li key={f}>{f}</li>)}
+                  {p.features.map(f => (
+                    <li key={f}><Check className="fl-check" size={15} strokeWidth={2.4} aria-hidden="true" />{f}</li>
+                  ))}
                 </ul>
                 {/* Hands the choice upward and does nothing else — no charge is
                     made or implied here, and none is made anywhere. */}

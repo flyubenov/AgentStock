@@ -221,6 +221,9 @@ describe('CheckoutPage', () => {
 
     await userEvent.click(proceed())
     expect(screen.getByText(/no payment was taken/i)).toBeInTheDocument()
+    const h2 = document.querySelector('.disclosure h2')!
+    expect(h2.querySelector('svg.lucide-check')).toBeInTheDocument()
+    expect(h2.textContent).not.toContain('✓')
 
     const box = screen.getByRole('textbox', { name: /optional/i })
     expect(box).toBeInTheDocument()
@@ -449,7 +452,10 @@ describe('CheckoutPage copy rules', () => {
       }
     }
     expect(used.size).toBeGreaterThan(10)
-    const unstyled = [...used].filter(c => !new RegExp(`\\.${c}(?![\\w-])`).test(css))
+    // lucide-react stamps its own `lucide` / `lucide-<name>` classes on every
+    // icon; they are the library's, not ours to style (spec §4 line icons).
+    const unstyled = [...used].filter(c => !/^lucide(-|$)/.test(c))
+      .filter(c => !new RegExp(`\\.${c}(?![\\w-])`).test(css))
     expect(unstyled).toEqual([])
   })
 })

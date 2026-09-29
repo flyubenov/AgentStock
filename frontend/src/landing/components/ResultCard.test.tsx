@@ -4,6 +4,8 @@ import userEvent from '@testing-library/user-event'
 import ResultCard, { type ResultCardProps } from './ResultCard'
 import type { TickerPayload } from '../types'
 
+const GLYPHS = /[☆✕✓▾]/
+
 function row(over: Partial<TickerPayload> = {}): TickerPayload {
   return {
     ticker: 'AAPL', company_name: 'Apple Inc.', price: 341.07,
@@ -185,5 +187,23 @@ describe('ResultCard — while a run is in flight', () => {
   it('hides the run summary while a new run is in flight', () => {
     const { container } = show({ rows: trio(), ms: 2100, busy: true, pending: ['AAPL', 'MSFT'] })
     expect(container.querySelector('.rc-head')).not.toHaveTextContent('2.1 s')
+  })
+})
+
+describe('ResultCard — line icons (spec §4)', () => {
+  it('draws the watch button as a bookmark and keeps its name', () => {
+    const { container } = show()
+    const watch = screen.getByRole('button', { name: 'Add AAPL to a watchlist' })
+    expect(watch.querySelector('svg.lucide-bookmark')).toBeInTheDocument()
+    expect(watch.textContent).not.toMatch(GLYPHS)
+    // spec §4: the brand mark never appears on a result
+    expect(container.querySelector('.brandmark')).toBeNull()
+  })
+
+  it('ends every score tile in a drawn chevron', () => {
+    const { container } = show()
+    const tiles = Array.from(container.querySelectorAll('.rc-tile'))
+    expect(tiles).toHaveLength(4)
+    for (const t of tiles) expect(t.querySelector('svg.tile-chev')).toBeInTheDocument()
   })
 })

@@ -5,6 +5,8 @@ import Framework from './Framework'
 import { CALIBRATIONS, FRAMEWORK } from '../content/framework'
 import type { AssessmentId } from '../types'
 
+const GLYPHS = /[☆✕✓▾]/
+
 const TABS = [0, 1, 2, 3] as const
 
 const show = (tab: AssessmentId = 0, onTab = vi.fn()) =>
@@ -216,6 +218,16 @@ describe('Framework — calibrations', () => {
     expect(screen.getByText(/AMD after the Xilinx acquisition/)).toBeInTheDocument()
     await userEvent.click(screen.getByText('Economic-profit gate'))
     expect(screen.queryByText(/Example:/)).not.toBeInTheDocument()
+  })
+
+  it('opens calibration rows with a drawn chevron', () => {
+    const { container } = show(0)
+    const heads = Array.from(container.querySelectorAll('.cal-wrap .arow .ah'))
+    expect(heads.length).toBeGreaterThan(0)
+    for (const h of heads) {
+      expect(h.querySelector('svg.chev')).toBeInTheDocument()
+      expect(h.textContent).not.toMatch(GLYPHS)
+    }
   })
 })
 

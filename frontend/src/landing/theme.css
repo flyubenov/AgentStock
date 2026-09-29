@@ -294,7 +294,7 @@
 .intrinsica .price-alt { font-size: 13px; color: var(--mute); margin-top: 4px; }
 .intrinsica .feature-list { list-style: none; margin: 18px 0; display: flex; flex-direction: column; gap: 9px; }
 .intrinsica .feature-list li { font-size: 14px; color: var(--dim); display: flex; gap: 9px; }
-.intrinsica .feature-list li::before { content: "✓"; color: var(--accent); font-weight: 700; }
+.intrinsica .feature-list .fl-check { color: var(--accent); flex: none; margin-top: 4px; }
 .intrinsica .btn-plan { width: 100%; height: 48px; margin-top: auto; border-radius: 11px; border: 1px solid var(--accent); background: transparent;
   color: var(--accent); font: 700 15px var(--fb); cursor: pointer; }
 .intrinsica .btn-plan:hover { background: var(--accent-soft); }
@@ -348,6 +348,8 @@
 .intrinsica .co-fine { margin-top: 12px; font-size: 12px; color: var(--mute); text-align: center; }
 .intrinsica .disclosure { margin-top: 20px; padding: 22px; border-radius: 12px; border: 1px solid #bbf7d0; background: #f0fdf4; }
 .intrinsica .disclosure h2 { font: 700 17px var(--fh); color: var(--pos); margin-bottom: 8px; }
+.intrinsica .disclosure h2 { display: flex; align-items: center; gap: 8px; }
+.intrinsica .disclosure .co-check { flex: none; }
 .intrinsica .disclosure p { font-size: 14px; color: var(--dim); }
 .intrinsica .disclosure a { color: var(--accent); font-weight: 600; }
 .intrinsica .disclosure .email { margin-top: 14px; display: flex; gap: 8px; }
@@ -449,7 +451,7 @@
   border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
 .intrinsica .rc-tile { background: var(--bg); border: 0; padding: 13px 15px; text-align: left; cursor: pointer; display: flex;
   flex-direction: column; gap: 0; font: inherit; color: inherit; position: relative; }
-.intrinsica .rc-tile::after { content: "↓"; position: absolute; right: 12px; top: 12px; font-size: 13px; color: var(--mute); }
+.intrinsica .rc-tile .tile-chev { position: absolute; right: 12px; top: 12px; color: var(--mute); }
 .intrinsica .rc-tile:hover { background: var(--bg2); }
 /* Inset: the tile grid clips its edges and each tile paints over its neighbour's
  * outline, so the default 2px-outside focus ring would be hidden (final review). */
@@ -513,3 +515,6 @@
   .intrinsica .rc-head { flex-wrap: wrap; }
   .intrinsica .rc-head > div { flex: 1 1 100%; }
 }
+.intrinsica .rc .watch svg, .intrinsica .wtoast .x svg { display: block; }
+.intrinsica .rc .watch { display: inline-grid; place-items: center; }
+.intrinsica .bk-x svg { display: inline-block; vertical-align: -2px; }

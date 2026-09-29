@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import Breakdown from './Breakdown'
 import type { AssessmentId, TickerPayload } from '../types'
+import { X } from 'lucide-react'
 
 /** The one place a breakdown opens (spec 5.3, hero rework 2026-09-27): full width,
  *  directly under the hero, whichever tile or row opened it. The panel itself is the
@@ -25,7 +26,7 @@ export default function OpenBreakdown({ row, tab, onTab, onClose }: {
       <div className="bk-in">
         <div className="bk-head">
           <b>{row.ticker}</b> {row.company_name ?? ''} · full breakdown
-          <button type="button" className="bk-x" onClick={onClose}>Close <span aria-hidden="true">✕</span></button>
+          <button type="button" className="bk-x" onClick={onClose}>Close <X size={14} aria-hidden="true" /></button>
         </div>
         <Breakdown row={row} tab={tab} onTab={onTab} />
       </div>

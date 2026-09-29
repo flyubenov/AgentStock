@@ -6,6 +6,7 @@ import { MAX_TICKERS } from './components/Hero'
 import { Logo } from './components/Nav'
 import { track, EVENTS } from '../lib/analytics'
 import type { FreeClickSource } from './types'
+import { Check } from 'lucide-react'
 
 /** The last step of the fake door (spec section 6), and the one page on the site
  *  that must be structurally incapable of taking money.
@@ -202,9 +203,8 @@ export default function CheckoutPage() {
         <>
           <div className="disclosure">
             <h2>
-              {free
-                ? "✓ You're on the Intrinsica early-access list"
-                : "✓ You're on the Intrinsica founding list"}
+              <Check className="co-check" size={18} strokeWidth={2.4} aria-hidden="true" />
+              {free ? "You're on the Intrinsica early-access list" : "You're on the Intrinsica founding list"}
             </h2>
             {/* The cap is interpolated from MAX_TICKERS, never retyped: a second
                 copy of that number is a false statement about the product the

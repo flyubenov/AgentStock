@@ -3,6 +3,8 @@ import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import WatchToast, { WATCH_TOAST_MS } from './WatchToast'
 
+const GLYPHS = /[☆✕✓▾]/
+
 describe('WatchToast', () => {
   afterEach(() => { vi.useRealTimers() })
 
@@ -32,5 +34,14 @@ describe('WatchToast', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
     await userEvent.click(screen.getByRole('link', { name: 'See plans →' }))
     expect(onClose).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('WatchToast — line icons (spec §4)', () => {
+  it('closes with a drawn × and keeps the name Dismiss', () => {
+    render(<WatchToast onClose={vi.fn()} />)
+    const x = screen.getByRole('button', { name: 'Dismiss' })
+    expect(x.querySelector('svg.lucide-x')).toBeInTheDocument()
+    expect(x.textContent).not.toMatch(GLYPHS)
   })
 })

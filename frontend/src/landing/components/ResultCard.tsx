@@ -5,6 +5,7 @@ import {
 } from '../format'
 import { ASSESSMENTS } from './Hero'
 import LiveRunBar from './LiveRunBar'
+import { Bookmark, ChevronDown } from 'lucide-react'
 
 export interface OpenState { ticker: string; tab: AssessmentId }
 
@@ -44,7 +45,9 @@ function Star({ ticker, onWatch }: { ticker: string; onWatch: (t: string) => voi
   return (
     <button type="button" className="watch" aria-label={`Add ${ticker} to a watchlist`}
             title="Add to watchlist"
-            onClick={e => { e.stopPropagation(); onWatch(ticker) }}>☆</button>
+            onClick={e => { e.stopPropagation(); onWatch(ticker) }}>
+      <Bookmark size={15} strokeWidth={1.8} aria-hidden="true" />
+    </button>
   )
 }
 
@@ -88,6 +91,7 @@ function Tile({ i, on, onClick, value, unit, visual, caption, captionClass }: {
       <span className={['c', failed ? '' : captionClass ?? ''].filter(Boolean).join(' ')}>
         {failed ? FAILED : caption}
       </span>
+      <ChevronDown className="tile-chev" size={15} strokeWidth={2} aria-hidden="true" />
     </button>
   )
 }
