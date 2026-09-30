@@ -491,3 +491,18 @@ async def test_failed_fast_refresh_backs_off_for_the_negative_ttl_then_retries()
         with _patched(run=run, inputs_fetch=inputs_fetch, quote=failing_quote):
             await cache.get_analysis("AAA")
         assert failing_quote.await_count == 2
+
+
+def test_the_cache_cap_defaults_to_256_and_follows_its_env_var():
+    import os, subprocess, sys
+    from pathlib import Path
+    backend = Path(__file__).resolve().parents[1]
+    probe = "import landing.cache as c; print(c.MAX_ENTRIES)"
+    env = {k: v for k, v in os.environ.items() if k != "LANDING_CACHE_MAX_ENTRIES"}
+    out = subprocess.run([sys.executable, "-c", probe], cwd=backend, env=env,
+                         capture_output=True, text=True, check=True).stdout.strip()
+    assert out == "256"
+    out = subprocess.run([sys.executable, "-c", probe], cwd=backend,
+                         env={**env, "LANDING_CACHE_MAX_ENTRIES": "7"},
+                         capture_output=True, text=True, check=True).stdout.strip()
+    assert out == "7"
