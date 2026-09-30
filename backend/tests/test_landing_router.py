@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 from main import app
 import landing.cache as cache_mod
+import routers.landing as landing_router
 
 client = TestClient(app)
 
@@ -32,6 +33,13 @@ def _isolated_landing_cache():
     cache_mod._fast.clear()
     cache_mod._locks.clear()
     cache_mod._lock_refs.clear()
+
+
+@pytest.fixture(autouse=True)
+def _reset_landing_limiter():
+    landing_router._limiter.clear()
+    yield
+    landing_router._limiter.clear()
 
 
 def _ok(ticker: str) -> dict:
@@ -125,3 +133,42 @@ def test_a_timed_out_ticker_does_not_sink_the_others():
     assert tickers["SLOW"]["errors"] == ["Something went wrong calculating this ticker."]
     assert tickers["SLOW"]["quality"] is None
     assert "TimeoutError" not in resp.text
+
+
+# --- Deployment spec §5.2: a per-IP brake on the live, expensive endpoint ---
+
+def _post(ip: str):
+    return client.post("/api/landing/analyze", json={"tickers": []},
+                       headers={"x-forwarded-for": ip})
+
+
+def test_one_ip_is_limited_with_a_readable_429_and_another_is_not(monkeypatch):
+    monkeypatch.setattr(landing_router._limiter, "limit", 2)
+    first, second, third = (_post("203.0.113.7") for _ in range(3))
+    assert first.status_code == 200 and second.status_code == 200
+    assert third.status_code == 429
+    assert third.json() == {"results": [], "invalid": [],
+                            "error": landing_router.RATE_LIMIT_MESSAGE}
+    assert _post("198.51.100.9").status_code == 200
+
+
+def test_a_forged_forwarded_for_prefix_does_not_dodge_the_landing_limit(monkeypatch):
+    monkeypatch.setattr(landing_router._limiter, "limit", 2)
+    codes = [client.post("/api/landing/analyze", json={"tickers": []},
+                         headers={"x-forwarded-for": f"10.0.0.{i}, 203.0.113.7"}).status_code
+             for i in range(3)]
+    assert codes == [200, 200, 429]
+
+
+def test_a_limited_request_never_reaches_the_engines(monkeypatch):
+    monkeypatch.setattr(landing_router._limiter, "limit", 0)
+    with patch("routers.landing.get_analysis", new=AsyncMock()) as ga,          patch("routers.landing.validate_ticker", new=AsyncMock(return_value=True)) as vt:
+        resp = client.post("/api/landing/analyze", json={"tickers": ["AAPL"]})
+    assert resp.status_code == 429
+    ga.assert_not_awaited()
+    vt.assert_not_awaited()
+
+
+def test_the_default_limit_is_twenty_per_minute():
+    assert landing_router._limiter.limit == 20
+    assert landing_router._limiter.window_seconds == 60

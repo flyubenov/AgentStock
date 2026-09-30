@@ -1,8 +1,11 @@
 from __future__ import annotations
 import asyncio
-from fastapi import APIRouter
+import os
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from services.rate_limit import RateLimiter, client_key
 from services.yahoo import validate_ticker
 from landing.cache import get_analysis
 from landing.contract import build_ticker_payload
@@ -12,13 +15,24 @@ router = APIRouter()
 # The demo allowance (spec section 10). It is also the Free plan's per-run cap.
 MAX_TICKERS = 3
 
+# A per-IP brake on this public endpoint: an uncached ticker runs all four engines
+# against Yahoo. A real visitor runs a handful per minute; this only bites a script.
+RATE_LIMIT_MESSAGE = "Too many analyses from your network. Please wait a minute and try again."
+_limiter = RateLimiter(int(os.getenv("LANDING_RATE_LIMIT", "20")),
+                       float(os.getenv("LANDING_RATE_WINDOW_SECONDS", "60")))
+
 
 class LandingAnalyzeRequest(BaseModel):
     tickers: list[str] = []
 
 
 @router.post("/landing/analyze")
-async def analyze(req: LandingAnalyzeRequest):
+async def analyze(req: LandingAnalyzeRequest, request: Request):
+    if _limiter.limited(client_key(request)):
+        # Same three-key shape as every other return: the page renders `error` verbatim.
+        return JSONResponse(status_code=429, content={
+            "results": [], "invalid": [], "error": RATE_LIMIT_MESSAGE})
+
     seen: list[str] = []
     for raw in req.tickers:
         t = raw.strip().upper()
@@ -38,7 +52,7 @@ async def analyze(req: LandingAnalyzeRequest):
     if not valid:
         return {"results": [], "invalid": invalid, "error": None}
 
-    # get_analysis (backend/landing/cache.py) serves fundamentals from a 3-day cache
+    # get_analysis (backend/landing/cache.py) serves fundamentals from a multi-day cache (LANDING_SLOW_TTL; 7 days in production)
     # and price/Reward-Risk from a shorter one (LANDING_FAST_TTL). On this public,
     # unauthenticated endpoint a hung yfinance call must never hold a worker open
     # indefinitely, on either path: a cold/expired slow fill still goes through
