@@ -25,10 +25,10 @@ from risk_reward.engine import _snapshot as _rr_snapshot
 # set via env vars, read once at import -- changing either still means a new Cloud Run
 # revision (a redeploy), not a live-tunable dial; "no code change" is the accurate
 # claim, not "no deploy".
-SLOW_TTL = float(os.getenv("LANDING_SLOW_TTL", "259200"))   # 3 days
+SLOW_TTL = float(os.getenv("LANDING_SLOW_TTL", "259200"))   # 3 days by default; production sets 7 days
 # 1 hour, not 15 minutes: the core assessments move on earnings, not intraday, and
 # Yahoo is not licensed for commercial use -- every avoided call reduces exposure.
-FAST_TTL = float(os.getenv("LANDING_FAST_TTL", "3600"))
+FAST_TTL = float(os.getenv("LANDING_FAST_TTL", "3600"))   # production sets 4 hours (14400)
 # A true slow-layer failure (see _populate_slow's "failed" discriminator -- a dead
 # ticker or a Yahoo outage, never a legitimate decline) is retried on this cadence
 # instead of the full SLOW_TTL. Deliberately its own constant, not a reuse of
@@ -65,7 +65,9 @@ FAST_REFRESH_TIMEOUT = float(os.getenv("LANDING_FAST_REFRESH_TIMEOUT", "5"))
 # grow the cache without bound. Marquee tickers are seeded and re-touched on every
 # page view, so normal traffic keeps them resident without a separate pinning
 # mechanism -- LRU alone is enough.
-MAX_ENTRIES = 64
+# 256 by default (deployment spec §6): an entry is a few tens of KB, so 256 fits easily
+# in a 1 GiB instance and keeps most demo tickers for their full TTL.
+MAX_ENTRIES = int(os.getenv("LANDING_CACHE_MAX_ENTRIES", "256"))
 
 # Clock indirection so tests can advance time without sleeping (monkeypatch this name).
 _now = time.monotonic

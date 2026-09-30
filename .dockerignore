@@ -1,0 +1,21 @@
+# Keep the build context small and never bake secrets in.
+.git
+.github
+.claude
+.superpowers
+brand
+docs
+MonetizationPlan
+**/node_modules
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+frontend/dist
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+backend/.env
+backend/credentials
+backend/jobs
+backend/tests
+*.ps1

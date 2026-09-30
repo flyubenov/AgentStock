@@ -10,6 +10,8 @@ from routers.watchlists import router as watchlists_router
 from routers.events import router as events_router
 from routers.landing import router as landing_router
 from landing.cache import seed
+from spa import mount_spa
+from canonical import add_canonical_host_redirect
 from services.events_sheets import flush_events, flush_loop
 
 load_dotenv()
@@ -34,6 +36,16 @@ async def lifespan(app: FastAPI):
     # itself never raises (a Yahoo outage at boot just leaves the cache cold), and this
     # must not block startup on live network calls either way.
     _seed_task = asyncio.create_task(seed(LANDING_MARQUEE_TICKERS))
+    # On Cloud Run's request-based billing CPU is throttled between requests, so a
+    # fire-and-forget seed would be starved right after a deploy. Startup gets boosted
+    # CPU and a long probe window, so production sets LANDING_SEED_WAIT_SECONDS to hold
+    # the new revision back (bounded) until the marquee tickers are warm. Default 0 =
+    # fire-and-forget, as in local dev. shield(): hitting the bound must not cancel the
+    # seed, which then just carries on in the background.
+    seed_wait = float(os.getenv("LANDING_SEED_WAIT_SECONDS", "0"))
+    if seed_wait > 0:
+        with suppress(asyncio.TimeoutError):
+            await asyncio.wait_for(asyncio.shield(_seed_task), seed_wait)
     # Queued funnel events are written on a timer, not only once a batch fills —
     # see services/events_sheets.py for every trigger.
     _flush_task = asyncio.create_task(flush_loop())
@@ -55,29 +67,52 @@ async def lifespan(app: FastAPI):
             await _seed_task
 
 
-app = FastAPI(title="Intrinsica", lifespan=lifespan)
-
-# Comma-separated list of allowed frontend origins. Defaults to the local Vite
-# dev server; set CORS_ORIGINS to the deployed frontend URL(s) in the cloud
-# (e.g. "https://agentstock.vercel.app").
-_cors_origins = [o.strip() for o in
-                 os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
-                 if o.strip()]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_cors_origins,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.include_router(analysis_router, prefix="/api")
-app.include_router(database_router, prefix="/api")
-app.include_router(watchlists_router, prefix="/api")
-app.include_router(events_router, prefix="/api")
-app.include_router(landing_router, prefix="/api")
+def _cors_origins() -> list[str]:
+    # Comma-separated allowed frontend origins. Defaults to the local Vite dev server;
+    # production sets CORS_ORIGINS=https://intrinsica.io (the page is same-origin, so
+    # this only stops other sites' pages from calling the API).
+    return [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
+            if o.strip()]
 
 
-@app.get("/api/health")
-def health():
-    return {"status": "ok"}
+def create_app(*, public_mode: bool | None = None, static_dir: str | None = None,
+               canonical_host: str | None = None) -> FastAPI:
+    """Build the app. Each argument left as None is read from the environment:
+    INTRINSICA_PUBLIC_MODE ("1" = production: only the fake-door APIs exist -- the
+    Agent Stock analyst routers are never mounted), INTRINSICA_STATIC_DIR (the built
+    frontend to serve) and CANONICAL_HOST (www -> apex redirect). Unset, all three
+    leave local dev exactly as it was."""
+    if public_mode is None:
+        public_mode = os.getenv("INTRINSICA_PUBLIC_MODE", "") == "1"
+    if static_dir is None:
+        static_dir = os.getenv("INTRINSICA_STATIC_DIR", "")
+    if canonical_host is None:
+        canonical_host = os.getenv("CANONICAL_HOST", "")
+
+    app = FastAPI(title="Intrinsica", lifespan=lifespan)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins(),
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    add_canonical_host_redirect(app, canonical_host)
+
+    if not public_mode:
+        app.include_router(analysis_router, prefix="/api")
+        app.include_router(database_router, prefix="/api")
+        app.include_router(watchlists_router, prefix="/api")
+    app.include_router(events_router, prefix="/api")
+    app.include_router(landing_router, prefix="/api")
+
+    @app.get("/api/health")
+    def health():
+        return {"status": "ok"}
+
+    # Last: the SPA catch-all must not shadow any API route registered above.
+    mount_spa(app, static_dir)
+
+    return app
+
+
+app = create_app()

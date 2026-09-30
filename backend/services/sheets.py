@@ -3,6 +3,7 @@ import asyncio, json, os
 import time as _time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+import google.auth
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -48,16 +49,19 @@ def _execute(request):
 def _get_service():
     global _service
     if _service is None:
-        # Cloud hosts (Cloud Run / Railway / Render) can't ship the gitignored key
-        # file, so accept the raw service-account JSON via env var; fall back to the
-        # on-disk file for local dev (GOOGLE_SHEETS_CREDS_PATH, default ./credentials/).
+        # Resolution order: the raw JSON env var (any host), then the on-disk key file
+        # (local dev, GOOGLE_SHEETS_CREDS_PATH, default ./credentials/), then
+        # Application Default Credentials -- on Cloud Run that is the service's runtime
+        # service account, so production holds no key at all (deployment spec §5.1).
         creds_json = os.environ.get("GOOGLE_SHEETS_CREDS_JSON")
+        creds_path = os.environ.get("GOOGLE_SHEETS_CREDS_PATH", "./credentials/service_account.json")
         if creds_json:
             creds = service_account.Credentials.from_service_account_info(
                 json.loads(creds_json), scopes=SCOPES)
-        else:
-            creds_path = os.environ.get("GOOGLE_SHEETS_CREDS_PATH", "./credentials/service_account.json")
+        elif os.path.exists(creds_path):
             creds = service_account.Credentials.from_service_account_file(creds_path, scopes=SCOPES)
+        else:
+            creds, _ = google.auth.default(scopes=SCOPES)
         _service = build("sheets", "v4", credentials=creds)
     return _service
 

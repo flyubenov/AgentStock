@@ -255,6 +255,23 @@ describe('LandingPage demo limit — only a successful typed run counts (fix rou
     expect(runsUsed()).toBe(0)
   })
 
+  it('shows the rate-limit message from a 429 and does not count the run', async () => {
+    await renderSettled()
+    const limited = 'Too many analyses from your network. Please wait a minute and try again.'
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false, status: 429,
+      json: async () => ({ results: [], invalid: [], error: limited }),
+    }))
+
+    await userEvent.type(screen.getByRole('textbox'), 'NVDA')
+    await userEvent.click(screen.getByRole('button', { name: 'Analyze →' }))
+    await waitFor(() => {
+      expect(screen.getByText(limited)).toBeInTheDocument()
+    })
+
+    expect(runsUsed()).toBe(0)
+  })
+
   it('does not count a typed run when the server returns an error (over the cap, empty input)', async () => {
     await renderSettled()
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
