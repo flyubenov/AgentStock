@@ -55,29 +55,48 @@ async def lifespan(app: FastAPI):
             await _seed_task
 
 
-app = FastAPI(title="Intrinsica", lifespan=lifespan)
-
-# Comma-separated list of allowed frontend origins. Defaults to the local Vite
-# dev server; set CORS_ORIGINS to the deployed frontend URL(s) in the cloud
-# (e.g. "https://agentstock.vercel.app").
-_cors_origins = [o.strip() for o in
-                 os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
-                 if o.strip()]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_cors_origins,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.include_router(analysis_router, prefix="/api")
-app.include_router(database_router, prefix="/api")
-app.include_router(watchlists_router, prefix="/api")
-app.include_router(events_router, prefix="/api")
-app.include_router(landing_router, prefix="/api")
+def _cors_origins() -> list[str]:
+    # Comma-separated allowed frontend origins. Defaults to the local Vite dev server;
+    # production sets CORS_ORIGINS=https://intrinsica.io (the page is same-origin, so
+    # this only stops other sites' pages from calling the API).
+    return [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
+            if o.strip()]
 
 
-@app.get("/api/health")
-def health():
-    return {"status": "ok"}
+def create_app(*, public_mode: bool | None = None, static_dir: str | None = None,
+               canonical_host: str | None = None) -> FastAPI:
+    """Build the app. Each argument left as None is read from the environment:
+    INTRINSICA_PUBLIC_MODE ("1" = production: only the fake-door APIs exist -- the
+    Agent Stock analyst routers are never mounted), INTRINSICA_STATIC_DIR (the built
+    frontend to serve) and CANONICAL_HOST (www -> apex redirect). Unset, all three
+    leave local dev exactly as it was."""
+    if public_mode is None:
+        public_mode = os.getenv("INTRINSICA_PUBLIC_MODE", "") == "1"
+    if static_dir is None:
+        static_dir = os.getenv("INTRINSICA_STATIC_DIR", "")
+    if canonical_host is None:
+        canonical_host = os.getenv("CANONICAL_HOST", "")
+
+    app = FastAPI(title="Intrinsica", lifespan=lifespan)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins(),
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    if not public_mode:
+        app.include_router(analysis_router, prefix="/api")
+        app.include_router(database_router, prefix="/api")
+        app.include_router(watchlists_router, prefix="/api")
+    app.include_router(events_router, prefix="/api")
+    app.include_router(landing_router, prefix="/api")
+
+    @app.get("/api/health")
+    def health():
+        return {"status": "ok"}
+
+    return app
+
+
+app = create_app()
