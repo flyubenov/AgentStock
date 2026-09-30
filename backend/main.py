@@ -11,6 +11,7 @@ from routers.events import router as events_router
 from routers.landing import router as landing_router
 from landing.cache import seed
 from spa import mount_spa
+from canonical import add_canonical_host_redirect
 from services.events_sheets import flush_events, flush_loop
 
 load_dotenv()
@@ -85,6 +86,7 @@ def create_app(*, public_mode: bool | None = None, static_dir: str | None = None
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    add_canonical_host_redirect(app, canonical_host)
 
     if not public_mode:
         app.include_router(analysis_router, prefix="/api")
