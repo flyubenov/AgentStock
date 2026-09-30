@@ -14,9 +14,9 @@ client = TestClient(app)
 @pytest.fixture(autouse=True)
 def _reset_limiter():
     """The per-client rate limiter is module state; every test starts clean."""
-    events_router._hits.clear()
+    events_router._limiter.clear()
     yield
-    events_router._hits.clear()
+    events_router._limiter.clear()
 
 
 def test_event_is_recorded():
@@ -139,7 +139,7 @@ def test_the_real_payloads_all_fit():
 
 
 def test_one_client_is_rate_limited_and_another_is_not(monkeypatch):
-    monkeypatch.setattr(events_router, "_RATE_LIMIT", 3)
+    monkeypatch.setattr(events_router._limiter, "limit", 3)
     with patch("routers.events.record_event", new=AsyncMock()) as rec:
         a = [client.post("/api/events", json={"event": "page_view", "visitor_id": "v-1"},
                          headers={"x-forwarded-for": "203.0.113.7"}).json()
@@ -152,31 +152,12 @@ def test_one_client_is_rate_limited_and_another_is_not(monkeypatch):
     assert rec.await_count == 4
 
 
-def test_the_limit_frees_up_once_the_window_passes(monkeypatch):
-    t = [100.0]
-    monkeypatch.setattr(events_router, "_now", lambda: t[0])
-    monkeypatch.setattr(events_router, "_RATE_LIMIT", 2)
-    monkeypatch.setattr(events_router, "_RATE_WINDOW_SECONDS", 60)
-    assert not events_router._rate_limited("ip")
-    assert not events_router._rate_limited("ip")
-    assert events_router._rate_limited("ip")
-    t[0] += 60
-    assert not events_router._rate_limited("ip")
-
-
 def test_a_forged_forwarded_for_prefix_does_not_dodge_the_limit(monkeypatch):
     # Cloud Run appends the real address; a client can only prepend. Keying on the
     # right-most entry means rotating the prefix changes nothing.
-    monkeypatch.setattr(events_router, "_RATE_LIMIT", 2)
+    monkeypatch.setattr(events_router._limiter, "limit", 2)
     with patch("routers.events.record_event", new=AsyncMock()):
         out = [client.post("/api/events", json={"event": "page_view", "visitor_id": "v-1"},
                            headers={"x-forwarded-for": f"10.0.0.{i}, 203.0.113.7"}).json()
                for i in range(3)]
     assert out[2] == {"recorded": False, "error": "rate limited"}
-
-
-def test_the_limiter_forgets_the_least_recent_client_past_its_bound(monkeypatch):
-    monkeypatch.setattr(events_router, "_MAX_CLIENTS", 3)
-    for ip in ["a", "b", "c", "d"]:
-        events_router._rate_limited(ip)
-    assert list(events_router._hits) == ["b", "c", "d"]

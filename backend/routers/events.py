@@ -1,11 +1,11 @@
 from __future__ import annotations
-import json, os, re, time
-from collections import OrderedDict, deque
+import json, os, re
 from datetime import datetime, timezone
 from fastapi import APIRouter, Request
 
 from models import AnalyticsEvent
 from services.events_sheets import record_event
+from services.rate_limit import RateLimiter, client_key
 
 router = APIRouter()
 
@@ -29,41 +29,8 @@ _MAX_PROPS_BYTES = 2048
 
 # A light per-client limit. One real visit posts about a dozen events over minutes;
 # this allows several times that per minute, so it only ever bites a script.
-_RATE_LIMIT = int(os.getenv("EVENTS_RATE_LIMIT", "60"))
-_RATE_WINDOW_SECONDS = float(os.getenv("EVENTS_RATE_WINDOW_SECONDS", "60"))
-# Bounds the limiter's own memory: past this many distinct clients the least recently
-# seen is forgotten.
-_MAX_CLIENTS = 10_000
-_hits: "OrderedDict[str, deque[float]]" = OrderedDict()
-_now = time.monotonic          # indirection so tests can move the clock
-
-
-def _client_key(request: Request) -> str:
-    """The caller's IP. Behind Cloud Run the Google front end APPENDS the address it
-    saw to X-Forwarded-For, so the right-most entry is the one a client cannot forge;
-    anything to its left came from the client itself."""
-    fwd = request.headers.get("x-forwarded-for", "")
-    if fwd.strip():
-        return fwd.split(",")[-1].strip()
-    return request.client.host if request.client else "unknown"
-
-
-def _rate_limited(key: str) -> bool:
-    now = _now()
-    q = _hits.get(key)
-    if q is None:
-        q = deque()
-        _hits[key] = q
-        while len(_hits) > _MAX_CLIENTS:
-            _hits.popitem(last=False)
-    else:
-        _hits.move_to_end(key)
-    while q and now - q[0] >= _RATE_WINDOW_SECONDS:
-        q.popleft()
-    if len(q) >= _RATE_LIMIT:
-        return True
-    q.append(now)
-    return False
+_limiter = RateLimiter(int(os.getenv("EVENTS_RATE_LIMIT", "60")),
+                       float(os.getenv("EVENTS_RATE_WINDOW_SECONDS", "60")))
 
 
 def _rejection(ev: AnalyticsEvent) -> str | None:
@@ -99,7 +66,7 @@ async def post_event(ev: AnalyticsEvent, request: Request):
     reason = _rejection(ev)
     if reason:
         return {"recorded": False, "error": reason}
-    if _rate_limited(_client_key(request)):
+    if _limiter.limited(client_key(request)):
         return {"recorded": False, "error": "rate limited"}
     ev.ts = ev.ts or datetime.now(timezone.utc).isoformat()
     try:
