@@ -27,7 +27,9 @@ def mount_spa(app: FastAPI, static_dir: str) -> bool:
         return False
     assets = root / "assets"
 
-    @app.get("/{path:path}", include_in_schema=False)
+    # HEAD too: uptime monitors and link-preview crawlers probe with it, and FastAPI's
+    # @app.get does not add it (a 405 there reads as "site down").
+    @app.api_route("/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
     async def spa(path: str):
         if path == "api" or path.startswith("api/"):
             return JSONResponse({"detail": "Not Found"}, status_code=404)

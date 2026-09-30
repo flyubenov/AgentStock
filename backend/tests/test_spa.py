@@ -94,3 +94,10 @@ def test_the_guard_itself_refuses_traversal(static_dir, path):
 def pathlib_name(resp) -> str:
     import pathlib
     return pathlib.Path(resp.path).name
+
+
+@pytest.mark.parametrize("path", ["/", "/t/AMZN", "/og-image.png"])
+def test_head_requests_are_answered_like_get(client, path):
+    # Uptime monitors and link-preview crawlers probe with HEAD; a 405 reads as "down".
+    r = client.head(path)
+    assert r.status_code == 200

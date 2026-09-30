@@ -36,6 +36,16 @@ async def lifespan(app: FastAPI):
     # itself never raises (a Yahoo outage at boot just leaves the cache cold), and this
     # must not block startup on live network calls either way.
     _seed_task = asyncio.create_task(seed(LANDING_MARQUEE_TICKERS))
+    # On Cloud Run's request-based billing CPU is throttled between requests, so a
+    # fire-and-forget seed would be starved right after a deploy. Startup gets boosted
+    # CPU and a long probe window, so production sets LANDING_SEED_WAIT_SECONDS to hold
+    # the new revision back (bounded) until the marquee tickers are warm. Default 0 =
+    # fire-and-forget, as in local dev. shield(): hitting the bound must not cancel the
+    # seed, which then just carries on in the background.
+    seed_wait = float(os.getenv("LANDING_SEED_WAIT_SECONDS", "0"))
+    if seed_wait > 0:
+        with suppress(asyncio.TimeoutError):
+            await asyncio.wait_for(asyncio.shield(_seed_task), seed_wait)
     # Queued funnel events are written on a timer, not only once a batch fills —
     # see services/events_sheets.py for every trigger.
     _flush_task = asyncio.create_task(flush_loop())

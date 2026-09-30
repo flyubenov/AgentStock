@@ -107,6 +107,7 @@
 | `LANDING_FAST_TTL` | `14400` | 4 hours (R8) |
 | `LANDING_CACHE_MAX_ENTRIES` | `256` | New. Replaces the hard-coded 64 |
 | `LANDING_RATE_LIMIT` / `LANDING_RATE_WINDOW_SECONDS` | `20` / `60` | New (§5) |
+| `LANDING_SEED_WAIT_SECONDS` | `90` | Startup waits (bounded) for the AAPL/MSFT/NVDA pre-warm, because request-based billing throttles CPU between requests. Unset/0 = fire-and-forget (local dev) |
 
 - The deploy uses `--set-env-vars`, so **the repo is the single source of truth**. An env var edited by hand in the console is overwritten by the next deploy; change config through a PR instead.
 - `GOOGLE_SHEETS_ID`, `GOOGLE_SHEETS_CREDS_JSON` and `GOOGLE_SHEETS_CREDS_PATH` are **never set** in production.
@@ -147,7 +148,8 @@ Steps 1 and 2 only, plus `npm run build`, so the type check also gates PRs. Noth
 
 | Service account | Roles |
 |---|---|
-| `intrinsica-build` | `roles/run.admin` (deploy and set public access), `roles/artifactregistry.writer`, `roles/logging.logWriter`; `roles/iam.serviceAccountUser` **on `intrinsica-run` only** |
+| `intrinsica-build` | `roles/run.admin` (deploy and set public access), `roles/artifactregistry.writer`, `roles/logging.logWriter`; `roles/iam.serviceAccountUser` **on `intrinsica-run` only**. Used by `intrinsica-deploy` (push to `main`) only |
+| `intrinsica-pr` | `roles/logging.logWriter` only. Used by `intrinsica-pr`: a PR can edit `cloudbuild-pr.yaml`, so PR builds must not hold deploy rights (final-review finding) |
 | `intrinsica-run` | No project roles. Editor on the events sheet (granted in Google Sheets, not IAM) |
 
 ### 3.5 Artifact Registry

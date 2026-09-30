@@ -37,6 +37,7 @@ Intrinsica runs as **one Cloud Run service**, `intrinsica`, in `europe-west1`. A
 | `LANDING_FAST_TTL` | `14400` | 4 hours (R8) |
 | `LANDING_CACHE_MAX_ENTRIES` | `256` | New. Replaces the hard-coded 64 |
 | `LANDING_RATE_LIMIT` / `LANDING_RATE_WINDOW_SECONDS` | `20` / `60` | New (§5) |
+| `LANDING_SEED_WAIT_SECONDS` | `90` | Startup waits (bounded) for the AAPL/MSFT/NVDA pre-warm, because request-based billing throttles CPU between requests. Unset/0 = fire-and-forget (local dev) |
 
 - The deploy uses `--set-env-vars`, so **the repo is the single source of truth**. An env var edited by hand in the console is overwritten by the next deploy; change config through a PR instead.
 - `GOOGLE_SHEETS_ID`, `GOOGLE_SHEETS_CREDS_JSON` and `GOOGLE_SHEETS_CREDS_PATH` are **never set** in production.
@@ -79,9 +80,11 @@ A budget **alerts** you; it does not stop spending. The real cap is max instance
 ```bash
 gcloud iam service-accounts create intrinsica-run   --display-name="Intrinsica runtime"
 gcloud iam service-accounts create intrinsica-build --display-name="Intrinsica build/deploy"
+gcloud iam service-accounts create intrinsica-pr    --display-name="Intrinsica PR checks (tests only)"
 
 export RUN_SA=intrinsica-run@$PROJECT_ID.iam.gserviceaccount.com
 export BUILD_SA=intrinsica-build@$PROJECT_ID.iam.gserviceaccount.com
+export PR_SA=intrinsica-pr@$PROJECT_ID.iam.gserviceaccount.com
 
 for ROLE in roles/run.admin roles/artifactregistry.writer roles/logging.logWriter; do
   gcloud projects add-iam-policy-binding $PROJECT_ID \
@@ -90,8 +93,13 @@ done
 
 gcloud iam service-accounts add-iam-policy-binding $RUN_SA \
   --member=serviceAccount:$BUILD_SA --role=roles/iam.serviceAccountUser
+
+# PR builds only run tests, so they get a separate identity that can do nothing but write
+# logs: a pull request can change cloudbuild-pr.yaml, so a PR build must never hold the
+# rights to deploy to production.
+gcloud projects add-iam-policy-binding $PROJECT_ID \n  --member=serviceAccount:$PR_SA --role=roles/logging.logWriter --condition=None
 ```
-**Check:** `gcloud projects get-iam-policy $PROJECT_ID --flatten=bindings --filter="bindings.members:$BUILD_SA" --format="value(bindings.role)"` lists the three roles.
+**Check:** `gcloud projects get-iam-policy $PROJECT_ID --flatten=bindings --filter="bindings.members:$BUILD_SA" --format="value(bindings.role)"` lists the three roles, and the same command with `$PR_SA` lists only `roles/logging.logWriter`.
 
 ### Step 4: Artifact Registry
 ```bash
@@ -134,7 +142,7 @@ gcloud artifacts repositories set-cleanup-policies intrinsica \
 | Comment control | — | Required except for owners and collaborators |
 | Configuration | Cloud Build config file, `/cloudbuild.yaml` | `/cloudbuild-pr.yaml` |
 | Substitution | `_SMOKE_URL` = *(leave empty for now)* | — |
-| Service account | `intrinsica-build@…` | `intrinsica-build@…` |
+| Service account | `intrinsica-build@…` | `intrinsica-pr@…` (logs only, not the deploy account) |
 
 4. **[GitHub]** (optional, recommended) Repo → Settings → Branches → the rule for `main` → *Require status checks* → select the `intrinsica-pr` check.
 
@@ -146,7 +154,7 @@ gcloud artifacts repositories set-cleanup-policies intrinsica \
    gcloud run services describe intrinsica --region=$REGION --format="value(status.url)"
    ```
    Open that `https://intrinsica-…run.app` URL. The page loads and the AAPL, MSFT and NVDA tiles render.
-4. **Check the sheet:** type a ticker on the page, wait about 30 s, and an `Events` tab with rows appears.
+4. **Check the sheet:** type a ticker on the page, wait about 30 s, then reload the page or click once more. The queued events are written on the next request after that 30 s (Cloud Run only gives the app CPU while it handles a request), and the `Events` tab appears with the rows.
 
 ### Step 8: Verify domain ownership
 ```bash
