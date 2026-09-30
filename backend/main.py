@@ -10,6 +10,7 @@ from routers.watchlists import router as watchlists_router
 from routers.events import router as events_router
 from routers.landing import router as landing_router
 from landing.cache import seed
+from spa import mount_spa
 from services.events_sheets import flush_events, flush_loop
 
 load_dotenv()
@@ -95,6 +96,9 @@ def create_app(*, public_mode: bool | None = None, static_dir: str | None = None
     @app.get("/api/health")
     def health():
         return {"status": "ok"}
+
+    # Last: the SPA catch-all must not shadow any API route registered above.
+    mount_spa(app, static_dir)
 
     return app
 
