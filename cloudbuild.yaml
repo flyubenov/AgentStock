@@ -1,0 +1,72 @@
+# Deploy pipeline — trigger "intrinsica-deploy" (push to ^main$). See DEPLOY.md.
+# Tests gate everything: a failure in steps 1-5 leaves the running revision untouched.
+# All service config lives here and is applied on every deploy (--set-env-vars), so
+# the repo is the single source of truth; console edits are overwritten.
+substitutions:
+  _REGION: europe-west1
+  _SERVICE: intrinsica
+  _IMAGE: europe-west1-docker.pkg.dev/${PROJECT_ID}/intrinsica/app
+  _SMOKE_URL: ""   # set to https://intrinsica.io on the trigger once the domain serves
+
+options:
+  logging: CLOUD_LOGGING_ONLY          # required with a user-specified build service account
+  dynamicSubstitutions: true
+
+steps:
+  - id: backend-tests
+    name: python:3.12-slim
+    dir: backend
+    entrypoint: bash
+    args: ["-c", "pip install -q -r requirements.txt -r requirements-dev.txt && python -m pytest -q"]
+
+  - id: frontend-tests
+    name: node:22-slim
+    dir: frontend
+    entrypoint: bash
+    args: ["-c", "npm ci && npx vitest run"]
+    waitFor: ["-"]
+
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "${_IMAGE}:${SHORT_SHA}", "."]
+    waitFor: ["backend-tests", "frontend-tests"]
+
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args: ["push", "${_IMAGE}:${SHORT_SHA}"]
+
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=${_IMAGE}:${SHORT_SHA}
+      - --region=${_REGION}
+      - --service-account=intrinsica-run@${PROJECT_ID}.iam.gserviceaccount.com
+      - --allow-unauthenticated
+      - --min-instances=1
+      - --max-instances=3
+      - --cpu=1
+      - --memory=1Gi
+      - --cpu-throttling
+      - --cpu-boost
+      - --concurrency=80
+      - --timeout=300
+      - --set-env-vars=INTRINSICA_PUBLIC_MODE=1,CANONICAL_HOST=intrinsica.io,CORS_ORIGINS=https://intrinsica.io,INTRINSICA_EVENTS_SHEET_ID=1e4U4roainSuDJPHwsxkVrZezlA2InDPHV1zaQHuCzqY,LANDING_SLOW_TTL=604800,LANDING_FAST_TTL=14400,LANDING_CACHE_MAX_ENTRIES=256,LANDING_RATE_LIMIT=20,LANDING_RATE_WINDOW_SECONDS=60
+
+  - id: smoke
+    name: curlimages/curl
+    entrypoint: sh
+    args:
+      - -c
+      - |
+        if [ -z "${_SMOKE_URL}" ]; then echo "Smoke check skipped: _SMOKE_URL is empty."; exit 0; fi
+        for attempt in 1 2 3 4 5; do
+          if curl -fsS "${_SMOKE_URL}/api/health" | grep -q '"status":"ok"'; then
+            echo "Healthy: ${_SMOKE_URL}"; exit 0
+          fi
+          sleep 10
+        done
+        echo "Smoke check FAILED for ${_SMOKE_URL}: roll back per DEPLOY.md (Operations)."; exit 1

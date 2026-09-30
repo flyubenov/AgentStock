@@ -1,0 +1,18 @@
+# PR checks — trigger "intrinsica-pr" (pull request into ^main$). Tests and the
+# frontend type-check/build only: nothing is pushed or deployed.
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+steps:
+  - id: backend-tests
+    name: python:3.12-slim
+    dir: backend
+    entrypoint: bash
+    args: ["-c", "pip install -q -r requirements.txt -r requirements-dev.txt && python -m pytest -q"]
+
+  - id: frontend-tests-and-build
+    name: node:22-slim
+    dir: frontend
+    entrypoint: bash
+    args: ["-c", "npm ci && npx vitest run && VITE_PUBLIC_MODE=1 npm run build"]
+    waitFor: ["-"]
