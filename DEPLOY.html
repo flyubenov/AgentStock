@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Deploying Intrinsica</title>
+<style>
+:root{--bg:#fff;--fg:#1c2024;--muted:#5f6b76;--line:#e3e7eb;--code:#f4f6f8;--accent:#1d5fd6;--side:#f8f9fb}
+@media (prefers-color-scheme:dark){:root{--bg:#14171a;--fg:#e6e9ec;--muted:#98a3ad;--line:#2a3036;--code:#1d2226;--accent:#6ea4ff;--side:#101316}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.wrap{display:flex;min-height:100vh}
+nav{position:sticky;top:0;align-self:flex-start;height:100vh;overflow:auto;width:290px;flex:none;padding:24px 16px;background:var(--side);border-right:1px solid var(--line);font-size:14px}
+nav a{display:block;color:var(--muted);text-decoration:none;padding:4px 8px;border-radius:6px}
+nav a:hover{color:var(--fg);background:var(--code)}
+nav a.l3{padding-left:20px}
+nav a.l2{font-weight:600;color:var(--fg);margin-top:10px}
+main{max-width:860px;padding:32px 40px 96px;min-width:0}
+h1{font-size:2rem;margin-top:0}
+h2{margin-top:2.6rem;padding-top:.6rem;border-top:1px solid var(--line)}
+h3{margin-top:2.2rem;font-size:1.2rem}
+a{color:var(--accent)}
+code{background:var(--code);padding:.15em .4em;border-radius:5px;font:.88em ui-monospace,Consolas,monospace}
+pre{position:relative;background:var(--code);border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto;line-height:1.5}
+pre code{background:none;padding:0;font-size:.86rem}
+.copy{position:absolute;top:8px;right:8px;font:12px system-ui;border:1px solid var(--line);background:var(--bg);color:var(--muted);border-radius:6px;padding:3px 9px;cursor:pointer}
+.copy:hover{color:var(--fg)}
+table{border-collapse:collapse;width:100%;font-size:.93rem;display:block;overflow:auto}
+th,td{border:1px solid var(--line);padding:8px 12px;text-align:left;vertical-align:top}
+th{background:var(--code)}
+blockquote{margin:1rem 0;padding:.4rem 1rem;border-left:4px solid var(--accent);background:var(--code);border-radius:0 8px 8px 0}
+li.task{list-style:none;margin-left:-1.2rem}
+li.task input{margin-right:.5rem;transform:scale(1.2)}
+li{margin:.25rem 0}
+@media (max-width:860px){nav{display:none}main{padding:20px 16px 64px}}
+</style></head><body><div class="wrap">
+<nav><strong style="display:block;margin:0 8px 8px">Deploying Intrinsica</strong><a class="l2" href="#how-it-works">How it works</a><a class="l2" href="#configuration">Configuration</a><a class="l2" href="#one-time-setup">One-time setup</a><a class="l3" href="#step-1-create-the-project-and-enable-apis">Step 1: Create the project and enable APIs</a><a class="l3" href="#step-2-budget-alert">Step 2: Budget alert</a><a class="l3" href="#step-3-service-accounts">Step 3: Service accounts</a><a class="l3" href="#step-4-artifact-registry">Step 4: Artifact Registry</a><a class="l3" href="#step-5-connect-the-google-sheet">Step 5: Connect the Google Sheet</a><a class="l3" href="#step-6-connect-github-and-create-the-triggers">Step 6: Connect GitHub and create the triggers</a><a class="l3" href="#step-7-first-deploy">Step 7: First deploy</a><a class="l3" href="#step-8-verify-domain-ownership">Step 8: Verify domain ownership</a><a class="l3" href="#step-9-map-the-domain">Step 9: Map the domain</a><a class="l3" href="#step-10-dns-records-at-spaceship">Step 10: DNS records at Spaceship</a><a class="l3" href="#step-11-lock-down-and-turn-on-the-smoke-check">Step 11: Lock down and turn on the smoke check</a><a class="l3" href="#step-12-launch-checklist">Step 12: Launch checklist</a><a class="l2" href="#operations">Operations</a><a class="l2" href="#local-development">Local development</a></nav>
+<main><h1 id="deploying-intrinsica">Deploying Intrinsica</h1>
+<p>Intrinsica runs as <strong>one Cloud Run service</strong>, <code>intrinsica</code>, in <code>europe-west1</code>. A single container image holds the React build and the FastAPI backend, which serves the page and <code>/api</code> from one origin. Every push to <code>main</code> is tested, built and deployed by Cloud Build, and every pull request into <code>main</code> runs the tests.</p>
+<h2 id="how-it-works">How it works</h2>
+<pre><code> visitor ──HTTPS──▶ intrinsica.io  (Cloud Run domain mapping, Google-managed cert)
+                         │
+                         ▼
+          Cloud Run service &quot;intrinsica&quot;  (europe-west1, min 1 / max 3)
+          ┌──────────────────────────────────────────────┐
+          │ one container (root Dockerfile)              │
+          │  FastAPI / uvicorn                           │
+          │   /api/landing/*, /api/events, /api/health   │
+          │   everything else → built React app (dist/)  │
+          └───────────┬──────────────────────┬───────────┘
+                      │ ADC (runtime SA)     │ HTTPS
+                      ▼                      ▼
+        Google Sheet 1e4U4…  (Events tab)   Yahoo Finance (yfinance)
+
+ GitHub intrinsica-io/intrinsica
+   PR → main   ──▶ Cloud Build trigger &quot;intrinsica-pr&quot;     : tests only
+   push main   ──▶ Cloud Build trigger &quot;intrinsica-deploy&quot; : tests → image → Artifact Registry → Cloud Run → smoke check
+</code></pre>
+<h2 id="configuration">Configuration</h2>
+<table>
+<thead>
+<tr>
+<th>Var</th>
+<th>Value</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>INTRINSICA_PUBLIC_MODE</code></td>
+<td><code>1</code></td>
+<td>§2.4</td>
+</tr>
+<tr>
+<td><code>INTRINSICA_STATIC_DIR</code></td>
+<td><code>/app/static</code></td>
+<td>Baked into the image (Dockerfile <code>ENV</code>), not set by the deploy</td>
+</tr>
+<tr>
+<td><code>CANONICAL_HOST</code></td>
+<td><code>intrinsica.io</code></td>
+<td>§2.3</td>
+</tr>
+<tr>
+<td><code>CORS_ORIGINS</code></td>
+<td><code>https://intrinsica.io</code></td>
+<td>Same-origin already. This blocks other sites' pages</td>
+</tr>
+<tr>
+<td><code>INTRINSICA_EVENTS_SHEET_ID</code></td>
+<td><code>1e4U4roainSuDJPHwsxkVrZezlA2InDPHV1zaQHuCzqY</code></td>
+<td>R6</td>
+</tr>
+<tr>
+<td><code>LANDING_SLOW_TTL</code></td>
+<td><code>604800</code></td>
+<td>7 days (R8)</td>
+</tr>
+<tr>
+<td><code>LANDING_FAST_TTL</code></td>
+<td><code>14400</code></td>
+<td>4 hours (R8)</td>
+</tr>
+<tr>
+<td><code>LANDING_CACHE_MAX_ENTRIES</code></td>
+<td><code>256</code></td>
+<td>New. Replaces the hard-coded 64</td>
+</tr>
+<tr>
+<td><code>LANDING_RATE_LIMIT</code> / <code>LANDING_RATE_WINDOW_SECONDS</code></td>
+<td><code>20</code> / <code>60</code></td>
+<td>New (§5)</td>
+</tr>
+<tr>
+<td><code>LANDING_SEED_WAIT_SECONDS</code></td>
+<td><code>90</code></td>
+<td>Startup waits (bounded) for the AAPL/MSFT/NVDA pre-warm, because request-based billing throttles CPU between requests. Unset/0 = fire-and-forget (local dev)</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>The deploy uses <code>--set-env-vars</code>, so <strong>the repo is the single source of truth</strong>. An env var edited by hand in the console is overwritten by the next deploy; change config through a PR instead.</li>
+<li><code>GOOGLE_SHEETS_ID</code>, <code>GOOGLE_SHEETS_CREDS_JSON</code> and <code>GOOGLE_SHEETS_CREDS_PATH</code> are <strong>never set</strong> in production.</li>
+</ul>
+<p>To change a value, edit <code>cloudbuild.yaml</code> in a PR.</p>
+<h2 id="one-time-setup">One-time setup</h2>
+<blockquote>
+<p>Run commands in <strong>Google Cloud Shell</strong> (console → the <code>&gt;_</code> icon, top right). It is already authenticated and has <code>gcloud</code>, so nothing is needed on Windows. Anything done in a browser UI is marked <strong>[Console]</strong>, <strong>[Spaceship]</strong>, <strong>[Sheets]</strong> or <strong>[GitHub]</strong>.
+Steps 1–5 can be done at any time. Step 6 needs the implementation PR (the pipeline files) merged first.</p>
+</blockquote>
+<h3 id="step-1-create-the-project-and-enable-apis">Step 1: Create the project and enable APIs</h3>
+<ol>
+<li><strong>[Console]</strong> Billing → confirm you have an active <strong>billing account</strong>. If not, create one (pay-as-you-go; a card is required).</li>
+<li>In Cloud Shell:
+   <code>bash
+   export PROJECT_ID=intrinsica-prod      # must be globally unique; add a suffix if taken
+   export REGION=europe-west1
+   gcloud projects create $PROJECT_ID --name="Intrinsica"
+   gcloud billing accounts list           # copy the ACCOUNT_ID
+   gcloud billing projects link $PROJECT_ID --billing-account=XXXXXX-XXXXXX-XXXXXX
+   gcloud config set project $PROJECT_ID
+   gcloud services enable run.googleapis.com cloudbuild.googleapis.com \
+     artifactregistry.googleapis.com sheets.googleapis.com iam.googleapis.com \
+     secretmanager.googleapis.com</code>
+   Secret Manager is only used internally by the Cloud Build GitHub connection to store its token. The app has no secrets.</li>
+<li><strong>Check:</strong> <code>gcloud services list --enabled</code> shows all six.</li>
+</ol>
+<blockquote>
+<p>Cloud Shell sessions forget variables. At the start of each later session, run <code>export PROJECT_ID=… REGION=europe-west1</code> and <code>gcloud config set project $PROJECT_ID</code> again.</p>
+</blockquote>
+<h3 id="step-2-budget-alert">Step 2: Budget alert</h3>
+<p><strong>[Console]</strong> Billing → Budgets &amp; alerts → <strong>Create budget</strong>:
+- Scope: project <code>Intrinsica</code>.
+- Amount: 25 (in your billing currency).
+- Thresholds: 50%, 90% and 100%, with email to billing admins.</p>
+<p>A budget <strong>alerts</strong> you; it does not stop spending. The real cap is max instances = 3.</p>
+<h3 id="step-3-service-accounts">Step 3: Service accounts</h3>
+<pre><code class="language-bash">gcloud iam service-accounts create intrinsica-run   --display-name=&quot;Intrinsica runtime&quot;
+gcloud iam service-accounts create intrinsica-build --display-name=&quot;Intrinsica build/deploy&quot;
+gcloud iam service-accounts create intrinsica-pr    --display-name=&quot;Intrinsica PR checks (tests only)&quot;
+
+export RUN_SA=intrinsica-run@$PROJECT_ID.iam.gserviceaccount.com
+export BUILD_SA=intrinsica-build@$PROJECT_ID.iam.gserviceaccount.com
+export PR_SA=intrinsica-pr@$PROJECT_ID.iam.gserviceaccount.com
+
+for ROLE in roles/run.admin roles/artifactregistry.writer roles/logging.logWriter; do
+  gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member=serviceAccount:$BUILD_SA --role=$ROLE --condition=None
+done
+
+gcloud iam service-accounts add-iam-policy-binding $RUN_SA \
+  --member=serviceAccount:$BUILD_SA --role=roles/iam.serviceAccountUser
+
+# PR builds only run tests, so they get a separate identity that can do nothing but write
+# logs: a pull request can change cloudbuild-pr.yaml, so a PR build must never hold the
+# rights to deploy to production.
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member=serviceAccount:$PR_SA --role=roles/logging.logWriter --condition=None
+</code></pre>
+<p><strong>Check:</strong> <code>gcloud projects get-iam-policy $PROJECT_ID --flatten=bindings --filter="bindings.members:$BUILD_SA" --format="value(bindings.role)"</code> lists the three roles, and the same command with <code>$PR_SA</code> lists only <code>roles/logging.logWriter</code>.</p>
+<h3 id="step-4-artifact-registry">Step 4: Artifact Registry</h3>
+<pre><code class="language-bash">gcloud artifacts repositories create intrinsica \
+  --repository-format=docker --location=$REGION --description=&quot;Intrinsica images&quot;
+
+cat &gt; cleanup.json &lt;&lt;'EOF'
+[
+  {&quot;name&quot;: &quot;keep-recent-10&quot;, &quot;action&quot;: {&quot;type&quot;: &quot;Keep&quot;},
+   &quot;mostRecentVersions&quot;: {&quot;keepCount&quot;: 10}},
+  {&quot;name&quot;: &quot;delete-older-30d&quot;, &quot;action&quot;: {&quot;type&quot;: &quot;Delete&quot;},
+   &quot;condition&quot;: {&quot;tagState&quot;: &quot;any&quot;, &quot;olderThan&quot;: &quot;30d&quot;}}
+]
+EOF
+gcloud artifacts repositories set-cleanup-policies intrinsica \
+  --location=$REGION --policy=cleanup.json --no-dry-run
+</code></pre>
+<h3 id="step-5-connect-the-google-sheet">Step 5: Connect the Google Sheet</h3>
+<ol>
+<li><strong>[Sheets]</strong> Open <code>https://docs.google.com/spreadsheets/d/1e4U4roainSuDJPHwsxkVrZezlA2InDPHV1zaQHuCzqY/edit</code>.</li>
+<li><strong>Share</strong> → add <code>intrinsica-run@&lt;PROJECT_ID&gt;.iam.gserviceaccount.com</code> → role <strong>Editor</strong> → untick "Notify people" → <strong>Share</strong>. Google may warn that the address is outside your organisation; that is expected.</li>
+<li>In the same dialog, confirm <strong>General access = Restricted</strong>.</li>
+<li>Do <strong>not</strong> create the <code>Events</code> tab yourself. The app creates it with the right headers on its first write. If you want to pre-create it, name it exactly <code>Events</code> and put <code>Timestamp | Event | VisitorId | Props</code> in row 1.</li>
+</ol>
+<h3 id="step-6-connect-github-and-create-the-triggers">Step 6: Connect GitHub and create the triggers</h3>
+<p><em>Prerequisite: this repo's <code>main</code> contains <code>cloudbuild.yaml</code> and <code>cloudbuild-pr.yaml</code>.</em></p>
+<ol>
+<li><strong>[Console]</strong> Cloud Build → <strong>Repositories</strong> → <strong>2nd gen</strong> tab → <strong>Create host connection</strong>:
+   - Provider GitHub, region <code>europe-west1</code>, name <code>github-intrinsica</code>.
+   - <strong>Connect</strong> → authorise → <strong>Install in a new account</strong>, choose the <strong><code>intrinsica-io</code></strong> org → <strong>Only select repositories</strong> → <code>intrinsica</code> → Install.
+   - If prompted to grant the Cloud Build service agent the Secret Manager Admin role, accept.</li>
+<li>On the connection → <strong>Link repository</strong> → <code>intrinsica-io/intrinsica</code> → Link.</li>
+<li><strong>[Console]</strong> Cloud Build → <strong>Triggers</strong> (region <code>europe-west1</code>) → <strong>Create trigger</strong>. Create two:</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th><code>intrinsica-deploy</code></th>
+<th><code>intrinsica-pr</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Event</td>
+<td>Push to a branch</td>
+<td>Pull request</td>
+</tr>
+<tr>
+<td>Repository</td>
+<td><code>intrinsica-io/intrinsica</code> (2nd gen)</td>
+<td>same</td>
+</tr>
+<tr>
+<td>Branch</td>
+<td><code>^main$</code></td>
+<td>Base branch <code>^main$</code></td>
+</tr>
+<tr>
+<td>Comment control</td>
+<td>—</td>
+<td>Required except for owners and collaborators</td>
+</tr>
+<tr>
+<td>Configuration</td>
+<td>Cloud Build config file, <code>/cloudbuild.yaml</code></td>
+<td><code>/cloudbuild-pr.yaml</code></td>
+</tr>
+<tr>
+<td>Substitution</td>
+<td><code>_SMOKE_URL</code> = <em>(leave empty for now)</em></td>
+<td>—</td>
+</tr>
+<tr>
+<td>Service account</td>
+<td><code>intrinsica-build@…</code></td>
+<td><code>intrinsica-pr@…</code> (logs only, not the deploy account)</td>
+</tr>
+</tbody>
+</table>
+<ol start="4">
+<li><strong>[GitHub]</strong> (optional, recommended) Repo → Settings → Branches → the rule for <code>main</code> → <em>Require status checks</em> → select the <code>intrinsica-pr</code> check.</li>
+</ol>
+<h3 id="step-7-first-deploy">Step 7: First deploy</h3>
+<ol>
+<li><strong>[Console]</strong> Triggers → <code>intrinsica-deploy</code> → <strong>Run</strong> → branch <code>main</code>.</li>
+<li>Watch Cloud Build → History. The first build takes about 5–8 minutes; later ones are faster thanks to layer cache.</li>
+<li>When it is green:
+   <code>bash
+   gcloud run services describe intrinsica --region=$REGION --format="value(status.url)"</code>
+   Open that <code>https://intrinsica-…run.app</code> URL. The page loads and the AAPL, MSFT and NVDA tiles render.</li>
+<li><strong>Check the sheet:</strong> type a ticker on the page, wait about 30 s, then reload the page or click once more. The queued events are written on the next request after that 30 s (Cloud Run only gives the app CPU while it handles a request), and the <code>Events</code> tab appears with the rows.</li>
+</ol>
+<h3 id="step-8-verify-domain-ownership">Step 8: Verify domain ownership</h3>
+<pre><code class="language-bash">gcloud domains verify intrinsica.io
+</code></pre>
+<p>This opens Google Search Console. Choose <strong>Domain</strong> property → copy the <strong>TXT</strong> record → <strong>[Spaceship]</strong> Domains → <code>intrinsica.io</code> → <strong>DNS / Nameservers</strong> → Add record: type <strong>TXT</strong>, host <code>@</code>, value <code>google-site-verification=…</code>, TTL default → Save. Back in Search Console → <strong>Verify</strong>. It can take a few minutes; retry if it fails at first.</p>
+<p>Use the <strong>same Google account</strong> that runs <code>gcloud</code> in Cloud Shell. Only a verified owner can create the mapping.</p>
+<h3 id="step-9-map-the-domain">Step 9: Map the domain</h3>
+<pre><code class="language-bash">gcloud beta run domain-mappings create --service=intrinsica --domain=intrinsica.io     --region=$REGION
+gcloud beta run domain-mappings create --service=intrinsica --domain=www.intrinsica.io --region=$REGION
+gcloud beta run domain-mappings describe --domain=intrinsica.io --region=$REGION
+</code></pre>
+<p>The <code>describe</code> output lists <code>resourceRecords</code>: 4 × <code>A</code> and 4 × <code>AAAA</code> for <code>intrinsica.io</code>, and 1 × <code>CNAME</code> → <code>ghs.googlehosted.com.</code> for <code>www</code>.</p>
+<h3 id="step-10-dns-records-at-spaceship">Step 10: DNS records at Spaceship</h3>
+<p><strong>[Spaceship]</strong> <code>intrinsica.io</code> → DNS records:
+1. <strong>Delete</strong> any existing records on host <code>@</code> or <code>www</code> of type A, AAAA or CNAME, and any Spaceship parking or URL-redirect records. Keep the TXT verification record.
+2. Add the <strong>4 A</strong> records: host <code>@</code>, each IP from step 9.
+3. Add the <strong>4 AAAA</strong> records: host <code>@</code>, each IPv6 address from step 9.
+4. Add <strong>1 CNAME</strong>: host <code>www</code>, value <code>ghs.googlehosted.com.</code>.
+5. Save, then watch the mapping status:
+   <code>bash
+   gcloud beta run domain-mappings describe --domain=intrinsica.io --region=$REGION \
+     --format="value(status.conditions)"</code>
+   Wait until <code>Ready</code> and <code>CertificateProvisioned</code> are <code>True</code>. That takes 15 minutes to 24 hours; propagation can be checked at dnschecker.org.</p>
+<h3 id="step-11-lock-down-and-turn-on-the-smoke-check">Step 11: Lock down and turn on the smoke check</h3>
+<ol>
+<li>Confirm that <code>https://intrinsica.io</code> and <code>https://www.intrinsica.io</code> work, and that <code>www</code> redirects to the apex.</li>
+<li>Disable the default URL:
+   <code>bash
+   gcloud run services update intrinsica --region=$REGION --no-default-url</code>
+   Re-open <code>https://intrinsica.io</code>; it must still work. The old <code>run.app</code> URL now returns 404. If the domain stopped serving, revert with <code>--default-url</code> and note it.</li>
+<li><strong>[Console]</strong> Triggers → <code>intrinsica-deploy</code> → Edit → set <code>_SMOKE_URL</code> = <code>https://intrinsica.io</code> → Save.</li>
+</ol>
+<h3 id="step-12-launch-checklist">Step 12: Launch checklist</h3>
+<ul>
+<li class="task"><input type="checkbox"> <code>https://intrinsica.io</code> shows a valid padlock. <code>http://intrinsica.io</code> and <code>https://www.intrinsica.io</code> both end at <code>https://intrinsica.io/</code>.</li>
+<li class="task"><input type="checkbox"> <code>https://intrinsica.io/api/health</code> returns <code>{"status":"ok"}</code>.</li>
+<li class="task"><input type="checkbox"> <code>https://intrinsica.io/api/database</code> and <code>/api/analysis</code> return 404, and <code>/app</code> shows the landing page.</li>
+<li class="task"><input type="checkbox"> The AAPL, MSFT and NVDA tiles are instant. A new ticker (e.g. AMZN) evaluates live, and a second view of it is instant.</li>
+<li class="task"><input type="checkbox"> New rows in the sheet's <code>Events</code> tab.</li>
+<li class="task"><input type="checkbox"> View source shows the <code>og:title</code>, <code>og:image</code> and <code>og:url</code> tags. The X card preview is checked (post a draft or use a card-preview tool).</li>
+<li class="task"><input type="checkbox"> The <code>run.app</code> URL no longer serves.</li>
+<li class="task"><input type="checkbox"> Open a trivial PR → <code>intrinsica-pr</code> runs green on it → merge → <code>intrinsica-deploy</code> runs green → the change is live.</li>
+<li class="task"><input type="checkbox"> Cloud Run → <code>intrinsica</code> → Metrics shows 1 instance idle-warm.</li>
+</ul>
+<h2 id="operations">Operations</h2>
+<ul>
+<li><strong>Deploy:</strong> merge a PR to <code>main</code>. Nothing else.</li>
+<li><strong>Change config</strong> (cache TTLs, rate limit, sheet): edit the env vars in <code>cloudbuild.yaml</code> in a PR. Console edits are overwritten on the next deploy.</li>
+<li><strong>Roll back:</strong>
+  <code>bash
+  gcloud run revisions list --service=intrinsica --region=$REGION
+  gcloud run services update-traffic intrinsica --region=$REGION --to-revisions=&lt;GOOD_REVISION&gt;=100</code>
+  Then fix forward with a PR. After it deploys, <code>gcloud run services update-traffic intrinsica --region=$REGION --to-latest</code> returns traffic to the newest revision.</li>
+<li><strong>Logs:</strong> Cloud Run → <code>intrinsica</code> → Logs. Save this Logs Explorer query as "Yahoo errors":
+  <code>resource.type="cloud_run_revision"
+  resource.labels.service_name="intrinsica"
+  (textPayload=~"429|Too Many Requests|YFRateLimit|rate limit" OR severity&gt;=ERROR)</code>
+  Frequent hits mean Yahoo is throttling Cloud Run IPs; revisit §7.</li>
+<li><strong>Cost:</strong> Billing → Reports, filtered to project Intrinsica.</li>
+</ul>
+<h2 id="local-development">Local development</h2>
+<p>Unchanged: <code>./start.sh</code> runs the backend on <code>:8000</code> (analyst app included; events stay in memory unless <code>INTRINSICA_EVENTS_SHEET_ID</code> is set) and the frontend on <code>:5173</code>.</p>
+<p>To preview production locally:</p>
+<pre><code class="language-bash">cd frontend &amp;&amp; VITE_PUBLIC_MODE=1 npm run build
+cd ../backend &amp;&amp; INTRINSICA_PUBLIC_MODE=1 INTRINSICA_STATIC_DIR=../frontend/dist python -m uvicorn main:app --port 8080
+</code></pre>
+<p>Then rebuild <code>frontend/dist</code> without the flag (<code>npm run build</code>) so a local build is not left in public mode.</p></main></div>
+<script>
+document.querySelectorAll('pre').forEach(function(p){
+  var b=document.createElement('button');b.className='copy';b.textContent='Copy';
+  b.onclick=function(){navigator.clipboard.writeText((p.querySelector('code')||p).innerText).then(function(){b.textContent='Copied';setTimeout(function(){b.textContent='Copy'},1500)})};
+  p.appendChild(b);
+});
+</script></body></html>
