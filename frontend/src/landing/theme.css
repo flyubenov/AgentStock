@@ -537,3 +537,15 @@
   transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); }
 .intrinsica .rv.in { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) { .intrinsica .rv { opacity: 1; transform: none; transition: none; } }
+
+/* privacy notice (launch checklist B4) */
+.intrinsica .footer .links-row { margin-top: 12px; font-size: 13px; }
+.intrinsica .footer .links-row a,
+.intrinsica .opt a { color: var(--accent); text-decoration: underline; }
+.intrinsica .privacy { max-width: 720px; color: var(--dim); font-size: 15px; line-height: 1.6; }
+.intrinsica .privacy h2 { margin: 28px 0 8px; font: 700 18px var(--fh); color: var(--text); }
+.intrinsica .privacy p { margin-top: 10px; }
+.intrinsica .privacy ul { margin: 10px 0 0 20px; display: grid; gap: 8px; }
+.intrinsica .privacy b { color: var(--text); }
+.intrinsica .privacy a { color: var(--accent); text-decoration: underline; overflow-wrap: anywhere; }
+.intrinsica .privacy code { font: 500 13px var(--fm); }

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('./landing/LandingPage', () => ({ default: () => <div>landing-page</div> }))
 vi.mock('./landing/CheckoutPage', () => ({ default: () => <div>checkout-page</div> }))
+vi.mock('./landing/PrivacyPage', () => ({ default: () => <div>privacy-page</div> }))
 vi.mock('./pages/Home', () => ({ default: () => <div>home-page</div> }))
 vi.mock('./pages/Database', () => ({ default: () => <div>database-page</div> }))
 vi.mock('./pages/Progress', () => ({ default: () => <div>progress-page</div> }))
@@ -40,6 +41,12 @@ describe('App routes in public mode (production)', () => {
     vi.stubEnv('VITE_PUBLIC_MODE', '1')
     await renderAt('/t/AMZN')
     expect(screen.getByText('landing-page')).toBeInTheDocument()
+  })
+
+  it('serves the privacy notice', async () => {
+    vi.stubEnv('VITE_PUBLIC_MODE', '1')
+    await renderAt('/privacy')
+    expect(screen.getByText('privacy-page')).toBeInTheDocument()
   })
 
   it('keeps the checkout page', async () => {

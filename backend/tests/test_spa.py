@@ -27,7 +27,7 @@ def test_root_serves_index_and_is_never_cached(client):
     assert r.headers["cache-control"] == "no-cache"
 
 
-@pytest.mark.parametrize("path", ["/checkout", "/t/AMZN", "/app", "/database"])
+@pytest.mark.parametrize("path", ["/checkout", "/privacy", "/t/AMZN", "/app", "/database"])
 def test_client_side_routes_fall_back_to_index(client, path):
     r = client.get(path)
     assert r.status_code == 200

@@ -7,6 +7,7 @@ import TickerDetail from './pages/TickerDetail'
 import Database from './pages/Database'
 import LandingPage from './landing/LandingPage'
 import CheckoutPage from './landing/CheckoutPage'
+import PrivacyPage from './landing/PrivacyPage'
 
 /** Production builds set VITE_PUBLIC_MODE=1: intrinsica.io serves only the fake door.
  *  The Agent Stock analyst pages are not registered, and because Vite inlines this
@@ -22,13 +23,16 @@ const PUBLIC_MODE = import.meta.env.VITE_PUBLIC_MODE === '1'
  *  rather than nested under `/` because it is a separate page, not a section:
  *  LandingPage navigates to it from every plan CTA.
  *
- *  In public mode (production) only `/` and `/checkout` exist; see PUBLIC_MODE. */
+ *  `/privacy` is the privacy notice (launch checklist B4), on the same light surface.
+ *
+ *  In public mode (production) only `/`, `/checkout` and `/privacy` exist; see PUBLIC_MODE. */
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/checkout" element={<CheckoutPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
         {PUBLIC_MODE ? (
           <Route path="*" element={<LandingPage />} />
         ) : (

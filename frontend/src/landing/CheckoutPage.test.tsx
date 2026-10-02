@@ -661,3 +661,13 @@ describe('CheckoutPage counts intent once per visitor', () => {
     ])
   })
 })
+
+describe('privacy links on the checkout (launch checklist B4)', () => {
+  it('links the privacy notice from the footer and beside the email field', async () => {
+    show()
+    await userEvent.click(proceed())
+    const links = screen.getAllByRole('link', { name: /privacy/i })
+    expect(links.length).toBeGreaterThanOrEqual(2)
+    links.forEach(l => expect(l).toHaveAttribute('href', '/privacy'))
+  })
+})
