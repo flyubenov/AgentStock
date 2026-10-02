@@ -116,6 +116,18 @@ describe('track', () => {
     expect(body.visitor_id).toBe(visitorId())
   })
 
+  it('sends where the visitor came from beside the props, never inside them', () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true })
+    vi.stubGlobal('fetch', fetchMock)
+
+    track(EVENTS.planSelected, { plan: 'Pro' })
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body)
+    expect(body.props).toEqual({ plan: 'Pro' })
+    expect(body.attribution).toMatchObject({ channel: expect.any(String),
+                                             visit_channel: expect.any(String) })
+  })
+
   it('does not throw when the network rejects', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
     expect(() => track(EVENTS.pageView)).not.toThrow()

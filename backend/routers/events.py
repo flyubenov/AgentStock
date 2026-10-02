@@ -26,6 +26,9 @@ _VISITOR_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 _MAX_TS_LEN = 40
 _MAX_PROPS_KEYS = 20
 _MAX_PROPS_BYTES = 2048
+# The page sends at most eight attribution fields of at most 100 characters each.
+_MAX_ATTRIBUTION_KEYS = 12
+_MAX_ATTRIBUTION_BYTES = 1024
 
 # A light per-client limit. One real visit posts about a dozen events over minutes;
 # this allows several times that per minute, so it only ever bites a script.
@@ -49,6 +52,15 @@ def _rejection(ev: AnalyticsEvent) -> str | None:
         return "invalid props"
     if size > _MAX_PROPS_BYTES:
         return "props too large"
+    attribution = ev.attribution or {}
+    if len(attribution) > _MAX_ATTRIBUTION_KEYS:
+        return "too many attribution fields"
+    try:
+        size = len(json.dumps(attribution))
+    except (TypeError, ValueError):
+        return "invalid attribution"
+    if size > _MAX_ATTRIBUTION_BYTES:
+        return "attribution too large"
     return None
 
 

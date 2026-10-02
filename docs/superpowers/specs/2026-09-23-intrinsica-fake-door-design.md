@@ -679,6 +679,14 @@ FastAPI app — a new `backend/routers/events.py` registered like the other rout
 (`event`, `visitor_id`, `ts`, `props`). It is fire-and-forget from the client: a failed post
 must never block or break the funnel, and the endpoint always returns quickly.
 
+*Added 2026-10-02 (launch checklist B1, user decision):* every event also carries an
+`attribution` object beside `props`. It holds the visitor's **first** arrival: `channel`
+(the `utm_source` tag, else `?ref`, else the referring domain, else `direct`), the
+`utm_source/medium/campaign/content` tags, `ref`, the referring domain (never the full
+address) and the `landing` path. It also holds `visit_channel`, this visit's own channel.
+The tags are removed from the address bar after reading. The sheet gains two columns after
+the original four: `Channel` and `Attribution` (JSON).
+
 *Revised 2026-09-29 (user decision):* events are appended to a **dedicated Intrinsica spreadsheet**, named by the env var `INTRINSICA_EVENTS_SHEET_ID` and shared with the same service account. They are **never** written to the Agent Stock spreadsheet (`GOOGLE_SHEETS_ID`), which is the analyst tool's own. If the variable is unset:
 - events stay queued in memory, bounded by the queue cap;
 - a warning is logged once;

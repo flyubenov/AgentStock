@@ -1,4 +1,5 @@
 import { API_BASE } from './api'
+import { attribution } from './attribution'
 
 /** The complete funnel event list (spec section 9). There is deliberately no
  *  scroll, hover, or billing-toggle event: the chosen billing period rides on
@@ -71,6 +72,7 @@ export function track(event: FunnelEvent, props: Record<string, unknown> = {}): 
         visitor_id: visitorId(),
         ts: new Date().toISOString(),
         props,
+        attribution: attribution(),
       }),
       keepalive: true,
     }).catch(() => {})
