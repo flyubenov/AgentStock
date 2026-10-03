@@ -150,6 +150,36 @@ describe('a /t/ link', () => {
     expect(runsUsed()).toBe(1)
   })
 
+  it('keeps the 429 copy as the notice when analyze is rate limited: no "not found" fallback, URL stays', async () => {
+    const copy = 'Too many analyses from your network. Please wait a minute and try again.'
+    const f = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.includes('/api/landing/ticker/')) return { ok: true, json: async () => ({ known: true }) }
+      const { tickers } = JSON.parse(String(init?.body))
+      return tickers[0] === 'NVDA'
+        ? { ok: true, json: async () => ({ results: [], invalid: [], error: copy }) }
+        : { ok: true, json: async () => ({ results: [payload('AAPL')], invalid: [], error: null }) }
+    })
+    vi.stubGlobal('fetch', f)
+    show('nvda')
+    await waitFor(() => expect(screen.getByText(copy)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('AAPL Inc.')).toBeInTheDocument())
+    expect(screen.getByText(copy)).toBeInTheDocument()
+    expect(screen.queryByText(/We couldn't find/)).toBeNull()
+    expect(window.location.pathname).toBe('/t/x')
+    expect(runsUsed()).toBe(0)
+  })
+
+  it('says the analysis could not be reached, with no "not found" fallback, when the fetch rejects', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.includes('/api/landing/ticker/')) return { ok: true, json: async () => ({ known: true }) }
+      throw new Error('offline')
+    }))
+    show('nvda')
+    await waitFor(() => expect(screen.getAllByText(/could not be reached/).length).toBeGreaterThan(0))
+    expect(screen.queryByText(/We couldn't find/)).toBeNull()
+    expect(window.location.pathname).toBe('/t/x')
+  })
+
   it('puts the card right after the headline on phones (class hook for the CSS)', async () => {
     server()
     const { container } = show('NVDA')

@@ -40,6 +40,8 @@ function usable(r: TickerPayload): boolean {
   return Boolean(r.quality || r.moat || r.fair_value || r.reward_risk)
 }
 
+type AnalyzeOutcome = 'ok' | 'empty' | 'error'
+
 export default function LandingPage({ linkTicker }: { linkTicker?: string } = {}) {
   const [rows, setRows] = useState<TickerPayload[]>([])
   // True from the first render: the mount sample (below) always runs, but it starts in
@@ -145,15 +147,19 @@ export default function LandingPage({ linkTicker }: { linkTicker?: string } = {}
   // do; a link run passes canAnalyze() (spec D5: a link always shows its stock, but
   // only uses an analysis while one remains). Resolves true when a usable row came
   // back, so the link flow can fall back when it did not.
+  // Resolves 'ok' (a usable row came back), 'empty' (an answer with no usable row: the
+  // stock did not compute) or 'error' (the server refused or the fetch failed: nothing
+  // is known about the stock). The link flow falls back to "couldn't find" only on
+  // 'empty'. `keepNotice`: leave the current notice standing as this run starts.
   const analyze = useCallback(async (
-    tickers: string[], source: AnalyzeSource, countRun = source === 'typed',
-  ): Promise<boolean> => {
+    tickers: string[], source: AnalyzeSource, countRun = source === 'typed', keepNotice = false,
+  ): Promise<AnalyzeOutcome> => {
     setBusy(true)
     setPending(tickers)
     // A run the visitor starts themselves (or the example) ends the linked view:
     // headline, title and phone order go back to normal. The link run itself keeps it.
     if (source !== 'link') setLinked(null)
-    setNotice(null)
+    if (!keepNotice) setNotice(null)
     track(EVENTS.analysisStarted, { tickers, count: tickers.length, source })
     const started = Date.now()
     const controller = new AbortController()
@@ -217,7 +223,8 @@ export default function LandingPage({ linkTicker }: { linkTicker?: string } = {}
         track(EVENTS.analysisCompleted, { duration_ms: Date.now() - started,
                                           count: results.length, source })
       }
-      return results.some(usable)
+      if (body.error) return 'error'
+      return results.some(usable) ? 'ok' : 'empty'
     } catch (err) {
       // A raw AbortError (or any other exception) must never reach the DOM as
       // its own text — both branches below are fixed, reader-facing copy.
@@ -225,7 +232,7 @@ export default function LandingPage({ linkTicker }: { linkTicker?: string } = {}
       setNotice(aborted
         ? 'The analysis is taking longer than expected. Please try again.'
         : 'The analysis could not be reached. Please try again.')
-      return false
+      return 'error'
     } finally {
       clearTimeout(timeoutId)
       setBusy(false)
@@ -272,8 +279,17 @@ export default function LandingPage({ linkTicker }: { linkTicker?: string } = {}
       if (!t || !known) return fallBack()
       // Spec D5: a link always shows its stock; it uses a free analysis only while
       // one remains. canAnalyze() is read BEFORE the run.
-      const ok = await analyze([t], 'link', canAnalyze())
-      if (!ok) fallBack()
+      const outcome = await analyze([t], 'link', canAnalyze())
+      if (!live) return
+      if (outcome === 'empty') return fallBack()
+      if (outcome === 'error') {
+        // Rate limited, or the server could not be reached: that says nothing about the
+        // stock, so no "couldn't find" and the address stays (spec 9: the 429 copy is the
+        // notice and the example card stays). analyze() has put its own notice up; the
+        // example runs under it, and the headline stops naming a stock with no card.
+        setLinked(null)
+        void analyze([SAMPLE], 'sample', false, true)
+      }
     })()
     return () => { live = false }
   }, [analyze, linkTicker])
