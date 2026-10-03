@@ -218,11 +218,25 @@ describe('ResultCard — Moat on 0–10 (spec §5.2)', () => {
     expect(tile).toHaveTextContent('Wide')
   })
 
-  it('offers Share for a single result and for every compared row', () => {
-    const { rerender, props } = show({ rows: [row()] })
-    expect(screen.getByRole('button', { name: 'Share AAPL' })).toBeInTheDocument()
-    rerender(<ResultCard {...props} rows={[row(), row({ ticker: 'MSFT' })]} />)
-    expect(screen.getByRole('button', { name: 'Share AAPL' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Share MSFT' })).toBeInTheDocument()
+  // User decision 2026-10-03: Share sat squeezed between the bookmark and the
+  // company name. One result: bottom right, beside the breakdown hint, labelled
+  // with the stock. Comparison: an icon at the end of each row's name cell.
+  it('puts Share for a single result in the footer, labelled with the stock', () => {
+    const { container } = show({ rows: [row()] })
+    const share = screen.getByRole('button', { name: 'Share AAPL' })
+    expect(share).toHaveTextContent('Share AAPL')
+    expect(container.querySelector('.rc-foot')!.contains(share)).toBe(true)
+    expect(container.querySelector('.rc-head')!.contains(share)).toBe(false)
+  })
+
+  it('gives every compared row an icon-only Share after the company name', () => {
+    const { container } = show({ rows: [row(), row({ ticker: 'MSFT' })] })
+    for (const t of ['AAPL', 'MSFT']) {
+      const share = screen.getByRole('button', { name: `Share ${t}` })
+      expect(share.textContent).toBe('')
+      const name = share.closest('.rc-id')!.querySelector('.nm')!
+      expect(name.compareDocumentPosition(share) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    }
+    expect(container.querySelector('.rc-foot')!.querySelector('button')).toBeNull()
   })
 })

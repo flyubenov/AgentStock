@@ -167,8 +167,10 @@ function CompareView({ rows, open, onRow, onWatch }: {
               <button type="button" className="rc-open" aria-expanded={isOpen}
                       onClick={e => { e.stopPropagation(); onRow(r.ticker) }}>{r.ticker}</button>
               <Star ticker={r.ticker} onWatch={onWatch} />
-              <ShareButton ticker={r.ticker} />
               <span className="nm">{r.company_name ?? ''}</span>
+              {/* After the name, icon-only: a link is one stock, so each row shares
+                  its own (user decision 2026-10-03 moved it off the ticker line). */}
+              <ShareButton ticker={r.ticker} iconOnly />
               <span className="chev" aria-hidden="true">▾</span>
             </span>
             <Cell best={is(q, bq)} value={num(q, 1)} sub={qualityTier(q) ?? ''} />
@@ -206,7 +208,7 @@ export default function ResultCard(p: ResultCardProps) {
         <div className="rc-head">
           {one ? (
             <div>
-              <span className="tk">{r.ticker}</span> <Star ticker={r.ticker} onWatch={p.onWatch} />{' '}<ShareButton ticker={r.ticker} />{' '}
+              <span className="tk">{r.ticker}</span> <Star ticker={r.ticker} onWatch={p.onWatch} />{' '}
               <span className="co">{r.company_name ?? ''}</span>
               <div className="px">
                 {money(r.price)}{r.quality?.profile_label ? ` · ${r.quality.profile_label} profile` : ''}
@@ -223,9 +225,12 @@ export default function ResultCard(p: ResultCardProps) {
         {one
           ? <TilesView r={r} open={p.open} onTile={p.onTile} />
           : <CompareView rows={p.rows} open={p.open} onRow={p.onRow} onWatch={p.onWatch} />}
-        <p className="rc-foot">
-          {one ? 'Click any score for its full breakdown ↓' : 'Click a ticker for its full breakdown ↓'}
-        </p>
+        {/* One result: Share sits bottom right, after the scores have been read
+            (user decision 2026-10-03). A comparison shares per row instead. */}
+        <div className="rc-foot">
+          <span>{one ? 'Click any score for its full breakdown ↓' : 'Click a ticker for its full breakdown ↓'}</span>
+          {one && <ShareButton ticker={r.ticker} label={`Share ${r.ticker}`} />}
+        </div>
       </div>
     </div>
   )

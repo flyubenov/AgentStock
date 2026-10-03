@@ -20,13 +20,38 @@ beforeEach(() => {
 })
 
 describe('share link and text', () => {
-  it('always points at the canonical site with ref=share', () => {
+  it('points the production build at the canonical site with ref=share', () => {
+    vi.stubEnv('VITE_PUBLIC_MODE', '1')
     expect(shareUrl('BRK.B')).toBe('https://intrinsica.io/t/BRK.B?ref=share')
+    vi.unstubAllEnvs()
+  })
+
+  // User decision 2026-10-03: a link shared from a local or preview build must open
+  // on that build, so the feature can be tried end to end before it is deployed.
+  it('points any other build at the address it is running on', () => {
+    vi.stubEnv('VITE_PUBLIC_MODE', '')
+    expect(shareUrl('JPM')).toBe(`${window.location.origin}/t/JPM?ref=share`)
+    vi.unstubAllEnvs()
+  })
+
+  it('words the share text around the stock', () => {
     expect(shareText('NVDA')).toBe('NVDA on Intrinsica: quality business? Durable moat? Fair price?')
   })
 })
 
 describe('ShareButton', () => {
+  it('can carry a visible label, keeping the accessible name', () => {
+    render(<ShareButton ticker="JPM" label="Share JPM" />)
+    const button = screen.getByRole('button', { name: 'Share JPM' })
+    expect(button).toHaveTextContent('Share JPM')
+  })
+
+  it('can be icon-only, keeping the accessible name', () => {
+    render(<ShareButton ticker="MSFT" iconOnly />)
+    const button = screen.getByRole('button', { name: 'Share MSFT' })
+    expect(button.textContent).toBe('')
+  })
+
   it('opens the native share sheet when there is one', async () => {
     const share = vi.fn().mockResolvedValue(undefined)
     Object.defineProperty(navigator, 'share', { value: share, configurable: true })

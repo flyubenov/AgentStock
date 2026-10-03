@@ -4,8 +4,12 @@ import { track, EVENTS } from '../../lib/analytics'
 import { shareText, shareUrl } from '../share'
 
 /** Share one result (ticker links spec §6): the phone's own share sheet where there
- *  is one, otherwise copy the link. Fires share_clicked on the click itself. */
-export default function ShareButton({ ticker }: { ticker: string }) {
+ *  is one, otherwise copy the link. Fires share_clicked on the click itself.
+ *  `label` is the visible text (default "Share"); `iconOnly` drops it for the
+ *  compact comparison rows. The accessible name always names the stock. */
+export default function ShareButton({ ticker, label = 'Share', iconOnly = false }: {
+  ticker: string; label?: string; iconOnly?: boolean
+}) {
   const [state, setState] = useState<'idle' | 'copied' | 'manual'>('idle')
   const url = shareUrl(ticker)
 
@@ -29,8 +33,8 @@ export default function ShareButton({ ticker }: { ticker: string }) {
 
   return (
     <span className="share-wrap">
-      <button type="button" className="share" aria-label={`Share ${ticker}`} title="Share" onClick={onClick}>
-        <Share2 size={14} strokeWidth={1.9} aria-hidden="true" /><span className="share-l">Share</span>
+      <button type="button" className={iconOnly ? 'share icon' : 'share'} aria-label={`Share ${ticker}`} title="Share" onClick={onClick}>
+        <Share2 size={14} strokeWidth={1.9} aria-hidden="true" />{!iconOnly && <span className="share-l">{label}</span>}
       </button>
       <span className="share-msg" aria-live="polite">{state === 'copied' ? 'Link copied' : ''}</span>
       {state === 'manual' && (
