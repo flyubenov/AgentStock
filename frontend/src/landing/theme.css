@@ -480,15 +480,20 @@
 .intrinsica .rc-pair em { font: 500 11px var(--fm); font-style: normal; color: var(--dim); text-align: right; }
 .intrinsica .rc-foot { font-size: 12.5px; color: var(--mute); padding-top: 10px; border-top: 1px solid var(--border); }
 .intrinsica .rc-cmp { margin: 8px 0 10px; }
-.intrinsica .rc-cols, .intrinsica .rc-row { display: grid; grid-template-columns: 1.35fr repeat(4, 1fr); gap: 8px; align-items: start; }
+/* The first column holds the ticker plus the bookmark/Share pair (option A, 2026-10-03):
+ * at least 172px, so an 8-character class share like GOOGL.AB never meets the icons. */
+.intrinsica .rc-cols, .intrinsica .rc-row { display: grid; grid-template-columns: minmax(172px, 1.6fr) repeat(4, 1fr); gap: 8px; align-items: start; }
 .intrinsica .rc-cols { font: 600 11.5px var(--fb); color: var(--dim); padding: 6px 8px; }
 .intrinsica .rc-row { padding: 11px 8px; border-top: 1px solid var(--border); cursor: pointer; }
 .intrinsica .rc-row:hover { background: var(--bg2); }
 .intrinsica .rc-row.on { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
-.intrinsica .rc-id { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.intrinsica .rc-id { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px 6px; }
 .intrinsica .rc-open { background: none; border: 0; padding: 0; font: 700 15px var(--fh); color: inherit; cursor: pointer; }
-.intrinsica .rc-id .nmline { flex-basis: 100%; display: flex; align-items: center; gap: 6px; min-width: 0; }
-.intrinsica .rc-id .nm { font-size: 11.5px; color: var(--mute); }
+.intrinsica .rc-id .rc-open { justify-self: start; white-space: nowrap; }
+/* Option A (user decision 2026-10-03): bookmark + Share pinned right on the ticker's
+ * line, identical on every row; the name takes the full second line. */
+.intrinsica .rc-acts { display: inline-flex; align-items: center; gap: 5px; }
+.intrinsica .rc-id .nm { grid-column: 1 / -1; font-size: 11.5px; color: var(--mute); }
 .intrinsica .rc-id .chev { display: none; }
 .intrinsica .rc-cell b { display: block; font: 700 18px var(--fh); }
 .intrinsica .rc-cell .s { display: block; font-size: 11.5px; color: var(--dim); margin-top: 2px; }
@@ -502,8 +507,12 @@
   .intrinsica .rc-cols > span:first-child { display: none; }
   .intrinsica .rc-row { grid-template-columns: repeat(4, 1fr); gap: 6px; }
   .intrinsica .rc-id { grid-column: 1 / -1; }
-  .intrinsica .rc-id .nmline { flex-basis: auto; }
-  .intrinsica .rc-id .chev { display: inline; margin-left: auto; color: var(--mute); }
+  /* Phone: one line — ticker, name (truncated), the action pair, the chevron. */
+  .intrinsica .rc-id { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+  .intrinsica .rc-id > * { grid-row: 1; }
+  .intrinsica .rc-id .nm { grid-column: 2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .intrinsica .rc-acts { grid-column: 3; }
+  .intrinsica .rc-id .chev { display: inline; grid-column: 4; color: var(--mute); }
   .intrinsica .rc-cell { background: var(--bg2); border-radius: 8px; padding: 7px 8px; }
   .intrinsica .rc-cell b { font-size: 16px; }
 }
@@ -514,7 +523,10 @@
 .intrinsica .bk-in { max-width: 1160px; margin: 0 auto; padding: 22px 24px 26px; }
 .intrinsica .bk-head { display: flex; align-items: baseline; gap: 8px; font-size: 15px; color: var(--dim); margin-bottom: 12px; }
 .intrinsica .bk-head b { font: 700 18px var(--fh); color: var(--text); }
-.intrinsica .bk-x { margin-left: auto; background: none; border: 1px solid var(--border2); border-radius: 8px; padding: 6px 12px;
+.intrinsica .bk-acts { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
+.intrinsica .bk-head { flex-wrap: wrap; row-gap: 8px; }
+.intrinsica .share { white-space: nowrap; }
+.intrinsica .bk-x { background: none; border: 1px solid var(--border2); border-radius: 8px; padding: 6px 12px;
   font: 600 13px var(--fb); color: var(--dim); cursor: pointer; min-height: 36px; }
 .intrinsica .bk-x:hover { color: var(--text); background: var(--bg); }
 .intrinsica .bk-dock .bd { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 6px 16px 18px; }

@@ -16,6 +16,7 @@ import { track, EVENTS } from '../lib/analytics'
 import { API_BASE } from '../lib/api'
 import { canAnalyze, recordRun } from './demoLimit'
 import { normalizeTicker, noticeLabel } from './ticker'
+import { computed } from './format'
 import { FRAMEWORK } from './content/framework'
 import { startReveal } from './reveal'
 import type { Billing } from './content/plans'
@@ -34,11 +35,6 @@ const SAMPLE = 'AAPL'
 // near it — the goal is to catch "gone", not to race "slow".
 export const FETCH_TIMEOUT_MS = 150_000
 
-/** A row worth featuring: at least one of the four assessments came back. A ticker
- *  that does not exist comes back as a row with every block null. */
-function usable(r: TickerPayload): boolean {
-  return Boolean(r.quality || r.moat || r.fair_value || r.reward_risk)
-}
 
 type AnalyzeOutcome = 'ok' | 'empty' | 'error'
 
@@ -205,7 +201,7 @@ export default function LandingPage({ linkTicker }: { linkTicker?: string } = {}
       // falls back to the example and must cost the visitor nothing); typed runs keep
       // the row-count rule.
       if (countRun && !body.error
-          && (source === 'link' ? results.some(usable) : results.length > 0)) {
+          && (source === 'link' ? results.some(computed) : results.length > 0)) {
         recordRun()
         setExhausted(!canAnalyze())
       }
@@ -219,12 +215,12 @@ export default function LandingPage({ linkTicker }: { linkTicker?: string } = {}
       // multi-ticker work. It is already in scope and already tested above.
       // A link run that showed nothing falls back to the example; it is not a completed
       // analysis, so it must not inflate the started -> completed step.
-      if (source !== 'link' || results.some(usable)) {
+      if (source !== 'link' || results.some(computed)) {
         track(EVENTS.analysisCompleted, { duration_ms: Date.now() - started,
                                           count: results.length, source })
       }
       if (body.error) return 'error'
-      return results.some(usable) ? 'ok' : 'empty'
+      return results.some(computed) ? 'ok' : 'empty'
     } catch (err) {
       // A raw AbortError (or any other exception) must never reach the DOM as
       // its own text — both branches below are fixed, reader-facing copy.

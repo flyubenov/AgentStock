@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type { AnalyzeSource, AssessmentId, TickerPayload } from '../types'
 import {
-  DASH, dollars, fvCaption, gapClass, gapPct, money, moatTier, num, qualityTier,
+  DASH, computed, dollars, fvCaption, gapClass, gapPct, money, moatTier, num, qualityTier,
 } from '../format'
 import { ASSESSMENTS } from './Hero'
 import LiveRunBar from './LiveRunBar'
@@ -166,14 +166,15 @@ function CompareView({ rows, open, onRow, onWatch }: {
             <span className="rc-id">
               <button type="button" className="rc-open" aria-expanded={isOpen}
                       onClick={e => { e.stopPropagation(); onRow(r.ticker) }}>{r.ticker}</button>
-              <Star ticker={r.ticker} onWatch={onWatch} />
-              {/* After the name, icon-only: a link is one stock, so each row shares
-                  its own (user decision 2026-10-03 moved it off the ticker line).
-                  One wrapper so the name and the icon share the row's second line. */}
-              <span className="nmline">
-                <span className="nm">{r.company_name ?? ''}</span>
-                <ShareButton ticker={r.ticker} iconOnly />
+              {/* Bookmark and icon-only Share as one group on the ticker's line, the
+                  same spot on every row whatever the name's length; the name gets
+                  its own line (user decision 2026-10-03, option A). A link is one
+                  stock, so each row shares its own, and only if it computed. */}
+              <span className="rc-acts">
+                <Star ticker={r.ticker} onWatch={onWatch} />
+                {computed(r) && <ShareButton ticker={r.ticker} place="row" iconOnly />}
               </span>
+              <span className="nm">{r.company_name ?? ''}</span>
               <span className="chev" aria-hidden="true">▾</span>
             </span>
             <Cell best={is(q, bq)} value={num(q, 1)} sub={qualityTier(q) ?? ''} />
@@ -232,7 +233,7 @@ export default function ResultCard(p: ResultCardProps) {
             (user decision 2026-10-03). A comparison shares per row instead. */}
         <div className="rc-foot">
           <span>{one ? 'Click any score for its full breakdown ↓' : 'Click a ticker for its full breakdown ↓'}</span>
-          {one && <ShareButton ticker={r.ticker} label={`Share ${r.ticker}`} />}
+          {one && computed(r) && <ShareButton ticker={r.ticker} place="card" label={`Share ${r.ticker}`} />}
         </div>
       </div>
     </div>

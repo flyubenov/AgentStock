@@ -25,6 +25,21 @@ describe('OpenBreakdown', () => {
     expect(dock).toHaveTextContent('ROIC level')
   })
 
+  // User decision 2026-10-03: a full-size Share sits beside Close, for single and
+  // compared results alike; none for a result that did not compute.
+  it('offers Share beside Close', () => {
+    render(<OpenBreakdown row={ROW} tab={1} onTab={vi.fn()} onClose={vi.fn()} />)
+    const share = screen.getByRole('button', { name: 'Share AMD' })
+    expect(share).toHaveTextContent('Share AMD')
+    expect(share.closest('.bk-head')).not.toBeNull()
+  })
+
+  it('offers no Share for a result that did not compute', () => {
+    const failed = { ...ROW, quality: null, moat: null, fair_value: null, reward_risk: null }
+    render(<OpenBreakdown row={failed} tab={1} onTab={vi.fn()} onClose={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: 'Share AMD' })).toBeNull()
+  })
+
   it('closes from its Close button', async () => {
     const onClose = vi.fn()
     render(<OpenBreakdown row={ROW} tab={0} onTab={vi.fn()} onClose={onClose} />)

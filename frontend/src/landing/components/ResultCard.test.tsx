@@ -229,18 +229,32 @@ describe('ResultCard — Moat on 0–10 (spec §5.2)', () => {
     expect(container.querySelector('.rc-head')!.contains(share)).toBe(false)
   })
 
-  it('gives every compared row an icon-only Share after the company name', () => {
-    const { container } = show({ rows: [row(), row({ ticker: 'MSFT' })] })
+  // User decision 2026-10-03 (option A): in a comparison the bookmark and an
+  // icon-only Share sit together on the ticker's line, the same spot on every row
+  // whatever the name's length; the company name gets its own line below.
+  it('groups bookmark and icon-only Share on each compared row, before the name', () => {
+    const { container } = show({ rows: [row(), row({ ticker: 'MSFT', company_name: 'Microsoft Corporation' })] })
     for (const t of ['AAPL', 'MSFT']) {
       const share = screen.getByRole('button', { name: `Share ${t}` })
       expect(share.textContent).toBe('')
-      const name = share.closest('.rc-id')!.querySelector('.nm')!
-      expect(name.compareDocumentPosition(share) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-      // Same line as the name: both live in one .nmline, which takes the row's
-      // second line on desktop (the name alone used to take it, pushing Share to a third).
-      expect(share.closest('.nmline')).not.toBeNull()
-      expect(share.closest('.nmline')!.contains(name)).toBe(true)
+      const acts = share.closest('.rc-acts')!
+      expect(acts).not.toBeNull()
+      expect(acts.querySelector('.watch')).not.toBeNull()
+      const name = acts.closest('.rc-id')!.querySelector('.nm')!
+      expect(acts.compareDocumentPosition(name) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     }
     expect(container.querySelector('.rc-foot')!.querySelector('button')).toBeNull()
+  })
+
+  // User report 2026-10-03: BRK.B computed nothing ("Could not be computed") yet
+  // offered Share, which hands out a link to a stock with no result.
+  it('offers no Share for a result that did not compute', () => {
+    const failed = row({ ticker: 'BRK.B', quality: null, moat: null, fair_value: null,
+                         reward_risk: null, errors: ['insufficient data for any model'] })
+    const { rerender, props } = show({ rows: [failed] })
+    expect(screen.queryByRole('button', { name: 'Share BRK.B' })).toBeNull()
+    rerender(<ResultCard {...props} rows={[row(), failed]} />)
+    expect(screen.queryByRole('button', { name: 'Share BRK.B' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Share AAPL' })).toBeInTheDocument()
   })
 })

@@ -1,3 +1,5 @@
+import type { TickerPayload } from './types'
+
 /** Every absent, non-finite or engine-declined value renders as an em dash. A grid
  *  cell must never show NaN, Infinity or "null". */
 export const DASH = '—'
@@ -111,3 +113,11 @@ export function moatTier(v: number | null): string | null {
 
 /** Reward/Risk tiers, highest first — risk_reward/config.py's tier ladder. */
 export const RR_TIERS = ['Asymmetric Upside', 'Reward-Favored', 'Balanced', 'Risk-Favored', 'Value Trap'] as const
+
+/** A result worth featuring or sharing: at least one of the four assessments came
+ *  back. A ticker that does not exist, or that the engines could not compute (BRK.B
+ *  before the Yahoo-symbol fix: "Could not be computed"), comes back as a row with
+ *  every block null. The /t/ link flow and the Share buttons both use this. */
+export function computed(r: TickerPayload): boolean {
+  return Boolean(r.quality || r.moat || r.fair_value || r.reward_risk)
+}

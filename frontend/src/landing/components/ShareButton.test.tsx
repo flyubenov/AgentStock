@@ -40,14 +40,24 @@ describe('share link and text', () => {
 })
 
 describe('ShareButton', () => {
+  // User decision 2026-10-03: share_clicked says which of the three spots was used.
+  it('records where it was pressed', async () => {
+    const user = userEvent.setup() // installs the clipboard jsdom lacks
+    vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue()
+    render(<ShareButton ticker="AMD" place="breakdown" />)
+    await user.click(screen.getByRole('button', { name: 'Share AMD' }))
+    expect(await tracked()).toHaveBeenCalledWith('share_clicked',
+      expect.objectContaining({ ticker: 'AMD', place: 'breakdown' }))
+  })
+
   it('can carry a visible label, keeping the accessible name', () => {
-    render(<ShareButton ticker="JPM" label="Share JPM" />)
+    render(<ShareButton ticker="JPM" place="card" label="Share JPM" />)
     const button = screen.getByRole('button', { name: 'Share JPM' })
     expect(button).toHaveTextContent('Share JPM')
   })
 
   it('can be icon-only, keeping the accessible name', () => {
-    render(<ShareButton ticker="MSFT" iconOnly />)
+    render(<ShareButton ticker="MSFT" place="row" iconOnly />)
     const button = screen.getByRole('button', { name: 'Share MSFT' })
     expect(button.textContent).toBe('')
   })
@@ -55,17 +65,17 @@ describe('ShareButton', () => {
   it('opens the native share sheet when there is one', async () => {
     const share = vi.fn().mockResolvedValue(undefined)
     Object.defineProperty(navigator, 'share', { value: share, configurable: true })
-    render(<ShareButton ticker="NVDA" />)
+    render(<ShareButton ticker="NVDA" place="card" />)
     await userEvent.click(screen.getByRole('button', { name: 'Share NVDA' }))
     expect(share).toHaveBeenCalledWith({
       title: 'NVDA on Intrinsica', text: shareText('NVDA'), url: shareUrl('NVDA') })
-    expect(await tracked()).toHaveBeenCalledWith('share_clicked', { ticker: 'NVDA', method: 'native' })
+    expect(await tracked()).toHaveBeenCalledWith('share_clicked', { ticker: 'NVDA', method: 'native', place: 'card' })
   })
 
   it('stays quiet when the visitor cancels the share sheet', async () => {
     Object.defineProperty(navigator, 'share', {
       value: vi.fn().mockRejectedValue(new DOMException('cancel', 'AbortError')), configurable: true })
-    render(<ShareButton ticker="NVDA" />)
+    render(<ShareButton ticker="NVDA" place="card" />)
     await userEvent.click(screen.getByRole('button', { name: 'Share NVDA' }))
     expect(screen.queryByText('Link copied')).toBeNull()
     expect(screen.queryByRole('textbox')).toBeNull()
@@ -74,17 +84,17 @@ describe('ShareButton', () => {
   it('copies the link on a desktop and says so', async () => {
     const user = userEvent.setup()
     const write = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue()
-    render(<ShareButton ticker="NVDA" />)
+    render(<ShareButton ticker="NVDA" place="card" />)
     await user.click(screen.getByRole('button', { name: 'Share NVDA' }))
     expect(write).toHaveBeenCalledWith(shareUrl('NVDA'))
     expect(await screen.findByText('Link copied')).toBeInTheDocument()
-    expect(await tracked()).toHaveBeenCalledWith('share_clicked', { ticker: 'NVDA', method: 'copy' })
+    expect(await tracked()).toHaveBeenCalledWith('share_clicked', { ticker: 'NVDA', method: 'copy', place: 'card' })
   })
 
   it('shows the link to copy by hand when the clipboard refuses', async () => {
     const user = userEvent.setup()
     vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('denied'))
-    render(<ShareButton ticker="NVDA" />)
+    render(<ShareButton ticker="NVDA" place="card" />)
     await user.click(screen.getByRole('button', { name: 'Share NVDA' }))
     expect(await screen.findByDisplayValue(shareUrl('NVDA'))).toBeInTheDocument()
   })
