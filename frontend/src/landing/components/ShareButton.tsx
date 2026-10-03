@@ -1,0 +1,43 @@
+import { useState, type MouseEvent } from 'react'
+import { Share2 } from 'lucide-react'
+import { track, EVENTS } from '../../lib/analytics'
+import { shareText, shareUrl } from '../share'
+
+/** Share one result (ticker links spec §6): the phone's own share sheet where there
+ *  is one, otherwise copy the link. Fires share_clicked on the click itself. */
+export default function ShareButton({ ticker }: { ticker: string }) {
+  const [state, setState] = useState<'idle' | 'copied' | 'manual'>('idle')
+  const url = shareUrl(ticker)
+
+  async function onClick(e: MouseEvent) {
+    e.stopPropagation() // inside a clickable comparison row
+    const native = typeof navigator.share === 'function'
+    track(EVENTS.shareClicked, { ticker, method: native ? 'native' : 'copy' })
+    if (native) {
+      try { await navigator.share({ title: `${ticker} on Intrinsica`, text: shareText(ticker), url }) }
+      catch { /* cancelled or refused: nothing to say */ }
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(url)
+      setState('copied')
+      setTimeout(() => setState('idle'), 2000)
+    } catch {
+      setState('manual')
+    }
+  }
+
+  return (
+    <span className="share-wrap">
+      <button type="button" className="share" aria-label={`Share ${ticker}`} title="Share" onClick={onClick}>
+        <Share2 size={14} strokeWidth={1.9} aria-hidden="true" /><span className="share-l">Share</span>
+      </button>
+      <span className="share-msg" aria-live="polite">{state === 'copied' ? 'Link copied' : ''}</span>
+      {state === 'manual' && (
+        <input className="share-url" readOnly value={url} aria-label="Link to copy"
+               onFocus={e => e.currentTarget.select()} autoFocus
+               onClick={e => e.stopPropagation()} />
+      )}
+    </span>
+  )
+}

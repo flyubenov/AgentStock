@@ -217,4 +217,12 @@ describe('ResultCard — Moat on 0–10 (spec §5.2)', () => {
     expect(tile).not.toHaveTextContent('/100')
     expect(tile).toHaveTextContent('Wide')
   })
+
+  it('offers Share for a single result and for every compared row', () => {
+    const { rerender, props } = show({ rows: [row()] })
+    expect(screen.getByRole('button', { name: 'Share AAPL' })).toBeInTheDocument()
+    rerender(<ResultCard {...props} rows={[row(), row({ ticker: 'MSFT' })]} />)
+    expect(screen.getByRole('button', { name: 'Share AAPL' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Share MSFT' })).toBeInTheDocument()
+  })
 })

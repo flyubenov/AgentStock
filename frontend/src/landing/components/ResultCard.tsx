@@ -5,6 +5,7 @@ import {
 } from '../format'
 import { ASSESSMENTS } from './Hero'
 import LiveRunBar from './LiveRunBar'
+import ShareButton from './ShareButton'
 import { Bookmark, ChevronDown } from 'lucide-react'
 
 export interface OpenState { ticker: string; tab: AssessmentId }
@@ -166,6 +167,7 @@ function CompareView({ rows, open, onRow, onWatch }: {
               <button type="button" className="rc-open" aria-expanded={isOpen}
                       onClick={e => { e.stopPropagation(); onRow(r.ticker) }}>{r.ticker}</button>
               <Star ticker={r.ticker} onWatch={onWatch} />
+              <ShareButton ticker={r.ticker} />
               <span className="nm">{r.company_name ?? ''}</span>
               <span className="chev" aria-hidden="true">▾</span>
             </span>
@@ -204,7 +206,7 @@ export default function ResultCard(p: ResultCardProps) {
         <div className="rc-head">
           {one ? (
             <div>
-              <span className="tk">{r.ticker}</span> <Star ticker={r.ticker} onWatch={p.onWatch} />{' '}
+              <span className="tk">{r.ticker}</span> <Star ticker={r.ticker} onWatch={p.onWatch} />{' '}<ShareButton ticker={r.ticker} />{' '}
               <span className="co">{r.company_name ?? ''}</span>
               <div className="px">
                 {money(r.price)}{r.quality?.profile_label ? ` · ${r.quality.profile_label} profile` : ''}
