@@ -91,10 +91,6 @@ export default function PrivacyPage() {
           <ul>
             <li><b>Google Cloud</b> hosts the site in Belgium (europe-west1).</li>
             <li><b>Google Sheets</b> stores the events and emails.</li>
-            <li>
-              <b>Google Fonts</b> serves the site's typefaces, so your browser sends your IP
-              address to Google when the page loads.
-            </li>
           </ul>
           <p>
             Google may process data outside the EU under its standard contractual clauses.

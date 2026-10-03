@@ -28,9 +28,13 @@ describe('PrivacyPage', () => {
       /tickers/i,             // analysis_started props
       /where you came from/i, // attribution (B1)
       /IP address/i,          // rate limiting and hosting logs
-      /Google Fonts/i,        // theme.css loads fonts from Google
       /Google Sheets/i,       // the events sink
     ]) expect(text).toMatch(item)
+  })
+
+  it('does not claim a Google Fonts transfer the site no longer makes', () => {
+    const { container } = show()
+    expect(container.textContent).not.toMatch(/Google Fonts/i)
   })
 
   it('tells the visitor how to exercise their rights', () => {
