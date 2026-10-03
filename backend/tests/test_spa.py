@@ -1,14 +1,35 @@
 import pytest
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from main import create_app
+
+
+_INDEX = """<!doctype html><html><head>
+<title>Intrinsica</title>
+<meta property="og:title" content="Intrinsica — Judge the business. Then judge the price." />
+<meta property="og:image" content="https://intrinsica.io/og-image.png" />
+<meta property="og:url" content="https://intrinsica.io/" />
+<meta name="twitter:image" content="https://intrinsica.io/og-image.png" />
+</head><body></body></html>"""
+
+
+async def _none(t):
+    return (False, None)
+
+
+@pytest.fixture(autouse=True)
+def _no_network_lookup():
+    # The real lookup may hit the SEC list; no test here may reach the network.
+    with patch("spa.lookup", new=_none):
+        yield
 
 
 @pytest.fixture
 def static_dir(tmp_path):
     site = tmp_path / "site"
     (site / "assets").mkdir(parents=True)
-    (site / "index.html").write_text("<!doctype html><title>Intrinsica</title>", encoding="utf-8")
+    (site / "index.html").write_text(_INDEX, encoding="utf-8")
     (site / "assets" / "index-abc123.js").write_text("console.log(1)", encoding="utf-8")
     (site / "og-image.png").write_bytes(b"\x89PNG fake")
     (tmp_path / "secret.txt").write_text("TOP-SECRET", encoding="utf-8")   # outside the site
@@ -101,3 +122,39 @@ def test_head_requests_are_answered_like_get(client, path):
     # Uptime monitors and link-preview crawlers probe with HEAD; a 405 reads as "down".
     r = client.head(path)
     assert r.status_code == 200
+
+
+async def _known(t):
+    return (True, "X") if t in {"NVDA", "BRK.B"} else (False, None)
+
+
+def test_a_known_ticker_link_gets_its_own_preview_tags(client):
+    with patch("spa.lookup", new=_known):
+        r = client.get("/t/nvda")
+    assert r.headers["cache-control"] == "no-cache"
+    assert "<title>NVDA: quality business? Durable moat? Fair price? · Intrinsica</title>" in r.text
+    assert 'content="NVDA: quality business? Durable moat? Fair price? · Intrinsica"' in r.text
+    assert 'content="https://intrinsica.io/og/NVDA.png"' in r.text
+    assert 'content="https://intrinsica.io/t/NVDA"' in r.text
+    assert "og-image.png" not in r.text
+
+
+def test_a_class_share_link_uses_the_canonical_ticker(client):
+    with patch("spa.lookup", new=_known):
+        r = client.get("/t/BRK-B")
+    assert 'content="https://intrinsica.io/og/BRK.B.png"' in r.text
+
+
+@pytest.mark.parametrize("path", ["/t/XYZQ", "/t/a,b", '/t/%22%3E%3Cscript%3E', "/t/", "/t/NVDA/extra"])
+def test_anything_else_gets_the_untouched_page(client, path):
+    with patch("spa.lookup", new=_known):
+        r = client.get(path)
+    assert r.status_code == 200
+    assert "<title>Intrinsica</title>" in r.text
+    assert "https://intrinsica.io/og-image.png" in r.text
+    assert "<script>" not in r.text
+
+
+def test_head_works_on_a_ticker_link(client):
+    with patch("spa.lookup", new=_known):
+        assert client.head("/t/NVDA").status_code == 200
