@@ -47,6 +47,10 @@ export interface Plan {
   forLine: string
   featured?: boolean
   cta: string
+  /** The refund promise printed under a paid plan's button. Absent on Free,
+   *  which takes no money to refund. It is a promise the real launch must keep,
+   *  so it is written once here and nowhere else. */
+  guarantee?: string
   /** Absent on Free, which costs nothing on either period. */
   annual?: AnnualBand
   monthly?: { effective: string; sub: string }
@@ -83,6 +87,7 @@ export const PLANS: Plan[] = [
     forLine: 'For the serious individual investor researching the stocks they care about.',
     featured: true,
     cta: 'Choose Pro',
+    guarantee: '7-day money-back guarantee',
     annual: { effective: '$18.00', yearly: 216,
               sub: 'billed annually · $216/yr · save 18%' },
     monthly: { effective: '$21.99', sub: 'billed monthly · $21.99/mo' },
@@ -97,6 +102,7 @@ export const PLANS: Plan[] = [
     title: 'Discover & Automate at Scale',
     forLine: 'For investors scanning & monitoring a whole universe or portfolio.',
     cta: 'Choose Unlimited',
+    guarantee: '7-day money-back guarantee',
     annual: { effective: '$25.00', yearly: 300,
               sub: 'billed annually · $300/yr · save 17%' },
     monthly: { effective: '$29.99', sub: 'billed monthly · $29.99/mo' },
@@ -112,7 +118,7 @@ export const PLANS: Plan[] = [
  *  (spec 5.7). Free costs nothing on either period, so it answers the same way
  *  for both rather than pretending to have an annual band. */
 export function priceFor(plan: Plan, billing: Billing): { headline: string; sub: string } {
-  if (plan.name === 'Free') return { headline: '$0', sub: 'No card, ever' }
+  if (plan.name === 'Free') return { headline: '$0', sub: 'No sign-up · no card, ever' }
   const band = billing === 'annual' ? plan.annual! : plan.monthly!
   return { headline: band.effective, sub: band.sub }
 }
