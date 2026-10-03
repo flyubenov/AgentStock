@@ -125,12 +125,12 @@ describe('plans', () => {
     expect(priceFor(pro, 'monthly').sub).toBe('billed monthly · $21.99/mo')
   })
 
-  it('prices Unlimited at $25 effective and $29.99 monthly', () => {
+  it('prices Unlimited at $35 effective and $41.99 monthly', () => {
     const unlimited = PLANS[2]
-    expect(priceFor(unlimited, 'annual').headline).toBe('$25.00')
-    expect(priceFor(unlimited, 'annual').sub).toBe('billed annually · $300/yr · save 17%')
-    expect(priceFor(unlimited, 'monthly').headline).toBe('$29.99')
-    expect(priceFor(unlimited, 'monthly').sub).toBe('billed monthly · $29.99/mo')
+    expect(priceFor(unlimited, 'annual').headline).toBe('$35.00')
+    expect(priceFor(unlimited, 'annual').sub).toBe('billed annually · $420/yr · save 17%')
+    expect(priceFor(unlimited, 'monthly').headline).toBe('$41.99')
+    expect(priceFor(unlimited, 'monthly').sub).toBe('billed monthly · $41.99/mo')
   })
 
   it('charges nothing for Free on either billing period, with no line beneath the price', () => {
@@ -175,8 +175,8 @@ describe('plans', () => {
   it('states the checkout total per plan and billing period', () => {
     expect(totalFor('Pro', 'annual')).toBe('$216 / year ($18.00/mo)')
     expect(totalFor('Pro', 'monthly')).toBe('$21.99 / month')
-    expect(totalFor('Unlimited', 'annual')).toBe('$300 / year ($25.00/mo)')
-    expect(totalFor('Unlimited', 'monthly')).toBe('$29.99 / month')
+    expect(totalFor('Unlimited', 'annual')).toBe('$420 / year ($35.00/mo)')
+    expect(totalFor('Unlimited', 'monthly')).toBe('$41.99 / month')
     expect(totalFor('Free', 'annual')).toBe('$0 — free plan')
     expect(totalFor('Free', 'monthly')).toBe('$0 — free plan')
   })

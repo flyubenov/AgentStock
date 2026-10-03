@@ -459,13 +459,15 @@ billed annually, with the annual total beneath.
 
 | | Free · Try Intrinsica | **Pro · Deep Stock Analysis** (featured) | Unlimited · Discover & Automate at Scale |
 |---|---|---|---|
-| Annual | $0/mo — "No card, ever" | **$18.00/mo** · billed annually · $216/yr · save 18% | **$25.00/mo** · billed annually · $300/yr · save 17% |
-| Monthly | $0 | $21.99/mo | $29.99/mo |
+| Annual | $0/mo | **$18.00/mo** · billed annually · $216/yr · save 18% | **$35.00/mo** · billed annually · $420/yr · save 17% |
+| Monthly | $0 | $21.99/mo | $41.99/mo |
 | For | For the curious investor judging the framework on stocks they already know. | For the serious individual investor researching the stocks they care about. | For investors scanning & monitoring a whole universe or portfolio. |
 | CTA | Start free | Choose Pro | Choose Unlimited |
 
 Cards are equal height with the button pinned to the bottom. Pro carries the subtle
 `featured` highlight (no "most popular" text).
+
+*Revised 2026-10-04 (founder).* Unlimited moves from $25.00 ($300/yr) / $29.99 to $35.00 ($420/yr) / $41.99, a 2× gap over Pro (competitors space tiers 1.7–3×), so Pro no longer looks like the weaker deal. The Free card's "No card, ever" line is removed. Prices are fixed from here until the fake-door test ends.
 
 *Revised 2026-09-29 (brand round).* The green in the pricing section moves to the accent, because green now means a score or a gain:
 - the **FREE** badge is set in bold `--accent`;

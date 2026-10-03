@@ -1015,7 +1015,7 @@ describe('LandingPage pricing section (task 13)', () => {
     const pricing = container.querySelector<HTMLElement>('section#pricing')
     expect(pricing).not.toBeNull()
     expect(within(pricing!).getByText('Choose your plan')).toBeInTheDocument()
-    expect(within(pricing!).getByText('$25.00')).toBeInTheDocument()
+    expect(within(pricing!).getByText('$35.00')).toBeInTheDocument()
 
     expect(pricing!.querySelectorAll('input, textarea, select, form')).toHaveLength(0)
     // The analyzer's ticker box is the page's only input, and it takes a ticker.
