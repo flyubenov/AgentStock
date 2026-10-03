@@ -1,6 +1,6 @@
 # Ticker links `/t/{TICKER}`: design
 
-**Status:** design approved in conversation 2026-10-03; this document awaits the founder's review.
+**Status:** approved by the founder on 2026-10-03 (the spec, and the implementation plan after it).
 **Branch:** `06-Intrinsica_Fake_Door_Launch_Checklist` (after B1 `59c5683` and B4 `51e2289`).
 **Source:** launch checklist B2 (`MonetizationPlan/Intrinsica_Fake_Door_Launch_Checklist.html`), advertising strategy review blocker 2.
 **Mockups:** `.superpowers/brainstorm/827-1790977003/` (`ticker-page-v2.html`; the card screens are in `archive/`).
