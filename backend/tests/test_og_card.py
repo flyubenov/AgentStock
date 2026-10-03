@@ -1,0 +1,64 @@
+import io
+import re
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+from fastapi.testclient import TestClient
+from PIL import Image
+
+from landing import og_card
+from main import create_app
+
+
+async def _known(t):
+    return (True, "X") if t in {"NVDA", "BRK.B", "GOOGL"} else (False, None)
+
+
+@pytest.fixture
+def client():
+    og_card._cache.clear()
+    with patch("routers.og.lookup", new=_known):
+        yield TestClient(create_app(public_mode=True, static_dir="", canonical_host=""))
+    og_card._cache.clear()
+
+
+def test_a_known_ticker_gets_a_1200_by_630_png(client):
+    r = client.get("/og/NVDA.png")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "image/png"
+    assert r.headers["cache-control"] == "public, max-age=86400"
+    assert Image.open(io.BytesIO(r.content)).size == (1200, 630)
+
+
+def test_a_class_share_is_served_by_its_canonical_name(client):
+    assert client.get("/og/brk-b.png").status_code == 200
+
+
+@pytest.mark.parametrize("name", ["XYZQ.png", "a,b.png", "%3Cscript%3E.png", "NVDA.jpg", "NVDA"])
+def test_anything_unknown_redirects_to_the_generic_card_and_is_never_drawn(client, name):
+    with patch.object(og_card, "render_card", side_effect=AssertionError("must not draw")):
+        r = client.get(f"/og/{name}", follow_redirects=False)
+    assert r.status_code == 302
+    assert r.headers["location"] == "/og-image.png"
+
+
+def test_a_drawn_card_is_reused(client):
+    with patch.object(og_card, "_draw", wraps=og_card._draw) as draw:
+        client.get("/og/NVDA.png")
+        client.get("/og/NVDA.png")
+        assert draw.call_count == 1
+
+
+def test_the_longest_ticker_fits():
+    img = Image.open(io.BytesIO(og_card.render_card("GOOGL.AB")))
+    assert img.size == (1200, 630)
+    assert og_card.ticker_width("GOOGL.AB") <= 0.6 * 1200
+
+
+def test_the_mark_colours_match_the_frontend_logo():
+    mark_ts = (Path(__file__).resolve().parents[2]
+               / "frontend/src/landing/components/mark.ts").read_text(encoding="utf-8")
+    for key in ("plateTop", "plateBot", "q", "mo", "fv", "rr"):
+        ts = re.search(rf"{key}: '(#[0-9a-f]{{6}})'", mark_ts).group(1)
+        assert og_card.CARD_COLOURS[key] == ts, key

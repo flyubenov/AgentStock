@@ -9,6 +9,7 @@ from routers.database import router as database_router
 from routers.watchlists import router as watchlists_router
 from routers.events import router as events_router
 from routers.landing import router as landing_router
+from routers.og import router as og_router
 from landing.cache import seed
 from spa import mount_spa
 from canonical import add_canonical_host_redirect
@@ -104,6 +105,8 @@ def create_app(*, public_mode: bool | None = None, static_dir: str | None = None
         app.include_router(watchlists_router, prefix="/api")
     app.include_router(events_router, prefix="/api")
     app.include_router(landing_router, prefix="/api")
+
+    app.include_router(og_router)
 
     @app.get("/api/health")
     def health():
