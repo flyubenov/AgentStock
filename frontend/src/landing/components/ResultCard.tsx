@@ -167,10 +167,13 @@ function CompareView({ rows, open, onRow, onWatch }: {
               <button type="button" className="rc-open" aria-expanded={isOpen}
                       onClick={e => { e.stopPropagation(); onRow(r.ticker) }}>{r.ticker}</button>
               <Star ticker={r.ticker} onWatch={onWatch} />
-              <span className="nm">{r.company_name ?? ''}</span>
               {/* After the name, icon-only: a link is one stock, so each row shares
-                  its own (user decision 2026-10-03 moved it off the ticker line). */}
-              <ShareButton ticker={r.ticker} iconOnly />
+                  its own (user decision 2026-10-03 moved it off the ticker line).
+                  One wrapper so the name and the icon share the row's second line. */}
+              <span className="nmline">
+                <span className="nm">{r.company_name ?? ''}</span>
+                <ShareButton ticker={r.ticker} iconOnly />
+              </span>
               <span className="chev" aria-hidden="true">▾</span>
             </span>
             <Cell best={is(q, bq)} value={num(q, 1)} sub={qualityTier(q) ?? ''} />

@@ -236,6 +236,10 @@ describe('ResultCard — Moat on 0–10 (spec §5.2)', () => {
       expect(share.textContent).toBe('')
       const name = share.closest('.rc-id')!.querySelector('.nm')!
       expect(name.compareDocumentPosition(share) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      // Same line as the name: both live in one .nmline, which takes the row's
+      // second line on desktop (the name alone used to take it, pushing Share to a third).
+      expect(share.closest('.nmline')).not.toBeNull()
+      expect(share.closest('.nmline')!.contains(name)).toBe(true)
     }
     expect(container.querySelector('.rc-foot')!.querySelector('button')).toBeNull()
   })
