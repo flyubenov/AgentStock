@@ -549,3 +549,16 @@
 .intrinsica .privacy b { color: var(--text); }
 .intrinsica .privacy a { color: var(--accent); text-decoration: underline; overflow-wrap: anywhere; }
 .intrinsica .privacy code { font: 500 13px var(--fm); }
+
+/* ticker links (spec 2026-10-03 §4): the featured ticker, and on phones the card
+ * right after the headline. display: contents lets hero-l's children take part in
+ * the single-column grid; DOM order (and so reading and tab order) is unchanged. */
+.intrinsica .hero-tk { color: var(--accent); }
+@media (max-width: 900px) {
+  .intrinsica .hero.linked .hero-l { display: contents; }
+  .intrinsica .hero.linked .hero-h1 { order: 1; }
+  .intrinsica .hero.linked .hero-r { order: 2; }
+  .intrinsica .hero.linked .hero-sub { order: 3; }
+  .intrinsica .hero.linked .analyzer { order: 4; }
+  .intrinsica .hero.linked .notice { order: 5; }
+}

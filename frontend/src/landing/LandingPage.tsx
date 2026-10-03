@@ -15,6 +15,7 @@ import SiteFooter from './components/SiteFooter'
 import { track, EVENTS } from '../lib/analytics'
 import { API_BASE } from '../lib/api'
 import { canAnalyze, recordRun } from './demoLimit'
+import { normalizeTicker, noticeLabel } from './ticker'
 import { FRAMEWORK } from './content/framework'
 import { startReveal } from './reveal'
 import type { Billing } from './content/plans'
@@ -33,7 +34,13 @@ const SAMPLE = 'AAPL'
 // near it — the goal is to catch "gone", not to race "slow".
 export const FETCH_TIMEOUT_MS = 150_000
 
-export default function LandingPage() {
+/** A row worth featuring: at least one of the four assessments came back. A ticker
+ *  that does not exist comes back as a row with every block null. */
+function usable(r: TickerPayload): boolean {
+  return Boolean(r.quality || r.moat || r.fair_value || r.reward_risk)
+}
+
+export default function LandingPage({ linkTicker }: { linkTicker?: string } = {}) {
   const [rows, setRows] = useState<TickerPayload[]>([])
   // True from the first render: the mount sample (below) always runs, but it starts in
   // a passive effect the browser may paint before. Starting idle would flash the
@@ -110,6 +117,9 @@ export default function LandingPage() {
   // The source of the run whose rows the card shows: it picks the card's pill
   // ("Live example" for a sample, "Your analysis" for a typed run).
   const [rowsSource, setRowsSource] = useState<AnalyzeSource | null>(null)
+  // The canonical ticker while the page is featuring a /t/ link; null otherwise
+  // (including after a link falls back to the example).
+  const [linked, setLinked] = useState<string | null>(null)
 
   // breakdown_opened fires only on a closed -> open transition, and beside the state
   // change, never inside an updater (StrictMode double-invokes updaters — fix round 1).
@@ -131,7 +141,13 @@ export default function LandingPage() {
   }, [openTicker, assessment])
   const closeBreakdown = useCallback(() => setOpenTicker(null), [])
 
-  const analyze = useCallback(async (tickers: string[], source: AnalyzeSource) => {
+  // `countRun`: whether a successful run uses one of the free analyses. Typed runs
+  // do; a link run passes canAnalyze() (spec D5: a link always shows its stock, but
+  // only uses an analysis while one remains). Resolves true when a usable row came
+  // back, so the link flow can fall back when it did not.
+  const analyze = useCallback(async (
+    tickers: string[], source: AnalyzeSource, countRun = source === 'typed',
+  ): Promise<boolean> => {
     setBusy(true)
     setPending(tickers)
     setNotice(null)
@@ -176,7 +192,11 @@ export default function LandingPage() {
       // empty input — no engines ran) or an all-invalid response (no rows) does
       // not. A thrown/aborted fetch never reaches here at all, so it can't count
       // either — see the catch block below.
-      if (source === 'typed' && !body.error && results.length > 0) {
+      // A link run counts only when its stock actually showed (a failed link run
+      // falls back to the example and must cost the visitor nothing); typed runs keep
+      // the row-count rule.
+      if (countRun && !body.error
+          && (source === 'link' ? results.some(usable) : results.length > 0)) {
         recordRun()
         setExhausted(!canAnalyze())
       }
@@ -190,6 +210,7 @@ export default function LandingPage() {
       // multi-ticker work. It is already in scope and already tested above.
       track(EVENTS.analysisCompleted, { duration_ms: Date.now() - started,
                                         count: results.length, source })
+      return results.some(usable)
     } catch (err) {
       // A raw AbortError (or any other exception) must never reach the DOM as
       // its own text — both branches below are fixed, reader-facing copy.
@@ -197,6 +218,7 @@ export default function LandingPage() {
       setNotice(aborted
         ? 'The analysis is taking longer than expected. Please try again.'
         : 'The analysis could not be reached. Please try again.')
+      return false
     } finally {
       clearTimeout(timeoutId)
       setBusy(false)
@@ -206,8 +228,52 @@ export default function LandingPage() {
 
   useEffect(() => {
     track(EVENTS.pageView)
-    void analyze([SAMPLE], 'sample')
-  }, [analyze])
+    if (linkTicker === undefined) {
+      void analyze([SAMPLE], 'sample')
+      return
+    }
+    let live = true
+    const fallBack = () => {
+      if (!live) return
+      setLinked(null)
+      // replaceState, not navigate(): navigating to "/" would unmount this page and
+      // mount a fresh one, losing the notice. The router doesn't need to know — the
+      // page already renders what "/" renders.
+      window.history.replaceState(window.history.state, '', '/')
+      void analyze([SAMPLE], 'sample')
+      setNotice(`We couldn't find ${noticeLabel(linkTicker)}. Here's an example instead.`)
+    }
+    void (async () => {
+      const t = normalizeTicker(linkTicker)
+      let known = false
+      if (t) {
+        try {
+          const r = await fetch(`${API_BASE}/api/landing/ticker/${encodeURIComponent(t)}`)
+          // A non-OK answer (e.g. the 429 rate limit, whose body says known:false) is
+          // a failed check, not a verdict: try the analysis, fall back only if it fails.
+          known = r.ok ? Boolean((await r.json()).known) : true
+        } catch {
+          known = true // the check itself failed: try the analysis, fall back if it fails
+        }
+      }
+      if (!live) return
+      track(EVENTS.tickerLinkOpened, { ticker: t ?? noticeLabel(linkTicker), known })
+      if (!t || !known) return fallBack()
+      setLinked(t)
+      // Spec D5: a link always shows its stock; it uses a free analysis only while
+      // one remains. canAnalyze() is read BEFORE the run.
+      const ok = await analyze([t], 'link', canAnalyze())
+      if (!ok) fallBack()
+    })()
+    return () => { live = false }
+  }, [analyze, linkTicker])
+
+  useEffect(() => {
+    if (!linked) return
+    const previous = document.title
+    document.title = `${linked}: Quality, Moat, Fair Value · Intrinsica`
+    return () => { document.title = previous }
+  }, [linked])
 
   // Spec §4 Motion: sections float in on scroll. Started once, after the first
   // render has put every section in the DOM.
@@ -244,6 +310,7 @@ export default function LandingPage() {
           busyCount={pending.length}
           exhausted={exhausted}
           notice={notice}
+          linked={linked}
           card={
             <ResultCard
               rows={rows}

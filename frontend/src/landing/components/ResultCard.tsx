@@ -52,9 +52,9 @@ function Star({ ticker, onWatch }: { ticker: string; onWatch: (t: string) => voi
 }
 
 function Pill({ source }: { source: AnalyzeSource | null }) {
-  return source === 'typed'
-    ? <span className="rc-pill yours">Your analysis</span>
-    : <span className="rc-pill live"><i aria-hidden="true" />Live example · computed just now</span>
+  if (source === 'typed') return <span className="rc-pill yours">Your analysis</span>
+  const label = source === 'link' ? 'Live analysis · computed just now' : 'Live example · computed just now'
+  return <span className="rc-pill live"><i aria-hidden="true" />{label}</span>
 }
 
 /** Two bars on one scale: fair value vs price, or reward vs risk. */
