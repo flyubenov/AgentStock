@@ -316,3 +316,15 @@ def test_an_existing_events_tab_gets_the_new_header_row_once_per_process(monkeyp
     assert update.call_args.kwargs["body"] == {"values": [events_sheets._EVENTS_HEADERS]}
     assert events_sheets._EVENTS_HEADERS == [
         "Timestamp", "Event", "VisitorId", "Props", "Channel", "Attribution"]
+
+
+def test_the_channel_cell_is_cleaned_server_side():
+    # The founder pivots on this column; a sheet formula must not be writable here.
+    ev = AnalyticsEvent(event="page_view", visitor_id="v-1",
+                        attribution={"channel": '=HYPERLINK("x")'})
+    cell = events_sheets._to_row(ev)[4]
+    assert not any(c in cell for c in '="()')
+    ok = AnalyticsEvent(event="page_view", visitor_id="v-1", attribution={"channel": "X_Ads-1.b"})
+    assert events_sheets._to_row(ok)[4] == "x_ads-1.b"
+    long = AnalyticsEvent(event="page_view", visitor_id="v-1", attribution={"channel": "a" * 300})
+    assert len(events_sheets._to_row(long)[4]) == 100

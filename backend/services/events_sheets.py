@@ -1,5 +1,5 @@
 from __future__ import annotations
-import asyncio, json, logging, os, time
+import asyncio, json, logging, os, re, time
 
 from models import AnalyticsEvent
 from services.sheets import _get_service, _execute, _run_sheets
@@ -61,11 +61,23 @@ def _trim_locked() -> None:
         _dropped += excess
 
 
+_CHANNEL_JUNK = re.compile(r"[^a-z0-9._-]+")
+
+
+def _clean_channel(value: object) -> str:
+    """The Channel cell, cleaned the way frontend/src/lib/attribution.ts clean() does:
+    it is the column the founder pivots on, and a hand-made request must not be able
+    to write a sheet formula into it. The JSON column keeps the raw attribution."""
+    if not isinstance(value, str):
+        return ""
+    return _CHANNEL_JUNK.sub("", value.lower())[:100]
+
+
 def _to_row(ev: AnalyticsEvent) -> list[str]:
     attribution = ev.attribution or {}
     channel = attribution.get("channel")
     return [ev.ts or "", ev.event, ev.visitor_id, json.dumps(ev.props or {}),
-            channel if isinstance(channel, str) else "", json.dumps(attribution)]
+            _clean_channel(channel), json.dumps(attribution)]
 
 
 def _ensure_events_sheet(svc, sheet_id: str) -> None:

@@ -26,9 +26,12 @@ _VISITOR_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 _MAX_TS_LEN = 40
 _MAX_PROPS_KEYS = 20
 _MAX_PROPS_BYTES = 2048
-# The page sends at most eight attribution fields of at most 100 characters each.
+# The page sends at most nine attribution fields (eight Touch fields plus
+# visit_channel) of at most 100 characters each: about 1,040 bytes of JSON. The limit
+# must clear that with room to spare, because first touch persists and a refusal would
+# drop every later event of that visitor.
 _MAX_ATTRIBUTION_KEYS = 12
-_MAX_ATTRIBUTION_BYTES = 1024
+_MAX_ATTRIBUTION_BYTES = 2048
 
 # A light per-client limit. One real visit posts about a dozen events over minutes;
 # this allows several times that per minute, so it only ever bites a script.

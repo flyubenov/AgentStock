@@ -175,9 +175,18 @@ def test_attribution_rides_beside_the_props():
 
 @pytest.mark.parametrize("att,reason", [
     ({f"k{i}": i for i in range(13)}, "too many attribution fields"),
-    ({"utm_campaign": "x" * 2000}, "attribution too large"),
+    ({"utm_campaign": "x" * 3000}, "attribution too large"),
 ])
 def test_oversized_attribution_is_refused(att, reason):
     resp, rec = _post(attribution=att)
     assert resp.json() == {"recorded": False, "error": reason}
     rec.assert_not_awaited()
+
+
+def test_a_maximal_legitimate_attribution_is_recorded():
+    # Eight Touch fields plus visit_channel, each at the 100-character cap: about
+    # 1,040 bytes of JSON. First touch persists, so a refusal here would drop every
+    # later event of that visitor.
+    att = {f"field_{i}": "x" * 100 for i in range(9)}
+    resp, rec = _post(attribution=att)
+    assert resp.json() == {"recorded": True}
