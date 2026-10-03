@@ -133,17 +133,12 @@ describe('plans', () => {
     expect(priceFor(unlimited, 'monthly').sub).toBe('billed monthly · $29.99/mo')
   })
 
-  it('charges nothing for Free on either billing period, and promises no sign-up or card', () => {
+  it('charges nothing for Free on either billing period, with no line beneath the price', () => {
     const free = PLANS[0]
     for (const billing of ['annual', 'monthly'] as const) {
       expect(priceFor(free, billing).headline).toBe('$0')
-      expect(priceFor(free, billing).sub).toBe('No sign-up · no card, ever')
+      expect(priceFor(free, billing).sub).toBe('')
     }
-  })
-
-  it('promises the same refund on every paid plan and none on Free', () => {
-    expect(PLANS[0].guarantee).toBeUndefined()
-    for (const p of PLANS.slice(1)) expect(p.guarantee).toBe('7-day money-back guarantee')
   })
 
   // The real guard on the prices: every derived string is recomputed from the

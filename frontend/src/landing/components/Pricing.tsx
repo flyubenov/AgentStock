@@ -109,7 +109,6 @@ export default function Pricing({ billing, onBilling, onChoose, onView }: {
                         onClick={() => onChoose(p.name, billing)}>
                   {p.cta}
                 </button>
-                {p.guarantee && <div className="pc-guarantee">{p.guarantee}</div>}
               </div>
             )
           })}

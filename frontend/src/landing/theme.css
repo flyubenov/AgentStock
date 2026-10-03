@@ -311,7 +311,6 @@
 .intrinsica .btn-plan:hover { background: var(--accent-soft); }
 .intrinsica .price-card.featured .btn-plan { background: var(--accent); color: #fff; border: none; }
 .intrinsica .price-card.featured .btn-plan:hover { background: var(--accent-d); }
-.intrinsica .pc-guarantee { font-size: 12.5px; color: var(--mute); text-align: center; margin-top: 8px; }
 /* The three cards share one set of rows (subgrid), so a title or for-line that wraps in
  * one card pushes the same row down in all three: for-lines, prices, features and
  * buttons stay level across the cards (user decision 2026-09-27). Seven rows = badge,

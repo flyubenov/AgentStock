@@ -59,18 +59,9 @@ describe('Pricing', () => {
         <Pricing billing={billing} onBilling={vi.fn()} onChoose={vi.fn()} />)
       const free = container.querySelectorAll<HTMLElement>('.price-card')[0]
       expect(within(free).getByText('$0')).toBeInTheDocument()
-      expect(within(free).getByText('No sign-up · no card, ever')).toBeInTheDocument()
+      expect(within(free).queryByText(/no card/i)).not.toBeInTheDocument()
       unmount()
     }
-  })
-
-  it('prints the money-back guarantee under each paid plan only', () => {
-    const { container } = render(
-      <Pricing billing="annual" onBilling={vi.fn()} onChoose={vi.fn()} />)
-    const cards = container.querySelectorAll<HTMLElement>('.price-card')
-    expect(within(cards[0]).queryByText(/money-back/)).not.toBeInTheDocument()
-    expect(within(cards[1]).getByText('7-day money-back guarantee')).toBeInTheDocument()
-    expect(within(cards[2]).getByText('7-day money-back guarantee')).toBeInTheDocument()
   })
 
   // The toggle is a pair of aria-pressed buttons, the same pattern the framework
