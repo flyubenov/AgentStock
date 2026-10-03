@@ -556,6 +556,10 @@
 .intrinsica .hero-tk { color: var(--accent); }
 @media (max-width: 900px) {
   .intrinsica .hero.linked .hero-l { display: contents; }
+  /* the grid gap replaces these blocks' own top margins */
+  .intrinsica .hero.linked .hero-sub,
+  .intrinsica .hero.linked .analyzer,
+  .intrinsica .hero.linked .notice { margin-top: 0; }
   .intrinsica .hero.linked .hero-h1 { order: 1; }
   .intrinsica .hero.linked .hero-r { order: 2; }
   .intrinsica .hero.linked .hero-sub { order: 3; }

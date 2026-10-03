@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import LandingPage from './LandingPage'
 import { DEMO_RUN_LIMIT, runsUsed } from './demoLimit'
@@ -113,6 +114,31 @@ describe('a /t/ link', () => {
     expect(window.location.pathname).toBe('/')
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/^Judge the business/)
     expect(runsUsed()).toBe(0)
+  })
+
+  it('does not report analysis_completed for a failed link run', async () => {
+    server({ failing: ['NVDA'] })
+    show('NVDA')
+    await waitFor(() => expect(screen.getByText('AAPL Inc.')).toBeInTheDocument())
+    const track = await tracked()
+    expect(track.mock.calls.filter(c => c[0] === 'analysis_completed' && (c[1] as { source: string }).source === 'link'))
+      .toEqual([])
+  })
+
+  it('names the ticker before the check resolves', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})))
+    const { container } = show('NVDA')
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('NVDA: judge the business.'))
+    expect(container.querySelector('header.hero.linked')).not.toBeNull()
+  })
+
+  it('goes back to the normal headline when the visitor runs a typed analysis', async () => {
+    server()
+    show('NVDA')
+    await waitFor(() => expect(screen.getByText('NVDA Inc.')).toBeInTheDocument())
+    await userEvent.type(screen.getByPlaceholderText('Try another ticker…'), 'MSFT{Enter}')
+    await waitFor(() => expect(screen.getByText('MSFT Inc.')).toBeInTheDocument())
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/^Judge the business/)
   })
 
   it('still shows the stock when the ticker check is rate-limited (429)', async () => {

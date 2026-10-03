@@ -150,6 +150,9 @@ export default function LandingPage({ linkTicker }: { linkTicker?: string } = {}
   ): Promise<boolean> => {
     setBusy(true)
     setPending(tickers)
+    // A run the visitor starts themselves (or the example) ends the linked view:
+    // headline, title and phone order go back to normal. The link run itself keeps it.
+    if (source !== 'link') setLinked(null)
     setNotice(null)
     track(EVENTS.analysisStarted, { tickers, count: tickers.length, source })
     const started = Date.now()
@@ -208,8 +211,12 @@ export default function LandingPage({ linkTicker }: { linkTicker?: string } = {}
       // sample too. Without it the started -> completed step reads ~100% for
       // everyone and duration_ms averages a warm cached AAPL against cold
       // multi-ticker work. It is already in scope and already tested above.
-      track(EVENTS.analysisCompleted, { duration_ms: Date.now() - started,
-                                        count: results.length, source })
+      // A link run that showed nothing falls back to the example; it is not a completed
+      // analysis, so it must not inflate the started -> completed step.
+      if (source !== 'link' || results.some(usable)) {
+        track(EVENTS.analysisCompleted, { duration_ms: Date.now() - started,
+                                          count: results.length, source })
+      }
       return results.some(usable)
     } catch (err) {
       // A raw AbortError (or any other exception) must never reach the DOM as
@@ -247,6 +254,10 @@ export default function LandingPage({ linkTicker }: { linkTicker?: string } = {}
       const t = normalizeTicker(linkTicker)
       let known = false
       if (t) {
+        // Show the ticker at once (spec 4): the headline and phone order must not flip
+        // after the check. fallBack() undoes this if the link turns out unusable.
+        setLinked(t)
+        setPending([t])
         try {
           const r = await fetch(`${API_BASE}/api/landing/ticker/${encodeURIComponent(t)}`)
           // A non-OK answer (e.g. the 429 rate limit, whose body says known:false) is
@@ -259,7 +270,6 @@ export default function LandingPage({ linkTicker }: { linkTicker?: string } = {}
       if (!live) return
       track(EVENTS.tickerLinkOpened, { ticker: t ?? noticeLabel(linkTicker), known })
       if (!t || !known) return fallBack()
-      setLinked(t)
       // Spec D5: a link always shows its stock; it uses a free analysis only while
       // one remains. canAnalyze() is read BEFORE the run.
       const ok = await analyze([t], 'link', canAnalyze())
