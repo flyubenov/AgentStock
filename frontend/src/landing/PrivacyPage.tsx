@@ -12,7 +12,7 @@ import SiteFooter from './components/SiteFooter'
  *  the same commit — PrivacyPage.test.tsx lists what it must disclose. */
 
 export const CONTACT_EMAIL = 'contact@intrinsica.io'
-export const UPDATED = '2 October 2026'
+export const UPDATED = '3 October 2026'
 
 function Mail() {
   return <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
@@ -57,11 +57,13 @@ export default function PrivacyPage() {
             <li>
               <b>A random visitor ID</b> kept in your browser's local storage, plus a count
               of the free analyses you've used and the channel you first arrived from. The
-              ID isn't linked to your name, and we use no advertising trackers.
+              ID isn't linked to your name, and we use no advertising trackers. If you give us
+              your email, it is stored with your visitor ID and the events above.
             </li>
             <li>
-              <b>What you do on the site</b>: page views, the tickers you analyse, and clicks
-              on plans, checkout and payment buttons, each with a time stamp.
+              <b>What you do on the site</b>: for example page views, the tickers you analyse,
+              which scores and plans you look at, and clicks on Share, plans, checkout and
+              payment buttons, each with a time stamp.
             </li>
             <li>
               <b>Where you came from</b>: the campaign tags in the link you followed, and the
@@ -73,8 +75,9 @@ export default function PrivacyPage() {
               about early access.
             </li>
             <li>
-              <b>Your IP address</b>, which every web request carries. We use it briefly in
-              memory to limit abusive traffic, and our hosting provider keeps it in request
+              <b>Your IP address</b>, which every web request carries. We keep it only in
+              server memory, to limit abusive traffic, and never write it to storage. Our
+              hosting provider keeps it in request
               logs for up to 30 days. We don't store it with the events above.
             </li>
           </ul>

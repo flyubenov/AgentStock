@@ -32,6 +32,13 @@ describe('PrivacyPage', () => {
     ]) expect(text).toMatch(item)
   })
 
+  it('says an email is stored with the visitor ID, and that the IP is not written to storage', () => {
+    const { container } = show()
+    const text = (container.textContent ?? '').replace(/\s+/g, ' ')
+    expect(text).toMatch(/it is stored with your visitor ID and the events above/)
+    expect(text).toMatch(/never write it to storage/)
+  })
+
   it('does not claim a Google Fonts transfer the site no longer makes', () => {
     const { container } = show()
     expect(container.textContent).not.toMatch(/Google Fonts/i)
