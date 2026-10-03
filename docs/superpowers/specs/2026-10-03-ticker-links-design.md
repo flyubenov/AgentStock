@@ -32,7 +32,7 @@ Ads and posts about one stock must land on that stock. Today every path except `
 | D6 | Events: `ticker_link_opened` and `share_clicked` (§7). |
 | D7 | The Share button's link carries `?ref=share`. B1 records the referrer `t.co` as channel `x`. |
 | D8 | An unknown ticker falls back to the AAPL homepage with a note. Only tickers on the SEC list get their own card. |
-| D9 | Ticker case is ignored; `BRK.B` = `BRK-B`; one stock per link. |
+| D9 | Ticker case is ignored; `BRK.B` = `BRK-B` (canonical `BRK.B`); one stock per link. |
 | D10 | "Engaged visitor" in the B3 keep/stop rules = typed **or** link. The go/no-go bars are unchanged. |
 | D11 | Fonts are self-hosted (removes the Google Fonts transfer from B4's privacy notice). |
 
@@ -40,13 +40,7 @@ Ads and posts about one stock must land on that stock. Today every path except `
 
 **Frontend route:** `/t/:ticker` renders `LandingPage` with a `linkTicker` prop, in public mode and in dev alike. Every other unknown path still falls back to the plain landing page.
 
-**Normalising a ticker:** `normalizeTicker(raw)` does the following:
-1. trims the input;
-2. upper-cases it;
-3. maps `.` to `-` (`BRK.B` → `BRK-B`, the form the engine and the SEC list use);
-4. accepts it only if it matches `^[A-Z][A-Z0-9-]{0,9}$`.
-
-Commas, spaces and anything else make it invalid. The same rules exist in Python (`landing/tickers.py`) and TypeScript (`landing/ticker.ts`). A shared table of test cases pins both.
+**Normalising a ticker:** `normalizeTicker(raw)` trims and upper-cases the input, then accepts it only if it matches `^[A-Z]{1,5}([.-][A-Z]{1,2})?$`, the same shape the analysis endpoint already validates (`services/yahoo.py` `_TICKER_RE`) widened to accept a dash. The canonical form uses a **dot** (`BRK-B` → `BRK.B`), because `/api/landing/analyze` rejects the dash form. The SEC list is keyed by the **dash** form (`sec_key("BRK.B")` = `BRK-B`). Commas, spaces and anything else make it invalid. The same rules exist in Python (`landing/tickers.py`) and TypeScript (`landing/ticker.ts`), and a shared JSON table of test cases pins both.
 
 **Known-ticker list:**
 - `landing/tickers.py` loads `https://www.sec.gov/files/company_tickers.json`, with the `User-Agent` taken from the env var `SEC_USER_AGENT`.
@@ -55,7 +49,7 @@ Commas, spaces and anything else make it invalid. The same rules exist in Python
 - **If `SEC_USER_AGENT` is unset,** the fetch is skipped and a warning is logged once. Production must set it (DEPLOY.md gets one line).
 - **Overlap with branch `05-yfinance-replacement`:** that branch has an EDGAR client with the same CIK map. This module stays standalone and small. When the branches meet, it should switch to that client; the plan notes this.
 
-**`GET /api/landing/ticker/{raw}`** returns `{"ticker": "BRK-B", "known": true, "name": "Berkshire Hathaway Inc"}`.
+**`GET /api/landing/ticker/{raw}`** returns `{"ticker": "BRK.B", "known": true, "name": "Berkshire Hathaway Inc"}`.
 - An invalid format returns `{"ticker": null, "known": false, "name": null}`.
 - It is rate-limited with the existing landing limiter key.
 - **If the SEC list can't be loaded,** the endpoint answers `known: true` for any ticker with a valid format. The page then tries the analysis, and a failed run falls back exactly as an unknown ticker does (§4). Only the card generator treats "list unavailable" as unknown.
@@ -83,7 +77,7 @@ Commas, spaces and anything else make it invalid. The same rules exist in Python
 **Headline and layout (D4):**
 - With a known link ticker, the hero headline becomes `{T}: judge the business.` / `Then judge the price.` The ticker is set in `--accent`.
 - The input placeholder becomes "Try another ticker…".
-- **On phones (≤ 720px),** the result card is ordered before the input block via CSS `order`. The DOM order stays the same, so screen readers and tab order are unchanged.
+- **On phones (≤ 900px, the existing single-column breakpoint),** the result card is ordered right after the headline via CSS `order` (the left column uses `display: contents` in link mode). The DOM order stays the same, so screen readers and tab order are unchanged.
 - **Header pill:** `link` runs show "Live analysis · computed just now", `sample` keeps "Live example · computed just now", and typed keeps "Your analysis".
 - The document title becomes `{T}: Quality, Moat, Fair Value · Intrinsica`.
 
@@ -116,7 +110,7 @@ How the swap works:
   - the small line in Inter at about 25px, `#cfe6e4`: "Quality · Moat · Fair Value · Reward/Risk, scored from fundamentals";
   - "intrinsica.io" right-aligned in bold white.
 - **Spacing:** follows the approved mockup (`share-card-v3.html` layout with the `share-line` text). The footer clears X's bottom-left domain chip.
-- **Long tickers** (up to 10 characters) shrink the font until the text fits within 60% of the width.
+- **Long tickers** (up to 8 characters, e.g. GOOGL.AB) shrink the font until the text fits within 60% of the width.
 - **Unknown or invalid tickers** answer with a 302 redirect to `/og-image.png`. No image is ever drawn for text outside the SEC list.
 - **Caching:** an in-process LRU of 256 PNGs, plus `Cache-Control: public, max-age=86400`.
 - **The brand mark** is drawn from the same geometry as `mark.ts`. A test compares the colour constants.
@@ -176,7 +170,7 @@ How the swap works:
 ## 10. Testing
 
 - **Normalisation:** a shared case table, run in Python and Vitest:
-  - `nvda` → NVDA; `BRK.B` → BRK-B;
+  - `nvda` → NVDA; `brk-b` → BRK.B;
   - ` msft ` → MSFT;
   - `a,b`, an empty string, `<x>` and an 11-character input are all invalid.
 - **`tickers.py`:**
@@ -194,7 +188,7 @@ How the swap works:
   - a 1200×630 PNG for a known ticker;
   - a 302 to `/og-image.png` for unknown and invalid tickers;
   - the LRU is reused;
-  - 10-character tickers fit;
+  - 8-character tickers fit;
   - the mark colours equal `mark.ts`.
 - **LandingPage with `linkTicker`:**
   - the headline, the placeholder and the pill;
