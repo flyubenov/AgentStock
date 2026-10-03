@@ -9,6 +9,7 @@ from services.rate_limit import RateLimiter, client_key
 from services.yahoo import validate_ticker
 from landing.cache import get_analysis
 from landing.contract import build_ticker_payload
+from landing.tickers import normalize, lookup, list_available
 
 router = APIRouter()
 
@@ -75,3 +76,20 @@ async def analyze(req: LandingAnalyzeRequest, request: Request):
             results.append(build_ticker_payload(run))
 
     return {"results": results, "invalid": invalid, "error": None}
+
+
+@router.get("/landing/ticker/{raw}")
+async def ticker_check(raw: str, request: Request):
+    """Is this /t/ link a real US ticker (spec 2026-10-03 §3)? While the SEC list is
+    unavailable, any well-formed ticker reads as known: the page then tries the
+    analysis and falls back only if that fails, so an SEC outage never breaks an
+    ad landing. Only the card generator treats "list unavailable" as unknown."""
+    if _limiter.limited(client_key(request)):
+        return JSONResponse(status_code=429, content={"ticker": None, "known": False, "name": None})
+    t = normalize(raw)
+    if t is None:
+        return {"ticker": None, "known": False, "name": None}
+    if not await list_available():
+        return {"ticker": t, "known": True, "name": None}
+    known, name = await lookup(t)
+    return {"ticker": t, "known": known, "name": name}

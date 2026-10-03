@@ -6,6 +6,16 @@ from main import app
 import landing.cache as cache_mod
 import routers.landing as landing_router
 
+
+def _list(known: dict[str, str] | None):
+    """Patch the SEC list: a dict of canonical ticker -> title, or None = unavailable."""
+    async def lookup(t):
+        if known is None:
+            return False, None
+        return (True, known[t]) if t in known else (False, None)
+    return (patch("routers.landing.lookup", new=lookup),
+            patch("routers.landing.list_available", new=AsyncMock(return_value=known is not None)))
+
 client = TestClient(app)
 
 MAX = 3
@@ -172,3 +182,37 @@ def test_a_limited_request_never_reaches_the_engines(monkeypatch):
 def test_the_default_limit_is_twenty_per_minute():
     assert landing_router._limiter.limit == 20
     assert landing_router._limiter.window_seconds == 60
+
+
+def test_ticker_check_knows_a_listed_ticker():
+    a, b = _list({"BRK.B": "BERKSHIRE HATHAWAY INC"})
+    with a, b:
+        r = client.get("/api/landing/ticker/brk-b")
+    assert r.json() == {"ticker": "BRK.B", "known": True, "name": "BERKSHIRE HATHAWAY INC"}
+
+
+def test_ticker_check_rejects_an_unlisted_ticker():
+    a, b = _list({"NVDA": "NVIDIA CORP"})
+    with a, b:
+        r = client.get("/api/landing/ticker/XYZQ")
+    assert r.json() == {"ticker": "XYZQ", "known": False, "name": None}
+
+
+def test_ticker_check_rejects_a_malformed_ticker():
+    a, b = _list({"NVDA": "NVIDIA CORP"})
+    with a, b:
+        r = client.get("/api/landing/ticker/a,b")
+    assert r.json() == {"ticker": None, "known": False, "name": None}
+
+
+def test_ticker_check_lets_a_valid_shape_through_when_the_list_is_down():
+    a, b = _list(None)
+    with a, b:
+        r = client.get("/api/landing/ticker/NVDA")
+    assert r.json() == {"ticker": "NVDA", "known": True, "name": None}
+
+
+def test_ticker_check_is_rate_limited(monkeypatch):
+    monkeypatch.setattr(landing_router._limiter, "limited", lambda key: True)
+    r = client.get("/api/landing/ticker/NVDA")
+    assert r.status_code == 429
