@@ -33,7 +33,7 @@ Ads and posts about one stock must land on that stock. Today every path except `
 | D7 | The Share button's link carries `?ref=share`. B1 records the referrer `t.co` as channel `x`. |
 | D8 | An unknown ticker falls back to the AAPL homepage with a note. Only tickers on the SEC list get their own card. |
 | D9 | Ticker case is ignored; `BRK.B` = `BRK-B` (canonical `BRK.B`); one stock per link. |
-| D10 | "Engaged visitor" in the B3 keep/stop rules = typed **or** link. The go/no-go bars are unchanged. |
+| D10 | "Engaged visitor" in the B3 keep/stop rules = a typed analysis, **or** a link arrival whose stock loaded **and** who then did one more thing: opened a score breakdown, viewed pricing, pressed Share, or typed a ticker. *Revised 2026-10-03 after the final review:* counting every link arrival made "engaged" equal "landed" for ad traffic, so the 10% health check could not tell channels apart. The go/no-go bars are unchanged. |
 | D11 | Fonts are self-hosted (removes the Google Fonts transfer from B4's privacy notice). |
 
 ## 3. Routes and the ticker check
@@ -143,7 +143,7 @@ How the swap works:
 **Other changes:**
 - `AnalyzeSource` becomes `'sample' | 'typed' | 'link'`. `analysis_started` and `analysis_completed` carry it as today.
 - B1 tweak (D7): in `attribution.ts`, the referrer domain `t.co` maps to the channel `x`. The raw `referrer` field keeps `t.co`.
-- B3 rules (D10): "engaged visitor" becomes `analysis_completed` with `source` = `typed` or `link`. This is updated in the checklist HTML. That file is untracked and never committed; it is edited in place.
+- B3 rules (D10): "engaged visitor" becomes a visitor with `analysis_completed` where `source` = `typed`, **or** with `analysis_completed` where `source` = `link` plus at least one of `breakdown_opened`, `pricing_viewed` or `share_clicked`. This is updated in the checklist HTML. That file is untracked and never committed; it is edited in place.
 - **Tagging guide:** a table added to the checklist HTML with one ready link per channel. For example:
   - `https://intrinsica.io/t/NVDA?utm_source=x&utm_campaign=<label>`;
   - the same pattern for reddit, hn, google, indiehackers and producthunt;

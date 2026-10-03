@@ -695,8 +695,10 @@ the original four: `Channel` and `Attribution` (JSON).
 *Added 2026-10-03 (ticker links spec §7, user decision):* the closed list grows by two
 events, `ticker_link_opened` (arrived through a `/t/{TICKER}` link; props `ticker`,
 `known`) and `share_clicked` (pressed Share; props `ticker`, `method`). The analysis
-`source` prop gains `link`. The B3 rules count `analysis_completed` with `source` =
-`typed` **or** `link` as an engaged visitor.
+`source` prop gains `link`. The B3 rules count as an engaged visitor anyone with
+`analysis_completed` where `source` = `typed`, or with `analysis_completed` where
+`source` = `link` plus at least one of `breakdown_opened`, `pricing_viewed` or
+`share_clicked` (revised the same day, ticker links spec D10).
 
 The demo's analyses themselves are never saved anywhere. The landing page runs the engines read-only (`_run_one_readonly`), and results live only in the in-memory landing cache.
 
