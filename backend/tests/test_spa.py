@@ -158,3 +158,37 @@ def test_anything_else_gets_the_untouched_page(client, path):
 def test_head_works_on_a_ticker_link(client):
     with patch("spa.lookup", new=_known):
         assert client.head("/t/NVDA").status_code == 200
+
+
+def test_a_slow_ticker_lookup_serves_the_untouched_page(client):
+    # A cold instance may still be downloading the SEC list; X's crawler gives up
+    # after a few seconds, so the page is served generic rather than late.
+    import asyncio
+
+    async def slow(t):
+        await asyncio.sleep(5)
+        return (True, "X")
+
+    with patch("spa.lookup", new=slow), patch("spa._LOOKUP_TIMEOUT", 0.05):
+        r = client.get("/t/NVDA")
+    assert r.status_code == 200
+    assert "og/NVDA.png" not in r.text
+    assert "<title>Intrinsica</title>" in r.text
+
+
+def test_startup_warms_the_sec_list_and_a_failure_cannot_stop_startup():
+    import main
+    calls = []
+
+    async def boom():
+        calls.append(1)
+        raise RuntimeError("SEC down")
+
+    with patch("main.list_available", new=boom), patch("main.seed", new=lambda tickers: _noop()):
+        with TestClient(create_app(public_mode=True, static_dir="", canonical_host="")) as c:
+            assert c.get("/api/health").status_code in (200, 404)
+    assert calls == [1]
+
+
+async def _noop():
+    return None

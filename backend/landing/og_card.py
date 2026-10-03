@@ -55,7 +55,7 @@ def ticker_width(ticker: str) -> float:
     return _ticker_font(ticker).getlength(ticker)
 
 
-def _gradient() -> Image.Image:
+def _build_gradient() -> Image.Image:
     top, bot = _rgb(CARD_COLOURS["plateTop"]), _rgb(CARD_COLOURS["plateBot"])
     img = Image.new("RGB", (W, H))
     px = ImageDraw.Draw(img)
@@ -63,6 +63,18 @@ def _gradient() -> Image.Image:
         k = y / (H - 1)
         px.line([(0, y), (W, y)], fill=tuple(round(a + (b - a) * k) for a, b in zip(top, bot)))
     return img
+
+
+_background: Image.Image | None = None
+
+
+def _gradient() -> Image.Image:
+    """The 630 line draws are the same for every ticker, so build once and hand out
+    a copy (each card draws on its own)."""
+    global _background
+    if _background is None:
+        _background = _build_gradient()
+    return _background.copy()
 
 
 def _mark(img: Image.Image, x: int, y: int, s: int) -> None:
@@ -108,7 +120,7 @@ def _draw(ticker: str) -> bytes:
     d.text((_LEFT, 536), _LINE, font=small, fill=_SMALL, anchor="lm")
     d.text((_RIGHT, 536), "intrinsica.io", font=_font(_INTER, 25, 700), fill="white", anchor="rm")
     out = io.BytesIO()
-    img.save(out, "PNG", optimize=True)
+    img.save(out, "PNG")
     return out.getvalue()
 
 

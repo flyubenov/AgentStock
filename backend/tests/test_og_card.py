@@ -93,3 +93,28 @@ def test_concurrent_renders_past_the_cache_limit_do_not_raise(monkeypatch):
     assert out == [t.encode() for t in tickers]
     assert len(og_card._cache) <= 3
     og_card._cache.clear()
+
+
+def test_a_slow_lookup_redirects_to_the_generic_card(client):
+    import asyncio
+
+    async def slow(t):
+        await asyncio.sleep(5)
+        return (True, "X")
+
+    with patch("routers.og.lookup", new=slow), patch("routers.og._LOOKUP_TIMEOUT", 0.05):
+        r = client.get("/og/NVDA.png", follow_redirects=False)
+    assert r.status_code == 302
+    assert r.headers["location"] == "/og-image.png"
+
+
+def test_a_client_over_the_limit_gets_the_generic_card_not_a_429(client, monkeypatch):
+    from routers import og
+    monkeypatch.setattr(og._limiter, "limit", 1)
+    og._limiter.hits.clear()
+    assert client.get("/og/NVDA.png").status_code == 200
+    with patch.object(og_card, "render_card", side_effect=AssertionError("must not draw")):
+        r = client.get("/og/NVDA.png", follow_redirects=False)
+    assert r.status_code == 302
+    assert r.headers["location"] == "/og-image.png"
+    og._limiter.hits.clear()

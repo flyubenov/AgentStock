@@ -1,4 +1,5 @@
 from __future__ import annotations
+import asyncio
 import html
 import re
 from pathlib import Path
@@ -15,6 +16,9 @@ _IMMUTABLE = "public, max-age=31536000, immutable"
 _SHORT = "public, max-age=3600"
 _NO_CACHE = "no-cache"
 _SITE = "https://intrinsica.io"
+# X's crawler gives up after a few seconds; a cold instance may still be downloading
+# the SEC list, so the page is served generic rather than late (spec §9).
+_LOOKUP_TIMEOUT = 2.0
 
 
 def _ticker_page(index_html: str, t: str) -> str:
@@ -63,7 +67,13 @@ def mount_spa(app: FastAPI, static_dir: str) -> bool:
         m = re.fullmatch(r"t/([^/]+)", path)
         if m:
             t = normalize(m.group(1))
-            if t is not None and (await lookup(t))[0]:
+            known = False
+            if t is not None:
+                try:
+                    known = (await asyncio.wait_for(asyncio.shield(lookup(t)), _LOOKUP_TIMEOUT))[0]
+                except asyncio.TimeoutError:
+                    pass  # shield(): the download carries on for the next request
+            if known:
                 return HTMLResponse(_ticker_page(index_html, t), headers={"Cache-Control": _NO_CACHE})
         return FileResponse(index, headers={"Cache-Control": _NO_CACHE})
 
