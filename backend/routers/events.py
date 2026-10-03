@@ -17,7 +17,7 @@ FUNNEL_EVENTS = frozenset({
     "page_view", "analysis_started", "analysis_completed", "breakdown_opened",
     "methodology_viewed", "pricing_viewed", "plan_selected", "checkout_started",
     "payment_button_clicked", "email_submitted", "free_plan_clicked",
-    "watchlist_clicked",
+    "watchlist_clicked", "ticker_link_opened", "share_clicked",
 })
 
 # Size limits, each far above anything the page itself sends (the largest real payload

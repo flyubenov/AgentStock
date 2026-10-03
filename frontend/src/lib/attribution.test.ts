@@ -44,6 +44,11 @@ describe('readTouch', () => {
     expect(readTouch()).toEqual({ channel: 'direct', landing: '/checkout' })
   })
 
+  it('records an X click without tags as channel x, keeping the raw referrer', async () => {
+    const { readTouch } = await fresh('/t/NVDA', 'https://t.co/abc123')
+    expect(readTouch()).toMatchObject({ channel: 'x', referrer: 't.co' })
+  })
+
   it('cleans and shortens values so a hand-made link cannot stuff the sheet', async () => {
     const long = 'a'.repeat(300)
     const { readTouch } = await fresh(`/?utm_source=%3Cscript%3E&utm_campaign=${long}`)

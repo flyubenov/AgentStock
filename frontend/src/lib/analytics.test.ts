@@ -39,6 +39,8 @@ const SPEC_EVENTS = [
   'email_submitted',
   'free_plan_clicked',
   'watchlist_clicked',
+  'ticker_link_opened', // added 2026-10-03 (ticker links spec §7)
+  'share_clicked', // added 2026-10-03 (ticker links spec §7)
 ]
 
 /** THE LIST IS CLOSED — spec section 9 says so in as many words: "this list is

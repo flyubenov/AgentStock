@@ -61,7 +61,10 @@ export function readTouch(): Touch {
   if (ref) touch.ref = ref
   const referrer = referringDomain()
   if (referrer) touch.referrer = referrer
-  touch.channel = touch.utm_source ?? touch.ref ?? touch.referrer ?? 'direct'
+  // X wraps every outbound link in t.co; an untagged X click belongs to the same
+  // channel as a tagged X post (ticker links spec D7).
+  const fromReferrer = touch.referrer === 't.co' ? 'x' : touch.referrer
+  touch.channel = touch.utm_source ?? touch.ref ?? fromReferrer ?? 'direct'
   return touch
 }
 
