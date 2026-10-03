@@ -694,7 +694,7 @@ the original four: `Channel` and `Attribution` (JSON).
 
 *Added 2026-10-03 (ticker links spec §7, user decision):* the closed list grows by two
 events, `ticker_link_opened` (arrived through a `/t/{TICKER}` link; props `ticker`,
-`known`) and `share_clicked` (pressed Share; props `ticker`, `method`). The analysis
+`known`) and `share_clicked` (pressed Share; props `ticker`, `method`, and `place` = `card`, `row` or `breakdown`, added the same day). The analysis
 `source` prop gains `link`. The B3 rules count as an engaged visitor anyone with
 `analysis_completed` where `source` = `typed`, or with `analysis_completed` where
 `source` = `link` plus at least one of `breakdown_opened`, `pricing_viewed` or

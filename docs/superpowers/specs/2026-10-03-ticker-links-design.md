@@ -129,7 +129,8 @@ How the swap works:
 
   A rejection, including the user cancelling, is silent.
 - **Otherwise** it copies the link with `navigator.clipboard.writeText` and shows "Link copied" for 2 seconds in an `aria-live="polite"` region. If the clipboard fails, the button shows the URL in a read-only selected input instead.
-- **Event:** `share_clicked` with `{ticker, method: 'native' | 'copy'}`, fired on click before the share or copy resolves.
+- **Event:** `share_clicked` with `{ticker, method: 'native' | 'copy', place: 'card' | 'row' | 'breakdown'}`, fired on click before the share or copy resolves.
+- **Revised 2026-10-03 (founder):** Share appears only for a result where at least one assessment computed. A single result shows "Share {T}" at the footer's right; comparison rows show an icon-only Share grouped with the bookmark at the right of the ticker line; the breakdown header shows "Share {T}" beside Close. Non-production builds link to their own origin.
 - **Future:** when scores are licensed (D2), the card gains a score row. Nothing in the button changes.
 
 ## 7. Analytics
