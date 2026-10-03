@@ -33,6 +33,7 @@ Intrinsica runs as **one Cloud Run service**, `intrinsica`, in `europe-west1`. A
 | `CANONICAL_HOST` | `intrinsica.io` | §2.3 |
 | `CORS_ORIGINS` | `https://intrinsica.io` | Same-origin already. This blocks other sites' pages |
 | `INTRINSICA_EVENTS_SHEET_ID` | `1e4U4roainSuDJPHwsxkVrZezlA2InDPHV1zaQHuCzqY` | R6 |
+| `SEC_USER_AGENT` | `Intrinsica contact@intrinsica.io` | SEC requires a contact in the User-Agent to download its ticker list (ticker links spec §3) |
 | `LANDING_SLOW_TTL` | `604800` | 7 days (R8) |
 | `LANDING_FAST_TTL` | `14400` | 4 hours (R8) |
 | `LANDING_CACHE_MAX_ENTRIES` | `256` | New. Replaces the hard-coded 64 |

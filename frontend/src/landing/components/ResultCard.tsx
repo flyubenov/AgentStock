@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react'
 import type { AnalyzeSource, AssessmentId, TickerPayload } from '../types'
 import {
-  DASH, dollars, fvCaption, gapClass, gapPct, money, moatTier, num, qualityTier,
+  DASH, computed, dollars, fvCaption, gapClass, gapPct, money, moatTier, num, qualityTier,
 } from '../format'
 import { ASSESSMENTS } from './Hero'
 import LiveRunBar from './LiveRunBar'
+import ShareButton from './ShareButton'
 import { Bookmark, ChevronDown } from 'lucide-react'
 
 export interface OpenState { ticker: string; tab: AssessmentId }
@@ -52,9 +53,9 @@ function Star({ ticker, onWatch }: { ticker: string; onWatch: (t: string) => voi
 }
 
 function Pill({ source }: { source: AnalyzeSource | null }) {
-  return source === 'typed'
-    ? <span className="rc-pill yours">Your analysis</span>
-    : <span className="rc-pill live"><i aria-hidden="true" />Live example · computed just now</span>
+  if (source === 'typed') return <span className="rc-pill yours">Your analysis</span>
+  const label = source === 'link' ? 'Live analysis · computed just now' : 'Live example · computed just now'
+  return <span className="rc-pill live"><i aria-hidden="true" />{label}</span>
 }
 
 /** Two bars on one scale: fair value vs price, or reward vs risk. */
@@ -165,7 +166,14 @@ function CompareView({ rows, open, onRow, onWatch }: {
             <span className="rc-id">
               <button type="button" className="rc-open" aria-expanded={isOpen}
                       onClick={e => { e.stopPropagation(); onRow(r.ticker) }}>{r.ticker}</button>
-              <Star ticker={r.ticker} onWatch={onWatch} />
+              {/* Bookmark and icon-only Share as one group on the ticker's line, the
+                  same spot on every row whatever the name's length; the name gets
+                  its own line (user decision 2026-10-03, option A). A link is one
+                  stock, so each row shares its own, and only if it computed. */}
+              <span className="rc-acts">
+                <Star ticker={r.ticker} onWatch={onWatch} />
+                {computed(r) && <ShareButton ticker={r.ticker} place="row" iconOnly />}
+              </span>
               <span className="nm">{r.company_name ?? ''}</span>
               <span className="chev" aria-hidden="true">▾</span>
             </span>
@@ -221,9 +229,12 @@ export default function ResultCard(p: ResultCardProps) {
         {one
           ? <TilesView r={r} open={p.open} onTile={p.onTile} />
           : <CompareView rows={p.rows} open={p.open} onRow={p.onRow} onWatch={p.onWatch} />}
-        <p className="rc-foot">
-          {one ? 'Click any score for its full breakdown ↓' : 'Click a ticker for its full breakdown ↓'}
-        </p>
+        {/* One result: Share sits bottom right, after the scores have been read
+            (user decision 2026-10-03). A comparison shares per row instead. */}
+        <div className="rc-foot">
+          <span>{one ? 'Click any score for its full breakdown ↓' : 'Click a ticker for its full breakdown ↓'}</span>
+          {one && computed(r) && <ShareButton ticker={r.ticker} place="card" label={`Share ${r.ticker}`} />}
+        </div>
       </div>
     </div>
   )

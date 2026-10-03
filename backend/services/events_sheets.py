@@ -1,5 +1,5 @@
 from __future__ import annotations
-import asyncio, json, logging, os, time
+import asyncio, json, logging, os, re, time
 
 from models import AnalyticsEvent
 from services.sheets import _get_service, _execute, _run_sheets
@@ -7,7 +7,10 @@ from services.sheets import _get_service, _execute, _run_sheets
 log = logging.getLogger(__name__)
 
 _EVENTS_TAB = "Events"
-_EVENTS_HEADERS = ["Timestamp", "Event", "VisitorId", "Props"]
+# Channel and Attribution (launch checklist B1) come after the original four columns,
+# so rows written before them still line up.
+_EVENTS_HEADERS = ["Timestamp", "Event", "VisitorId", "Props", "Channel", "Attribution"]
+_EVENTS_RANGE = "A:F"
 _EVENTS_SHEET_ENV = "INTRINSICA_EVENTS_SHEET_ID"
 
 
@@ -46,6 +49,7 @@ _dropped = 0
 _lock = asyncio.Lock()
 _now = time.monotonic              # indirection so tests can move the clock
 _warned = False                    # a failing sink is logged once per process, not per flush
+_headers_written = False           # the header row is (re)written once per process
 
 
 def _trim_locked() -> None:
@@ -57,23 +61,44 @@ def _trim_locked() -> None:
         _dropped += excess
 
 
+_CHANNEL_JUNK = re.compile(r"[^a-z0-9._-]+")
+
+
+def _clean_channel(value: object) -> str:
+    """The Channel cell, cleaned the way frontend/src/lib/attribution.ts clean() does:
+    it is the column the founder pivots on, and a hand-made request must not be able
+    to write a sheet formula into it. The JSON column keeps the raw attribution."""
+    if not isinstance(value, str):
+        return ""
+    return _CHANNEL_JUNK.sub("", value.lower())[:100]
+
+
 def _to_row(ev: AnalyticsEvent) -> list[str]:
-    return [ev.ts or "", ev.event, ev.visitor_id, json.dumps(ev.props or {})]
+    attribution = ev.attribution or {}
+    channel = attribution.get("channel")
+    return [ev.ts or "", ev.event, ev.visitor_id, json.dumps(ev.props or {}),
+            _clean_channel(channel), json.dumps(attribution)]
 
 
 def _ensure_events_sheet(svc, sheet_id: str) -> None:
+    """Create the Events tab if missing, and write the header row once per process —
+    so a tab created before a column was added gets the new header too."""
+    global _headers_written
     meta = _execute(svc.spreadsheets().get(spreadsheetId=sheet_id))
     titles = {s["properties"]["title"] for s in meta.get("sheets", [])}
-    if _EVENTS_TAB in titles:
+    if _EVENTS_TAB not in titles:
+        _execute(svc.spreadsheets().batchUpdate(
+            spreadsheetId=sheet_id,
+            body={"requests": [{"addSheet": {"properties": {"title": _EVENTS_TAB}}}]},
+        ))
+        _headers_written = False
+    if _headers_written:
         return
-    _execute(svc.spreadsheets().batchUpdate(
-        spreadsheetId=sheet_id,
-        body={"requests": [{"addSheet": {"properties": {"title": _EVENTS_TAB}}}]},
-    ))
     _execute(svc.spreadsheets().values().update(
         spreadsheetId=sheet_id, range=f"{_EVENTS_TAB}!A1",
         valueInputOption="RAW", body={"values": [_EVENTS_HEADERS]},
     ))
+    _headers_written = True
 
 
 def _append_sync(rows: list[list[str]]) -> None:
@@ -81,7 +106,7 @@ def _append_sync(rows: list[list[str]]) -> None:
     sheet_id = _sheet_id()
     _ensure_events_sheet(svc, sheet_id)
     _execute(svc.spreadsheets().values().append(
-        spreadsheetId=sheet_id, range=f"{_EVENTS_TAB}!A:D",
+        spreadsheetId=sheet_id, range=f"{_EVENTS_TAB}!{_EVENTS_RANGE}",
         valueInputOption="RAW", insertDataOption="INSERT_ROWS",
         body={"values": rows},
     ))

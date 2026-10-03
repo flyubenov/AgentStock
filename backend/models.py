@@ -49,3 +49,6 @@ class AnalyticsEvent(BaseModel):
     visitor_id: str
     ts: str | None = None
     props: dict = {}
+    # Where the visitor came from (launch checklist B1): the first arrival's channel
+    # and tags, plus this visit's channel. Kept apart from props, which are the event's own.
+    attribution: dict = {}

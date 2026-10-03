@@ -45,6 +45,13 @@ describe('BrandMark (spec §4)', () => {
     expect(screen.getByText('Intrinsica')).toBeInTheDocument()
   })
 
+  // User decision 2026-10-03: the logo takes you home from every page, including
+  // a /t/ link page, which otherwise has no way back to the plain homepage.
+  it('links home', () => {
+    render(<Logo />)
+    expect(screen.getByRole('link', { name: /Intrinsica/ })).toHaveAttribute('href', '/')
+  })
+
   it('ships the same mark as the favicon', () => {
     const here = dirname(fileURLToPath(import.meta.url))
     const svg = readFileSync(resolve(here, '../../../public/favicon.svg'), 'utf8')

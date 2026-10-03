@@ -22,6 +22,8 @@ vi.mock('../lib/analytics', () => ({
     planSelected: 'plan_selected',
     freePlanClicked: 'free_plan_clicked',
     watchlistClicked: 'watchlist_clicked',
+    tickerLinkOpened: 'ticker_link_opened',
+    shareClicked: 'share_clicked',
   },
 }))
 

@@ -8,9 +8,12 @@ const SECTIONS = [
   { href: '#pricing', label: 'Pricing' },
 ]
 
-/** The logo block, shared with the checkout's mini-nav. */
+/** The logo block, shared with the checkout's and privacy page's mini-navs. It
+ *  links home from every page (user decision 2026-10-03): a /t/ link page otherwise
+ *  has no way back to the plain homepage. A plain link, not a router Link, so the
+ *  homepage starts fresh with its own example. */
 export function Logo() {
-  return <div className="logo"><BrandMark size={42} />Intrinsica</div>
+  return <a className="logo" href="/"><BrandMark size={42} />Intrinsica</a>
 }
 
 export default function Nav() {

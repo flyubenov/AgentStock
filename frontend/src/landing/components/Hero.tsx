@@ -42,9 +42,11 @@ interface Props {
   notice?: string | null
   /** The result card: the hero's right column (spec 5.1). */
   card: ReactNode
+  /** The ticker a /t/ link is featuring (ticker links spec §4), or null. */
+  linked?: string | null
 }
 
-export default function Hero({ onAnalyze, busy, busyCount = 0, exhausted, notice, card }: Props) {
+export default function Hero({ onAnalyze, busy, busyCount = 0, exhausted, notice, card, linked = null }: Props) {
   const [value, setValue] = useState('')
   const [error, setError] = useState<string | null>(null)
 
@@ -79,9 +81,11 @@ export default function Hero({ onAnalyze, busy, busyCount = 0, exhausted, notice
   // heading, the pipeline strip and the four assessment links are gone — the card
   // shows the four scores themselves, and the questions live in the Framework.
   return (
-    <header className="hero">
+    <header className={linked ? 'hero linked' : 'hero'}>
       <div className="hero-in">
         <div className="hero-l">
+          {/* The same headline on a /t/ link (user decision 2026-10-03): the card
+              already names the stock, so the headline doesn't. */}
           <h1 className="hero-h1">Judge the business.{' '}<br />Then judge the price.</h1>
           <p className="hero-sub">
             Quality and Moat tell you how good the company is; Fair Value and Reward/Risk
@@ -103,7 +107,7 @@ export default function Hero({ onAnalyze, busy, busyCount = 0, exhausted, notice
                       aria-label="Tickers"
                       onChange={e => setValue(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') submit() }}
-                      placeholder="Enter one or more tickers — e.g. NVDA, AMD, AVGO"
+                      placeholder={linked ? 'Try another ticker…' : 'Enter one or more tickers — e.g. NVDA, AMD, AVGO'}
                     />
                   </div>
                   <button className="an-btn" type="button" onClick={submit} disabled={busy}>

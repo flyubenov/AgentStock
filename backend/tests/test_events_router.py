@@ -94,7 +94,7 @@ def test_the_backend_allowlist_is_exactly_the_frontend_event_list():
     block = src[src.index("export const EVENTS"):]
     block = block[:block.index("})")]
     names = set(re.findall(r"^\s*\w+:\s*'([a-z_]+)'", block, re.M))
-    assert len(names) == 12  # 11 original + watchlist_clicked (user decision 2026-09-26)
+    assert len(names) == 14  # 11 original + watchlist_clicked (2026-09-26) + ticker_link_opened, share_clicked (2026-10-03)
     assert names == events_router.FUNNEL_EVENTS
 
 
@@ -161,3 +161,32 @@ def test_a_forged_forwarded_for_prefix_does_not_dodge_the_limit(monkeypatch):
                            headers={"x-forwarded-for": f"10.0.0.{i}, 203.0.113.7"}).json()
                for i in range(3)]
     assert out[2] == {"recorded": False, "error": "rate limited"}
+
+
+def test_attribution_rides_beside_the_props():
+    att = {"channel": "x", "utm_source": "x", "utm_campaign": "oct-nvda",
+           "landing": "/t/NVDA", "visit_channel": "direct"}
+    resp, rec = _post(props={"plan": "Pro"}, attribution=att)
+    assert resp.json() == {"recorded": True}
+    ev = rec.await_args.args[0]
+    assert ev.props == {"plan": "Pro"}
+    assert ev.attribution == att
+
+
+@pytest.mark.parametrize("att,reason", [
+    ({f"k{i}": i for i in range(13)}, "too many attribution fields"),
+    ({"utm_campaign": "x" * 3000}, "attribution too large"),
+])
+def test_oversized_attribution_is_refused(att, reason):
+    resp, rec = _post(attribution=att)
+    assert resp.json() == {"recorded": False, "error": reason}
+    rec.assert_not_awaited()
+
+
+def test_a_maximal_legitimate_attribution_is_recorded():
+    # Eight Touch fields plus visit_channel, each at the 100-character cap: about
+    # 1,040 bytes of JSON. First touch persists, so a refusal here would drop every
+    # later event of that visitor.
+    att = {f"field_{i}": "x" * 100 for i in range(9)}
+    resp, rec = _post(attribution=att)
+    assert resp.json() == {"recorded": True}

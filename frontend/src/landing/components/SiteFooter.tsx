@@ -11,6 +11,7 @@ export default function SiteFooter() {
           Intrinsica provides systematic analysis and scoring of individual stocks to help
           investors conduct their own fundamental research and make informed decisions.
         </p>
+        <p className="links-row"><a href="/privacy">Privacy notice</a></p>
       </div>
     </footer>
   )

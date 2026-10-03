@@ -67,6 +67,7 @@ function Shell({ title, kicker = 'Checkout', children }: {
             for informational analysis. Nothing on this platform constitutes personalized
             investment advice.
           </p>
+          <p className="links-row"><a href="/privacy">Privacy notice</a></p>
         </div>
       </footer>
     </div>
@@ -249,6 +250,9 @@ export default function CheckoutPage() {
             <label className="opt" htmlFor="co-email">
               Optional — add your email for an early-access invite.
             </label>
+            <p className="opt">
+              We use it only for that. <a href="/privacy">Privacy notice</a>
+            </p>
             {sent && (
               <p className="opt ok">Thanks — we'll email you when early access opens.</p>
             )}

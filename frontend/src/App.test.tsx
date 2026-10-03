@@ -2,8 +2,9 @@ import type { ReactNode } from 'react'
 import { render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('./landing/LandingPage', () => ({ default: () => <div>landing-page</div> }))
+vi.mock('./landing/LandingPage', () => ({ default: ({ linkTicker }: { linkTicker?: string }) => <div>{linkTicker ? `landing-page:${linkTicker}` : 'landing-page'}</div> }))
 vi.mock('./landing/CheckoutPage', () => ({ default: () => <div>checkout-page</div> }))
+vi.mock('./landing/PrivacyPage', () => ({ default: () => <div>privacy-page</div> }))
 vi.mock('./pages/Home', () => ({ default: () => <div>home-page</div> }))
 vi.mock('./pages/Database', () => ({ default: () => <div>database-page</div> }))
 vi.mock('./pages/Progress', () => ({ default: () => <div>progress-page</div> }))
@@ -36,10 +37,22 @@ describe('App routes in public mode (production)', () => {
       expect(screen.queryByText(/^(home|database|progress|results|ticker)-page$/)).toBeNull()
     })
 
-  it('shows the landing page for unknown paths such as future share links', async () => {
+  it('passes a /t/ link ticker to the landing page', async () => {
     vi.stubEnv('VITE_PUBLIC_MODE', '1')
     await renderAt('/t/AMZN')
+    expect(screen.getByText('landing-page:AMZN')).toBeInTheDocument()
+  })
+
+  it('still shows the plain landing page for other unknown paths', async () => {
+    vi.stubEnv('VITE_PUBLIC_MODE', '1')
+    await renderAt('/whatever')
     expect(screen.getByText('landing-page')).toBeInTheDocument()
+  })
+
+  it('serves the privacy notice', async () => {
+    vi.stubEnv('VITE_PUBLIC_MODE', '1')
+    await renderAt('/privacy')
+    expect(screen.getByText('privacy-page')).toBeInTheDocument()
   })
 
   it('keeps the checkout page', async () => {
@@ -50,6 +63,12 @@ describe('App routes in public mode (production)', () => {
 })
 
 describe('App routes in local dev (flag unset)', () => {
+  it('serves /t/ links in dev too', async () => {
+    vi.stubEnv('VITE_PUBLIC_MODE', '')
+    await renderAt('/t/NVDA')
+    expect(screen.getByText('landing-page:NVDA')).toBeInTheDocument()
+  })
+
   it('still serves the analyst app', async () => {
     vi.stubEnv('VITE_PUBLIC_MODE', '')
     await renderAt('/database')

@@ -39,6 +39,8 @@ const SPEC_EVENTS = [
   'email_submitted',
   'free_plan_clicked',
   'watchlist_clicked',
+  'ticker_link_opened', // added 2026-10-03 (ticker links spec §7)
+  'share_clicked', // added 2026-10-03 (ticker links spec §7)
 ]
 
 /** THE LIST IS CLOSED — spec section 9 says so in as many words: "this list is
@@ -114,6 +116,18 @@ describe('track', () => {
     expect(body.event).toBe('payment_button_clicked')
     expect(body.props).toEqual({ plan: 'Pro', billing: 'annual' })
     expect(body.visitor_id).toBe(visitorId())
+  })
+
+  it('sends where the visitor came from beside the props, never inside them', () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true })
+    vi.stubGlobal('fetch', fetchMock)
+
+    track(EVENTS.planSelected, { plan: 'Pro' })
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body)
+    expect(body.props).toEqual({ plan: 'Pro' })
+    expect(body.attribution).toMatchObject({ channel: expect.any(String),
+                                             visit_channel: expect.any(String) })
   })
 
   it('does not throw when the network rejects', async () => {

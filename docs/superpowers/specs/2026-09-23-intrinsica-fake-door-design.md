@@ -679,10 +679,26 @@ FastAPI app — a new `backend/routers/events.py` registered like the other rout
 (`event`, `visitor_id`, `ts`, `props`). It is fire-and-forget from the client: a failed post
 must never block or break the funnel, and the endpoint always returns quickly.
 
+*Added 2026-10-02 (launch checklist B1, user decision):* every event also carries an
+`attribution` object beside `props`. It holds the visitor's **first** arrival: `channel`
+(the `utm_source` tag, else `?ref`, else the referring domain, else `direct`), the
+`utm_source/medium/campaign/content` tags, `ref`, the referring domain (never the full
+address) and the `landing` path. It also holds `visit_channel`, this visit's own channel.
+The tags are removed from the address bar after reading. The sheet gains two columns after
+the original four: `Channel` and `Attribution` (JSON).
+
 *Revised 2026-09-29 (user decision):* events are appended to a **dedicated Intrinsica spreadsheet**, named by the env var `INTRINSICA_EVENTS_SHEET_ID` and shared with the same service account. They are **never** written to the Agent Stock spreadsheet (`GOOGLE_SHEETS_ID`), which is the analyst tool's own. If the variable is unset:
 - events stay queued in memory, bounded by the queue cap;
 - a warning is logged once;
 - nothing falls back to another sheet.
+
+*Added 2026-10-03 (ticker links spec §7, user decision):* the closed list grows by two
+events, `ticker_link_opened` (arrived through a `/t/{TICKER}` link; props `ticker`,
+`known`) and `share_clicked` (pressed Share; props `ticker`, `method`, and `place` = `card`, `row` or `breakdown`, added the same day). The analysis
+`source` prop gains `link`. The B3 rules count as an engaged visitor anyone with
+`analysis_completed` where `source` = `typed`, or with `analysis_completed` where
+`source` = `link` plus at least one of `breakdown_opened`, `pricing_viewed` or
+`share_clicked` (revised the same day, ticker links spec D10).
 
 The demo's analyses themselves are never saved anywhere. The landing page runs the engines read-only (`_run_one_readonly`), and results live only in the in-memory landing cache.
 

@@ -1,4 +1,5 @@
 import { API_BASE } from './api'
+import { attribution } from './attribution'
 
 /** The complete funnel event list (spec section 9). There is deliberately no
  *  scroll, hover, or billing-toggle event: the chosen billing period rides on
@@ -21,6 +22,11 @@ export const EVENTS = Object.freeze({
    *  interest in a paid-workflow feature, outside the paid funnel like the free
    *  plan click. Carries the ticker. */
   watchlistClicked: 'watchlist_clicked',
+  /** Arrived through a /t/{TICKER} link (ad, post or a visitor's share; the
+   *  attribution says which). Carries { ticker, known }. Ticker links spec §7. */
+  tickerLinkOpened: 'ticker_link_opened',
+  /** Pressed Share on a result. Carries { ticker, method: 'native' | 'copy' }. */
+  shareClicked: 'share_clicked',
 })
 
 const KEY = 'intrinsica_vid'
@@ -71,6 +77,7 @@ export function track(event: FunnelEvent, props: Record<string, unknown> = {}): 
         visitor_id: visitorId(),
         ts: new Date().toISOString(),
         props,
+        attribution: attribution(),
       }),
       keepalive: true,
     }).catch(() => {})

@@ -1,0 +1,15 @@
+[
+  ["nvda", "NVDA"],
+  [" msft ", "MSFT"],
+  ["BRK.B", "BRK.B"],
+  ["brk-b", "BRK.B"],
+  ["GOOGL", "GOOGL"],
+  ["a,b", null],
+  ["", null],
+  ["<x>", null],
+  ["NVDA AMD", null],
+  ["TOOLONGX", null],
+  ["BRK.BBB", null],
+  ["1ABC", null],
+  ["%22%3E", null]
+]

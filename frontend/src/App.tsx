@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, useParams } from 'react-router-dom'
 import Layout from './components/Layout'
 import Home from './pages/Home'
 import Progress from './pages/Progress'
@@ -7,12 +7,20 @@ import TickerDetail from './pages/TickerDetail'
 import Database from './pages/Database'
 import LandingPage from './landing/LandingPage'
 import CheckoutPage from './landing/CheckoutPage'
+import PrivacyPage from './landing/PrivacyPage'
 
 /** Production builds set VITE_PUBLIC_MODE=1: intrinsica.io serves only the fake door.
  *  The Agent Stock analyst pages are not registered, and because Vite inlines this
  *  constant at build time Rollup drops them from the bundle. Every other path shows
- *  the landing page (future /t/{TICKER} share links included). Unset in local dev. */
+ *  the landing page. Unset in local dev. */
 const PUBLIC_MODE = import.meta.env.VITE_PUBLIC_MODE === '1'
+
+/** /t/{TICKER}: the landing page with that stock featured (ticker links spec §4).
+ *  Registered in both modes, before the public-mode catch-all. */
+function TickerLanding() {
+  const { ticker = '' } = useParams()
+  return <LandingPage linkTicker={ticker} />
+}
 
 /** The landing page owns `/` and renders outside Layout: Layout is the dark analyst
  *  chrome, and the landing page is light. The analyst app moves to /app.
@@ -22,13 +30,19 @@ const PUBLIC_MODE = import.meta.env.VITE_PUBLIC_MODE === '1'
  *  rather than nested under `/` because it is a separate page, not a section:
  *  LandingPage navigates to it from every plan CTA.
  *
- *  In public mode (production) only `/` and `/checkout` exist; see PUBLIC_MODE. */
+ *  `/privacy` is the privacy notice (launch checklist B4), on the same light surface.
+ *
+ *  `/t/:ticker` is a shareable link to the landing page featuring one stock.
+ *
+ *  In public mode (production) only `/`, `/t/:ticker`, `/checkout` and `/privacy` exist; see PUBLIC_MODE. */
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/checkout" element={<CheckoutPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/t/:ticker" element={<TickerLanding />} />
         {PUBLIC_MODE ? (
           <Route path="*" element={<LandingPage />} />
         ) : (

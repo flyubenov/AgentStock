@@ -98,9 +98,11 @@ export type AssessmentId = 0 | 1 | 2 | 3
 /** Where an analyze run came from. 'sample' is the mount auto-run and the
  *  compare chip — served from cache, marketing content, never counted against
  *  the demo limit. 'typed' is a visitor's own analysis and is the only source
- *  that consumes an allowance (see demoLimit.ts). Declared here so the page and
- *  the Hero that calls it cannot drift apart. */
-export type AnalyzeSource = 'sample' | 'typed'
+ *  that consumes an allowance (see demoLimit.ts). 'link' is a /t/{TICKER} visit:
+ *  it uses one free analysis while any remain, but is never blocked by the wall
+ *  (ticker links spec D5). Declared here so the page and the Hero that calls it
+ *  cannot drift apart. */
+export type AnalyzeSource = 'sample' | 'typed' | 'link'
 
 /** Which of the two sites fired `free_plan_clicked`. The event is the only one
  *  on the site that fires from two places — the pricing CTA and the checkout's

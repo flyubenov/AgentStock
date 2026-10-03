@@ -9,7 +9,9 @@ from routers.database import router as database_router
 from routers.watchlists import router as watchlists_router
 from routers.events import router as events_router
 from routers.landing import router as landing_router
+from routers.og import router as og_router
 from landing.cache import seed
+from landing.tickers import list_available
 from spa import mount_spa
 from canonical import add_canonical_host_redirect
 from services.events_sheets import flush_events, flush_loop
@@ -25,17 +27,28 @@ LANDING_MARQUEE_TICKERS = ["AAPL", "MSFT", "NVDA"]
 # silently before it finishes. Fire-and-forget still means "don't await it here", not
 # "don't keep a reference to it".
 _seed_task: asyncio.Task | None = None
+_tickers_task: asyncio.Task | None = None
 _flush_task: asyncio.Task | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _seed_task, _flush_task
+    global _seed_task, _flush_task, _tickers_task
     # Cloud Run scales to zero, so the cache is cold for the first visitor after an
     # idle period -- exactly the visitor this page exists for. Fire-and-forget: seed()
     # itself never raises (a Yahoo outage at boot just leaves the cache cold), and this
     # must not block startup on live network calls either way.
     _seed_task = asyncio.create_task(seed(LANDING_MARQUEE_TICKERS))
+    # The SEC ticker list is what /t/ links are checked against. Downloading it on the
+    # first link request would make X's crawler wait on it, so it is fetched now. It
+    # logs and swallows its own failures, and the guard keeps even a surprise from
+    # failing startup.
+    async def _warm_tickers():
+        try:
+            await list_available()
+        except Exception:
+            pass
+    _tickers_task = asyncio.create_task(_warm_tickers())
     # On Cloud Run's request-based billing CPU is throttled between requests, so a
     # fire-and-forget seed would be starved right after a deploy. Startup gets boosted
     # CPU and a long probe window, so production sets LANDING_SEED_WAIT_SECONDS to hold
@@ -58,6 +71,10 @@ async def lifespan(app: FastAPI):
     # grace period before an idle instance is removed, and this runs inside it.
     # flush_events() swallows a sink failure, so shutdown cannot hang on Sheets.
     await flush_events()
+    if _tickers_task is not None and not _tickers_task.done():
+        _tickers_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await _tickers_task
     if _seed_task is not None and not _seed_task.done():
         _seed_task.cancel()
         # Await it: a cancelled-but-never-awaited task can log "Task was destroyed
@@ -104,6 +121,8 @@ def create_app(*, public_mode: bool | None = None, static_dir: str | None = None
         app.include_router(watchlists_router, prefix="/api")
     app.include_router(events_router, prefix="/api")
     app.include_router(landing_router, prefix="/api")
+
+    app.include_router(og_router)
 
     @app.get("/api/health")
     def health():
