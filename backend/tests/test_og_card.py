@@ -62,3 +62,34 @@ def test_the_mark_colours_match_the_frontend_logo():
     for key in ("plateTop", "plateBot", "q", "mo", "fv", "rr"):
         ts = re.search(rf"{key}: '(#[0-9a-f]{{6}})'", mark_ts).group(1)
         assert og_card.CARD_COLOURS[key] == ts, key
+
+
+def test_the_cache_evicts_oldest_first_and_redraws_an_evicted_ticker(monkeypatch):
+    og_card._cache.clear()
+    monkeypatch.setattr(og_card, "_MAX", 3)
+    calls = []
+    monkeypatch.setattr(og_card, "_draw", lambda t: calls.append(t) or t.encode())
+    for t in ("A", "B", "C"):
+        og_card.render_card(t)
+    og_card.render_card("A")  # A becomes most recent; B is now oldest
+    og_card.render_card("D")  # evicts B
+    assert list(og_card._cache) == ["C", "A", "D"]
+    calls.clear()
+    og_card.render_card("A")
+    assert calls == []
+    og_card.render_card("B")
+    assert calls == ["B"]
+    og_card._cache.clear()
+
+
+def test_concurrent_renders_past_the_cache_limit_do_not_raise(monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    og_card._cache.clear()
+    monkeypatch.setattr(og_card, "_MAX", 3)
+    monkeypatch.setattr(og_card, "_draw", lambda t: t.encode())
+    tickers = [f"T{i}" for i in range(10)] * 200
+    with ThreadPoolExecutor(16) as ex:
+        out = list(ex.map(og_card.render_card, tickers))
+    assert out == [t.encode() for t in tickers]
+    assert len(og_card._cache) <= 3
+    og_card._cache.clear()

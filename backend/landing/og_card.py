@@ -3,6 +3,7 @@ ticker and the three questions, no numbers. Drawn on first request and kept in a
 small LRU. Callers must only pass tickers that are on the SEC list (routers/og.py)."""
 from __future__ import annotations
 import io
+import threading
 from collections import OrderedDict
 from pathlib import Path
 
@@ -25,6 +26,7 @@ _LEFT, _RIGHT = 78, W - 72
 
 _cache: OrderedDict[str, bytes] = OrderedDict()
 _MAX = 256
+_lock = threading.Lock()  # render_card runs in worker threads; guards _cache only, never held while drawing
 
 
 def _font(path: Path, size: int, weight: int) -> ImageFont.FreeTypeFont:
@@ -111,11 +113,15 @@ def _draw(ticker: str) -> bytes:
 
 
 def render_card(ticker: str) -> bytes:
-    if ticker in _cache:
+    with _lock:
+        hit = _cache.get(ticker)
+        if hit is not None:
+            _cache.move_to_end(ticker)
+            return hit
+    png = _draw(ticker)  # outside the lock; a double draw of one ticker is harmless
+    with _lock:
+        _cache[ticker] = png
         _cache.move_to_end(ticker)
-        return _cache[ticker]
-    png = _draw(ticker)
-    _cache[ticker] = png
-    if len(_cache) > _MAX:
-        _cache.popitem(last=False)
+        while len(_cache) > _MAX:
+            _cache.popitem(last=False)
     return png
