@@ -71,9 +71,12 @@ def test_the_cache_expires_after_seven_days(monkeypatch):
 
 
 def test_a_failed_fetch_means_unavailable_not_a_crash():
-    with patch("landing.tickers._fetch_json", new=AsyncMock(side_effect=RuntimeError("down"))):
+    with patch("landing.tickers._fetch_json", new=AsyncMock(side_effect=RuntimeError("down"))) as fetch:
         assert asyncio.run(tickers.lookup("NVDA")) == (False, None)
         assert asyncio.run(tickers.list_available()) is False
+        # Second immediate lookup should not fetch again (retry-after protection)
+        assert asyncio.run(tickers.lookup("AAPL")) == (False, None)
+        assert fetch.await_count == 1
 
 
 def test_without_a_user_agent_the_sec_is_never_called(monkeypatch):
@@ -81,3 +84,15 @@ def test_without_a_user_agent_the_sec_is_never_called(monkeypatch):
     with _fetch_ok() as fetch:
         assert asyncio.run(tickers.list_available()) is False
         fetch.assert_not_awaited()
+
+
+def test_concurrent_burst_during_outage_fetches_once():
+    """During an SEC outage, N concurrent requests should fetch once, not N times."""
+    with patch("landing.tickers._fetch_json", new=AsyncMock(side_effect=RuntimeError("down"))) as fetch:
+        async def burst():
+            return await asyncio.gather(*[tickers.lookup("NVDA") for _ in range(5)])
+        results = asyncio.run(burst())
+        # All 5 requests should get (False, None)
+        assert all(r == (False, None) for r in results)
+        # But only 1 fetch attempt (others queued on lock and found retry-after in effect)
+        assert fetch.await_count == 1

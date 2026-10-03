@@ -70,6 +70,8 @@ async def _ensure() -> dict[str, str] | None:
     async with _lock:
         if _titles is not None and _now() - _loaded_at < _TTL:
             return _titles
+        if _failed_at is not None and _now() - _failed_at < _RETRY_AFTER:
+            return _titles      # possibly stale, possibly None
         try:
             raw = await _fetch_json(ua)
             _titles = {str(v["ticker"]).upper(): str(v.get("title") or "")
