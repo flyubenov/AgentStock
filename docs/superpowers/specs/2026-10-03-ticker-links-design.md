@@ -28,7 +28,7 @@ Ads and posts about one stock must land on that stock. Today every path except `
 | D2 | The share card is a branded per-ticker image with **no numbers**. Scores are added once prices are licensed, to the right of the big ticker. |
 | D3 | Card: teal, with the headline "Quality business? · Durable moat? · Fair price?" and the small line "Quality · Moat · Fair Value · Reward/Risk, scored from fundamentals" (§5). |
 | D4 | Page layout B: the headline names the stock, and the card comes first on phones (§4). |
-| D5 | A `/t/` visit **uses one free analysis**. The same ticker again is free. **The linked stock is never blocked**, even when the allowance is used up. |
+| D5 | A `/t/` link **always shows its stock**, on every visit, whether or not the allowance is used up. While analyses remain, opening a link **uses one**, including repeat visits. Typed runs are unchanged. There is no per-stock memory anywhere. The loophole (hand-typing `/t/` addresses after the allowance is gone) is accepted. |
 | D6 | Events: `ticker_link_opened` and `share_clicked` (§7). |
 | D7 | The Share button's link carries `?ref=share`. B1 records the referrer `t.co` as channel `x`. |
 | D8 | An unknown ticker falls back to the AAPL homepage with a note. Only tickers on the SEC list get their own card. |
@@ -75,9 +75,9 @@ Commas, spaces and anything else make it invalid. The same rules exist in Python
 - replaces the address bar with `/` so a copied link isn't the broken one.
 
 **Free allowance (D5)** lives in `demoLimit.ts`:
-- **State:** add `tickers: string[]`, the tickers already counted in the current window. It is capped at 50 and reset with the window. The old stored state (no `tickers`) reads as `[]`.
-- **Counting:** `recordRun(tickers)` counts the run only if at least one ticker is new, and then adds them all to the list. Typed runs use it the same way, so re-typing a ticker already seen this window is also free. That's a small, deliberate generosity that keeps one rule for both paths.
-- **`link` runs** call `recordRun([t])` after a successful row, exactly as typed runs do.
+- **No change to the stored state** (`count` and `windowStart` only). No list of tickers is kept.
+- **`link` runs** call the existing `recordRun()` after a successful row, but only if `canAnalyze()` was true. Once the allowance is used up, the link still shows its stock and nothing more is recorded. Repeat visits count like any other run.
+- **Typed runs:** unchanged, every successful run counts.
 - **Never blocked:** a `link` run ignores `canAnalyze()`. The linked stock always shows. Afterwards `exhausted` is recomputed, so the input wall appears for anything further.
 
 **Headline and layout (D4):**
@@ -199,7 +199,7 @@ How the swap works:
 - **LandingPage with `linkTicker`:**
   - the headline, the placeholder and the pill;
   - `ticker_link_opened` fires once;
-  - the allowance is used once, and a reload of the same ticker is free;
+  - a link run uses one analysis while some remain, and a repeat visit uses another;
   - the stock still shows when the allowance is used up;
   - the unknown and failed fallbacks set the notice and `/`;
   - CSS order on phones is checked by class.
