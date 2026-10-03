@@ -27,7 +27,7 @@ Ads and posts about one stock must land on that stock. Today every path except `
 | D1 | Purpose: ad and post landing, plus a small Share button. Not SEO. |
 | D2 | The share card is a branded per-ticker image with **no numbers**. Scores are added once prices are licensed, to the right of the big ticker. |
 | D3 | Card: teal, with the headline "Quality business? · Durable moat? · Fair price?" and the small line "Quality · Moat · Fair Value · Reward/Risk, scored from fundamentals" (§5). |
-| D4 | Page layout B: the headline names the stock, and the card comes first on phones (§4). |
+| D4 | Page layout B: the card comes first on phones (§4). *Revised 2026-10-03 (founder):* the headline no longer names the stock; it stays the site's own, since the card already says which stock it is. The logo links home on every page. |
 | D5 | A `/t/` link **always shows its stock**, on every visit, whether or not the allowance is used up. While analyses remain, opening a link **uses one**, including repeat visits. Typed runs are unchanged. There is no per-stock memory anywhere. The loophole (hand-typing `/t/` addresses after the allowance is gone) is accepted. |
 | D6 | Events: `ticker_link_opened` and `share_clicked` (§7). |
 | D7 | The Share button's link carries `?ref=share`. B1 records the referrer `t.co` as channel `x`. |
@@ -75,7 +75,7 @@ Ads and posts about one stock must land on that stock. Today every path except `
 - **Never blocked:** a `link` run ignores `canAnalyze()`. The linked stock always shows. Afterwards `exhausted` is recomputed, so the input wall appears for anything further.
 
 **Headline and layout (D4):**
-- With a known link ticker, the hero headline becomes `{T}: judge the business.` / `Then judge the price.` The ticker is set in `--accent`.
+- The hero headline is unchanged on a link page (revised 2026-10-03; the earlier `{T}: judge the business.` prefix was dropped). The logo links to `/` from every page, so a visitor can always get back to the plain homepage.
 - The input placeholder becomes "Try another ticker…".
 - **On phones (≤ 900px, the existing single-column breakpoint),** the result card is ordered right after the headline via CSS `order` (the left column uses `display: contents` in link mode). The DOM order stays the same, so screen readers and tab order are unchanged.
 - **Header pill:** `link` runs show "Live analysis · computed just now", `sample` keeps "Live example · computed just now", and typed keeps "Your analysis".

@@ -30,7 +30,7 @@ export default function PrivacyPage() {
     <div className="intrinsica">
       <nav className="nav">
         <div className="nav-in">
-          <a href="/" aria-label="Intrinsica home"><Logo /></a>
+          <Logo />
           <div className="links"><a className="back" href="/">← Back to Intrinsica</a></div>
         </div>
       </nav>

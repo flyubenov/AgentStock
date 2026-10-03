@@ -62,11 +62,14 @@ beforeEach(() => {
 })
 
 describe('a /t/ link', () => {
-  it('names the stock in the headline and shows its result, not AAPL', async () => {
+  // User decision 2026-10-03: the headline stays the site's own on a /t/ link; the
+  // card already says which stock it is (the "NVDA: judge the business." prefix was
+  // dropped).
+  it('keeps the normal headline and shows the linked result, not AAPL', async () => {
     server()
     show('nvda')
-    await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('NVDA: judge the business.'))
     await waitFor(() => expect(screen.getByText('NVDA Inc.')).toBeInTheDocument())
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/^Judge the business\. ?Then judge the price\.$/)
     expect(screen.queryByText('AAPL Inc.')).toBeNull()
     expect(screen.getByPlaceholderText('Try another ticker…')).toBeInTheDocument()
     expect(screen.getByText(/Live analysis · computed just now/)).toBeInTheDocument()
@@ -125,20 +128,19 @@ describe('a /t/ link', () => {
       .toEqual([])
   })
 
-  it('names the ticker before the check resolves', async () => {
+  it('switches to the link layout before the check resolves', async () => {
     vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})))
     const { container } = show('NVDA')
-    await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('NVDA: judge the business.'))
-    expect(container.querySelector('header.hero.linked')).not.toBeNull()
+    await waitFor(() => expect(container.querySelector('header.hero.linked')).not.toBeNull())
   })
 
-  it('goes back to the normal headline when the visitor runs a typed analysis', async () => {
+  it('leaves the link layout when the visitor runs a typed analysis', async () => {
     server()
     show('NVDA')
     await waitFor(() => expect(screen.getByText('NVDA Inc.')).toBeInTheDocument())
     await userEvent.type(screen.getByPlaceholderText('Try another ticker…'), 'MSFT{Enter}')
     await waitFor(() => expect(screen.getByText('MSFT Inc.')).toBeInTheDocument())
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/^Judge the business/)
+    expect(document.querySelector('header.hero.linked')).toBeNull()
   })
 
   it('still shows the stock when the ticker check is rate-limited (429)', async () => {

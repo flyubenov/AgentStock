@@ -84,10 +84,9 @@ export default function Hero({ onAnalyze, busy, busyCount = 0, exhausted, notice
     <header className={linked ? 'hero linked' : 'hero'}>
       <div className="hero-in">
         <div className="hero-l">
-          <h1 className="hero-h1">
-            {linked && <><span className="hero-tk">{linked}:</span>{' '}</>}
-            {linked ? 'judge the business.' : 'Judge the business.'}{' '}<br />Then judge the price.
-          </h1>
+          {/* The same headline on a /t/ link (user decision 2026-10-03): the card
+              already names the stock, so the headline doesn't. */}
+          <h1 className="hero-h1">Judge the business.{' '}<br />Then judge the price.</h1>
           <p className="hero-sub">
             Quality and Moat tell you how good the company is; Fair Value and Reward/Risk
             tell you whether the price makes sense. All from the fundamentals, all shown.

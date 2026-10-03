@@ -33,7 +33,8 @@
 .intrinsica .nav { position: sticky; top: 0; z-index: 50; background: rgba(253,252,249,.88);
   backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); }
 .intrinsica .nav-in { max-width: 1120px; margin: 0 auto; padding: 14px 28px; display: flex; align-items: center; gap: 10px; }
-.intrinsica .logo { display: flex; align-items: center; gap: 11px; font: 700 23px var(--fh); letter-spacing: -.02em; }
+.intrinsica .logo { display: flex; align-items: center; gap: 11px; font: 700 23px var(--fh); letter-spacing: -.02em;
+  color: inherit; text-decoration: none; }
 .intrinsica .logo .brandmark { display: block; flex: none; }
 .intrinsica .links { margin-left: auto; display: flex; align-items: center; gap: 24px; }
 .intrinsica .links a { font-size: 14px; color: var(--dim); cursor: pointer; }
@@ -564,7 +565,6 @@
 /* ticker links (spec 2026-10-03 §4): the featured ticker, and on phones the card
  * right after the headline. display: contents lets hero-l's children take part in
  * the single-column grid; DOM order (and so reading and tab order) is unchanged. */
-.intrinsica .hero-tk { color: var(--accent); }
 @media (max-width: 900px) {
   .intrinsica .hero.linked .hero-l { display: contents; }
   /* the grid gap replaces these blocks' own top margins */
