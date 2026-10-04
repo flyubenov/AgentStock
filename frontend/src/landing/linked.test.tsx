@@ -119,6 +119,26 @@ describe('a /t/ link', () => {
     expect(runsUsed()).toBe(0)
   })
 
+  // A stock declined for its reporting currency exists: "couldn't find" would be
+  // false, so the fallback says why instead (KSPI, 2026-10-04).
+  it('names the reason when the linked stock reports in another currency', async () => {
+    const msg = "Data not available for companies that don't report in US dollars under US GAAP"
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.includes('/api/landing/ticker/')) {
+        return { ok: true, json: async () => ({ ticker: 'KSPI', known: true, name: null }) }
+      }
+      const { tickers } = JSON.parse(String(init?.body))
+      return { ok: true, json: async () => ({
+        results: tickers.map((t: string) => t === 'KSPI' ? { ...payload(t, false), errors: [msg] } : payload(t)),
+        invalid: [], error: null }) }
+    }))
+    show('KSPI')
+    await waitFor(() => expect(screen.getByText('AAPL Inc.')).toBeInTheDocument())
+    expect(screen.getByText(`KSPI: ${msg}. Here's an example instead.`)).toBeInTheDocument()
+    expect(screen.queryByText(/We couldn't find/)).toBeNull()
+    expect(runsUsed()).toBe(0)
+  })
+
   it('does not report analysis_completed for a failed link run', async () => {
     server({ failing: ['NVDA'] })
     show('NVDA')

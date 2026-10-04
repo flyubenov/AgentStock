@@ -8,6 +8,7 @@ from services.sheets import upsert_result
 from services.screener_sheets import upsert_screener_result
 from services.risk_reward_sheets import upsert_risk_reward_result
 from services.yf_pool import rate_limit_pressure
+from services.yahoo import fetch_ticker_info
 from models import TickerResult
 
 # How many tickers evaluate at once. Kept small on purpose: each ticker fans ~10
@@ -22,6 +23,34 @@ PACING_PRESSURE_MULT = float(os.getenv("RECALC_PACING_PRESSURE_MULT", "6.0"))
 # Hard ceiling on a single ticker so one wedged fetch (a hung socket holding a pool
 # thread) can never freeze the whole batch — it fails fast and the run moves on.
 PER_TICKER_TIMEOUT = float(os.getenv("RECALC_TICKER_TIMEOUT", "120"))
+
+# The same reader-facing wording the SEC data path uses for these filers, so the
+# message does not change when the data source does.
+UNSUPPORTED_CURRENCY_MESSAGE = (
+    "Data not available for companies that don't report in US dollars under US GAAP")
+
+
+async def _declined_for_currency(ticker: str) -> TickerResult | None:
+    """A decline for a company whose statements are in another currency than its
+    price, or None to run the engines as usual.
+
+    Yahoo gives a US-listed foreign company's price, market cap and trailing EPS in
+    dollars but its statements, forward EPS and book value in its own currency, and
+    nothing here converts between them (TM: a $8,924 fair value; KSPI: a 7234%
+    earnings yield). Missing currency fields, or a failed fetch, decline nothing:
+    the engines make their own call on the data they get."""
+    try:
+        info = await fetch_ticker_info(ticker)
+    except Exception:
+        return None
+    reported = (info.get("financialCurrency") or "").upper()
+    traded = (info.get("currency") or "").upper()
+    if not reported or not traded or reported == traded:
+        return None
+    return TickerResult(ticker=ticker.upper(), status="failed",
+                        company_name=info.get("shortName") or info.get("longName"),
+                        current_price=info.get("currentPrice") or info.get("regularMarketPrice"),
+                        errors=[UNSUPPORTED_CURRENCY_MESSAGE])
 
 
 def _pacing_delay() -> float:
@@ -38,6 +67,18 @@ async def _run_one(ticker: str, persist: bool = True) -> dict:
     persist=False runs the same three engines and returns the same shape but writes
     nothing to Sheets — the public landing page's demo runs are read-only toward the
     analyst app's Database (see _run_one_readonly)."""
+    declined = await _declined_for_currency(ticker)
+    if declined is not None:
+        errors = list(declined.errors)
+        # Written like any other decline: a blank row replaces a stale fair value.
+        if persist and declined.current_price is not None:
+            try:
+                await upsert_result(declined)
+            except Exception as e:
+                errors.append(f"sheets_write: {e}")
+        dump = {**declined.model_dump(), "errors": errors, "screener": None, "risk_reward": None}
+        return {"result": dump, "fv_failed": True}
+
     fv_task = asyncio.create_task(engine_run(ticker))
     sc_task = asyncio.create_task(screener_run(ticker))
     rr_task = asyncio.create_task(risk_reward_run(ticker))
