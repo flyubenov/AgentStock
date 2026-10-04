@@ -76,6 +76,17 @@ describe('ResultCard — tiles view (one ticker)', () => {
     await userEvent.click(screen.getByRole('button', { name: /^Reward \/ Risk/ }))
     expect(props.onTile).toHaveBeenCalledWith('AAPL', 3)
   })
+  // User 2026-10-05: the footer line read like a link and did nothing when clicked.
+  it('opens the Quality breakdown from the footer line', async () => {
+    const { props } = show()
+    await userEvent.click(screen.getByRole('button', { name: 'Click any score for its full breakdown ↓' }))
+    expect(props.onTile).toHaveBeenCalledWith('AAPL', 0)
+  })
+  it('leaves an open Quality breakdown open when the footer line is clicked again', async () => {
+    const { props } = show({ open: { ticker: 'AAPL', tab: 0 } })
+    await userEvent.click(screen.getByRole('button', { name: 'Click any score for its full breakdown ↓' }))
+    expect(props.onTile).not.toHaveBeenCalled()
+  })
   it('marks only the tile whose breakdown is open as pressed', () => {
     show({ open: { ticker: 'AAPL', tab: 2 } })
     const pressed = screen.getAllByRole('button', { name: /^(Quality|Moat|Fair Value|Reward \/ Risk)/ })
@@ -162,6 +173,10 @@ describe('ResultCard — comparison view (two or three tickers)', () => {
   it('carries the run summary in the header once the run is done', () => {
     const { container } = show({ rows: trio(), ms: 2100 })
     expect(container.querySelector('.rc-head')).toHaveTextContent('3 tickers · 2.1 s')
+  })
+  it('keeps the comparison footer line as plain text: each row opens its own breakdown', () => {
+    show({ rows: [row(), row({ ticker: 'MSFT' })] })
+    expect(screen.getByText('Click a ticker for its full breakdown ↓').closest('button')).toBeNull()
   })
   it('shows a failed cell as a dash', () => {
     const rows = trio(); rows[1] = { ...rows[1], moat: null }
