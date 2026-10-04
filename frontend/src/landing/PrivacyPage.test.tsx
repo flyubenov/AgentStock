@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import PrivacyPage, { CONTACT_EMAIL } from './PrivacyPage'
@@ -56,5 +56,16 @@ describe('the privacy link', () => {
     render(<SiteFooter />)
     const footer = screen.getByRole('contentinfo')
     expect(within(footer).getByRole('link', { name: /privacy/i })).toHaveAttribute('href', '/privacy')
+  })
+
+  // The owner marker (?me=1): the line must show the ID the events actually carry.
+  it('shows the me- prefix on a browser marked as the owner’s', async () => {
+    localStorage.setItem('intrinsica_vid', 'v-abc-123')
+    localStorage.setItem('intrinsica_me', '1')
+    vi.resetModules()
+    const { default: Fresh } = await import('./PrivacyPage')
+    render(<MemoryRouter><Fresh /></MemoryRouter>)
+    expect(screen.getByText('me-v-abc-123')).toBeInTheDocument()
+    localStorage.clear()
   })
 })

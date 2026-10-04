@@ -146,3 +146,56 @@ describe('track', () => {
     expect(track(EVENTS.checkoutStarted, { plan: 'Pro' })).toBeUndefined()
   })
 })
+
+/** The owner marker (2026-10-04): the founder opens intrinsica.io/?me=1 once in each
+ *  browser they use, and that browser's events go out as "me-<id>", so the events
+ *  sheet can exclude them whatever the device. analytics.ts memoizes, so each test
+ *  imports a fresh copy after arranging the URL and storage. */
+describe('the ?me=1 owner marker', () => {
+  async function freshAt(url: string) {
+    window.history.replaceState(null, '', url)
+    vi.resetModules()
+    return import('./analytics')
+  }
+
+  it('prefixes the same visitor ID with me- once the browser is marked, and remembers it', async () => {
+    localStorage.clear()
+    const before = (await freshAt('/')).visitorId()
+    expect(before).toMatch(/^v-/)
+
+    const marked = await freshAt('/?me=1')
+    marked.markOwnerFromUrl()
+    expect(marked.visitorId()).toBe(`me-${before}`)
+
+    const later = await freshAt('/t/NVDA')
+    later.markOwnerFromUrl()
+    expect(later.visitorId()).toBe(`me-${before}`)
+    expect(later.isOwner()).toBe(true)
+  })
+
+  it('unmarks the browser with ?me=0', async () => {
+    localStorage.clear()
+    ;(await freshAt('/?me=1')).markOwnerFromUrl()
+    const off = await freshAt('/?me=0')
+    off.markOwnerFromUrl()
+    expect(off.isOwner()).toBe(false)
+    expect(off.visitorId()).toMatch(/^v-/)
+  })
+
+  it('leaves an unmarked browser alone, whatever else the URL carries', async () => {
+    localStorage.clear()
+    const a = await freshAt('/?utm_source=x&me=yes')
+    a.markOwnerFromUrl()
+    expect(a.isOwner()).toBe(false)
+  })
+
+  it('still marks this page load when storage is blocked', async () => {
+    localStorage.clear()
+    const set = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('blocked') })
+    const get = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('blocked') })
+    const a = await freshAt('/?me=1')
+    a.markOwnerFromUrl()
+    expect(a.visitorId()).toMatch(/^me-v-/)
+    set.mockRestore(); get.mockRestore()
+  })
+})
