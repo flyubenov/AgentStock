@@ -232,7 +232,16 @@ export default function ResultCard(p: ResultCardProps) {
         {/* One result: Share sits bottom right, after the scores have been read
             (user decision 2026-10-03). A comparison shares per row instead. */}
         <div className="rc-foot">
-          <span>{one ? 'Click any score for its full breakdown ↓' : 'Click a ticker for its full breakdown ↓'}</span>
+          {/* One result: the line opens the Quality breakdown (user 2026-10-05: it read
+              like a link and did nothing). Already open on Quality, it leaves it open
+              rather than folding it the way a second tile click does. A comparison has
+              no single breakdown to open, so its line stays text. */}
+          {one ? (
+            <button type="button" className="rc-hint"
+                    onClick={() => { if (!(p.open?.ticker === r.ticker && p.open.tab === 0)) p.onTile(r.ticker, 0) }}>
+              Click any score for its full breakdown ↓
+            </button>
+          ) : <span>Click a ticker for its full breakdown ↓</span>}
           {one && computed(r) && <ShareButton ticker={r.ticker} place="card" label={`Share ${r.ticker}`} />}
         </div>
       </div>

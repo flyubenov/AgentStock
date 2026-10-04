@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import './theme.css'
 import { Logo } from './components/Nav'
 import SiteFooter from './components/SiteFooter'
+import { isOwner } from '../lib/analytics'
 
 /** The privacy notice (launch checklist B4, 2026-10-02). The checkout collects an
  *  optional email and every visitor gets a browser ID, and the site is run from
@@ -130,5 +131,6 @@ export default function PrivacyPage() {
 function VisitorIdLine() {
   let id: string | null = null
   try { id = localStorage.getItem('intrinsica_vid') } catch { /* blocked storage */ }
+  if (id && isOwner()) id = `me-${id}`
   return <code>{id ?? 'none stored in this browser'}</code>
 }

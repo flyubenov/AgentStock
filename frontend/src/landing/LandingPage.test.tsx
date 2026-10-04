@@ -304,6 +304,20 @@ describe('LandingPage demo limit — only a successful typed run counts (fix rou
     expect(runsUsed()).toBe(0)
   })
 
+  it('says why a typed stock that reports in another currency was not computed', async () => {
+    await renderSettled()
+    const msg = "Data not available for companies that don't report in US dollars under US GAAP"
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      json: async () => ({ results: [{ ticker: 'TM', errors: [msg] }], invalid: ['ZZZZ'], error: null }),
+    }))
+
+    await userEvent.type(screen.getByRole('textbox'), 'TM, ZZZZ')
+    await userEvent.click(screen.getByRole('button', { name: 'Analyze →' }))
+    await waitFor(() => {
+      expect(screen.getByText(`Not recognised: ZZZZ TM: ${msg}.`)).toBeInTheDocument()
+    })
+  })
+
   it('counts a typed run on a partial success — one bad ticker, one rendered result', async () => {
     await renderSettled()
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
@@ -1015,7 +1029,7 @@ describe('LandingPage pricing section (task 13)', () => {
     const pricing = container.querySelector<HTMLElement>('section#pricing')
     expect(pricing).not.toBeNull()
     expect(within(pricing!).getByText('Choose your plan')).toBeInTheDocument()
-    expect(within(pricing!).getByText('$25.00')).toBeInTheDocument()
+    expect(within(pricing!).getByText('$35.00')).toBeInTheDocument()
 
     expect(pricing!.querySelectorAll('input, textarea, select, form')).toHaveLength(0)
     // The analyzer's ticker box is the page's only input, and it takes a ticker.

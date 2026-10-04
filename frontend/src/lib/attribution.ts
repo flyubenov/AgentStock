@@ -25,7 +25,8 @@ export type Attribution = Touch & { visit_channel: string }
 const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content'] as const
 /** Stripped from the address bar after reading, so a visitor who copies the link
  *  doesn't pass an ad's tags on to the people they share it with. */
-const STRIPPED = [...UTM_KEYS, 'utm_term', 'ref']
+// 'me' is the owner marker (analytics.markOwnerFromUrl), read before this runs.
+const STRIPPED = [...UTM_KEYS, 'utm_term', 'ref', 'me']
 const FIRST_KEY = 'intrinsica_first_touch'
 const VISIT_KEY = 'intrinsica_visit_touch'
 const MAX_LEN = 100

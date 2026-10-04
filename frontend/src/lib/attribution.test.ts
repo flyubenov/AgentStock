@@ -84,6 +84,12 @@ describe('attribution', () => {
       .toBe('/t/NVDA?keep=1#top')
   })
 
+  it('also removes the ?me owner marker from the address bar', async () => {
+    const { captureAttribution } = await fresh('/t/NVDA?me=1&keep=1')
+    captureAttribution()
+    expect(window.location.pathname + window.location.search).toBe('/t/NVDA?keep=1')
+  })
+
   it('still works when storage throws', async () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('blocked') })
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('blocked') })

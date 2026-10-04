@@ -18,9 +18,11 @@ import '@fontsource/jetbrains-mono/600.css'
 import './index.css'
 import App from './App'
 import { captureAttribution } from './lib/attribution'
+import { markOwnerFromUrl } from './lib/analytics'
 
-// Before the router renders, so the arrival's tags are read and then cleaned out of
-// the address bar (launch checklist B1).
+// Before the router renders, so the arrival's tags (and the ?me owner marker) are read
+// and then cleaned out of the address bar (launch checklist B1).
+markOwnerFromUrl()
 captureAttribution()
 
 createRoot(document.getElementById('root')!).render(

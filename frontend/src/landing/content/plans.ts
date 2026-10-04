@@ -97,9 +97,9 @@ export const PLANS: Plan[] = [
     title: 'Discover & Automate at Scale',
     forLine: 'For investors scanning & monitoring a whole universe or portfolio.',
     cta: 'Choose Unlimited',
-    annual: { effective: '$25.00', yearly: 300,
-              sub: 'billed annually · $300/yr · save 17%' },
-    monthly: { effective: '$29.99', sub: 'billed monthly · $29.99/mo' },
+    annual: { effective: '$35.00', yearly: 420,
+              sub: 'billed annually · $420/yr · save 17%' },
+    monthly: { effective: '$41.99', sub: 'billed monthly · $41.99/mo' },
     features: [
       'Bulk runs — 100+ tickers in one run, results stream in as each finishes',
       'Screen hundreds of stocks on all four scores',
@@ -112,7 +112,7 @@ export const PLANS: Plan[] = [
  *  (spec 5.7). Free costs nothing on either period, so it answers the same way
  *  for both rather than pretending to have an annual band. */
 export function priceFor(plan: Plan, billing: Billing): { headline: string; sub: string } {
-  if (plan.name === 'Free') return { headline: '$0', sub: 'No card, ever' }
+  if (plan.name === 'Free') return { headline: '$0', sub: '' }
   const band = billing === 'annual' ? plan.annual! : plan.monthly!
   return { headline: band.effective, sub: band.sub }
 }

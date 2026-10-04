@@ -39,18 +39,18 @@ describe('Pricing', () => {
   it('shows the annual effective prices by default', () => {
     show()
     expect(screen.getByText('$18.00')).toBeInTheDocument()
-    expect(screen.getByText('$25.00')).toBeInTheDocument()
+    expect(screen.getByText('$35.00')).toBeInTheDocument()
     expect(screen.getByText('billed annually · $216/yr · save 18%')).toBeInTheDocument()
-    expect(screen.getByText('billed annually · $300/yr · save 17%')).toBeInTheDocument()
+    expect(screen.getByText('billed annually · $420/yr · save 17%')).toBeInTheDocument()
     expect(screen.queryByText('$21.99')).not.toBeInTheDocument()
   })
 
   it('switches to monthly prices', () => {
     show('monthly')
     expect(screen.getByText('$21.99')).toBeInTheDocument()
-    expect(screen.getByText('$29.99')).toBeInTheDocument()
+    expect(screen.getByText('$41.99')).toBeInTheDocument()
     expect(screen.queryByText('$18.00')).not.toBeInTheDocument()
-    expect(screen.queryByText('$25.00')).not.toBeInTheDocument()
+    expect(screen.queryByText('$35.00')).not.toBeInTheDocument()
   })
 
   it('costs nothing on Free, on either billing period', () => {
@@ -59,7 +59,7 @@ describe('Pricing', () => {
         <Pricing billing={billing} onBilling={vi.fn()} onChoose={vi.fn()} />)
       const free = container.querySelectorAll<HTMLElement>('.price-card')[0]
       expect(within(free).getByText('$0')).toBeInTheDocument()
-      expect(within(free).getByText('No card, ever')).toBeInTheDocument()
+      expect(within(free).queryByText(/no card/i)).not.toBeInTheDocument()
       unmount()
     }
   })

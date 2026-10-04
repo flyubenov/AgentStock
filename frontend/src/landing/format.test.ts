@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { money, num, pct, gapClass, figure, weight, dollars, gapPct, qualityTier, moatTier, fvCaption } from './format'
+import { money, num, pct, gapClass, figure, weight, dollars, gapPct, qualityTier, moatTier, fvCaption,
+         UNSUPPORTED_CURRENCY, unsupportedNotice } from './format'
+import type { TickerPayload } from './types'
 
 describe('formatters', () => {
   it('renders an em dash for every absent value', () => {
@@ -166,5 +168,23 @@ describe('fvCaption', () => {
   it('falls back to the em dash for a missing or broken gap', () => {
     expect(fvCaption(null)).toBe('—')
     expect(fvCaption(Number.NaN)).toBe('—')
+  })
+})
+
+describe('unsupportedNotice', () => {
+  const row = (ticker: string, errors: string[], ok = false) => ({
+    ticker, company_name: null, price: null, calibrations: [], errors,
+    quality: ok ? { score: 7 } : null, moat: null, fair_value: null, reward_risk: null,
+  }) as unknown as TickerPayload
+
+  it('names every stock declined for its reporting currency, once', () => {
+    expect(unsupportedNotice([row('KSPI', [UNSUPPORTED_CURRENCY]), row('AAPL', [], true), row('TM', [UNSUPPORTED_CURRENCY])]))
+      .toBe(`KSPI, TM: ${UNSUPPORTED_CURRENCY}.`)
+  })
+
+  it('says nothing for other failures, for computed rows, or for rows without errors', () => {
+    expect(unsupportedNotice([row('NVDA', ['Market data unavailable'])])).toBeNull()
+    expect(unsupportedNotice([row('AAPL', [UNSUPPORTED_CURRENCY], true)])).toBeNull()
+    expect(unsupportedNotice([{ ticker: 'NVDA' } as TickerPayload])).toBeNull()
   })
 })

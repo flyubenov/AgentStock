@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './theme.css'
 import Nav from './components/Nav'
@@ -16,7 +16,7 @@ import { track, EVENTS } from '../lib/analytics'
 import { API_BASE } from '../lib/api'
 import { canAnalyze, recordRun } from './demoLimit'
 import { normalizeTicker, noticeLabel } from './ticker'
-import { computed } from './format'
+import { computed, unsupportedNotice } from './format'
 import { FRAMEWORK } from './content/framework'
 import { startReveal } from './reveal'
 import type { Billing } from './content/plans'
@@ -118,6 +118,9 @@ export default function LandingPage({ linkTicker }: { linkTicker?: string } = {}
   // The canonical ticker while the page is featuring a /t/ link; null otherwise
   // (including after a link falls back to the example).
   const [linked, setLinked] = useState<string | null>(null)
+  // The last run's "declined for its reporting currency" notice, read by the /t/ link
+  // fallback so it says why rather than "couldn't find" (format.unsupportedNotice).
+  const declined = useRef<string | null>(null)
 
   // breakdown_opened fires only on a closed -> open transition, and beside the state
   // change, never inside an updater (StrictMode double-invokes updaters — fix round 1).
@@ -178,8 +181,13 @@ export default function LandingPage({ linkTicker }: { linkTicker?: string } = {}
       // real cap before anything expensive); render it verbatim rather than any
       // locally-generated message so client/server cap drift never reaches a
       // visitor as a stale guess.
+      declined.current = body.error ? null : unsupportedNotice(results)
       if (body.error) setNotice(body.error)
-      else if (body.invalid.length) setNotice(`Not recognised: ${body.invalid.join(', ')}`)
+      else {
+        const parts = [body.invalid.length ? `Not recognised: ${body.invalid.join(', ')}` : null, declined.current]
+          .filter(Boolean)
+        if (parts.length) setNotice(parts.join(' '))
+      }
       // A run that produced no rows (all invalid, a server error) leaves the previous
       // card — and any open breakdown — in place: an empty card would leave a hole in
       // the hero (spec 5.2, hero rework). The notice above says what happened.
@@ -243,7 +251,7 @@ export default function LandingPage({ linkTicker }: { linkTicker?: string } = {}
       return
     }
     let live = true
-    const fallBack = () => {
+    const fallBack = (reason: string | null = null) => {
       if (!live) return
       setLinked(null)
       // replaceState, not navigate(): navigating to "/" would unmount this page and
@@ -251,7 +259,9 @@ export default function LandingPage({ linkTicker }: { linkTicker?: string } = {}
       // page already renders what "/" renders.
       window.history.replaceState(window.history.state, '', '/')
       void analyze([SAMPLE], 'sample')
-      setNotice(`We couldn't find ${noticeLabel(linkTicker)}. Here's an example instead.`)
+      setNotice(reason
+        ? `${reason} Here's an example instead.`
+        : `We couldn't find ${noticeLabel(linkTicker)}. Here's an example instead.`)
     }
     void (async () => {
       const t = normalizeTicker(linkTicker)
@@ -277,7 +287,7 @@ export default function LandingPage({ linkTicker }: { linkTicker?: string } = {}
       // one remains. canAnalyze() is read BEFORE the run.
       const outcome = await analyze([t], 'link', canAnalyze())
       if (!live) return
-      if (outcome === 'empty') return fallBack()
+      if (outcome === 'empty') return fallBack(declined.current)
       if (outcome === 'error') {
         // Rate limited, or the server could not be reached: that says nothing about the
         // stock, so no "couldn't find" and the address stays (spec 9: the 429 copy is the

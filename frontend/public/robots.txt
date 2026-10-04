@@ -1,0 +1,5 @@
+# Everything a visitor can open is public, including the /t/ ticker pages and
+# the /og/ share images (X's card crawler honours this file). Only the JSON API
+# is kept out of search results.
+User-agent: *
+Disallow: /api/

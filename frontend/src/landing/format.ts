@@ -121,3 +121,17 @@ export const RR_TIERS = ['Asymmetric Upside', 'Reward-Favored', 'Balanced', 'Ris
 export function computed(r: TickerPayload): boolean {
   return Boolean(r.quality || r.moat || r.fair_value || r.reward_risk)
 }
+
+/** The backend's decline for a company whose statements are in another currency
+ *  than its price (orchestrator/batch.py UNSUPPORTED_CURRENCY_MESSAGE, pinned to this
+ *  copy by test_currency_guard.py). Such a stock exists, so "couldn't find" would be
+ *  false: the page names the reason instead. */
+export const UNSUPPORTED_CURRENCY = "Data not available for companies that don't report in US dollars under US GAAP"
+
+/** "KSPI, TM: <reason>." for the rows declined for their reporting currency, or null. */
+export function unsupportedNotice(rows: TickerPayload[]): string | null {
+  const declined = rows
+    .filter(r => !computed(r) && (r.errors ?? []).includes(UNSUPPORTED_CURRENCY))
+    .map(r => r.ticker)
+  return declined.length ? `${declined.join(', ')}: ${UNSUPPORTED_CURRENCY}.` : null
+}

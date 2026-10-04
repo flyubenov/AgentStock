@@ -36,9 +36,40 @@ function newId(): string {
   return `v-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 }
 
+/** The owner marker (2026-10-04). Each browser keeps its own ID (a phone, a laptop and
+ *  Discord's in-app browser are three visitors), so the founder marks every browser they
+ *  use by opening intrinsica.io/?me=1 once; ?me=0 undoes it. A marked browser sends its
+ *  same ID with a "me-" prefix, and the events sheet excludes everything starting "me-". */
+const OWNER_KEY = 'intrinsica_me'
+let owner: boolean | null = null
+
+/** Reads ?me=1 / ?me=0 from the address. Runs before captureAttribution, which then
+ *  removes the parameter from the address bar with the tags. */
+export function markOwnerFromUrl(): void {
+  let flag: string | null = null
+  try { flag = new URLSearchParams(window.location.search).get('me') } catch { return }
+  if (flag !== '1' && flag !== '0') return
+  owner = flag === '1'
+  try {
+    if (owner) localStorage.setItem(OWNER_KEY, '1')
+    else localStorage.removeItem(OWNER_KEY)
+  } catch { /* blocked storage: the flag still holds for this page load */ }
+}
+
+export function isOwner(): boolean {
+  if (owner === null) {
+    try { owner = localStorage.getItem(OWNER_KEY) === '1' } catch { owner = false }
+  }
+  return owner
+}
+
 /** A stable per-browser id. Private mode, cleared storage and blocked storage all
  *  degrade to a per-session id rather than throwing. */
 export function visitorId(): string {
+  return isOwner() ? `me-${baseId()}` : baseId()
+}
+
+function baseId(): string {
   if (cached) return cached
   try {
     const stored = localStorage.getItem(KEY)

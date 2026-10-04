@@ -65,8 +65,8 @@ describe('CheckoutPage', () => {
     show('?plan=Unlimited&billing=monthly')
     expect(screen.getByText('Unlimited')).toBeInTheDocument()
     expect(screen.getByText('Monthly')).toBeInTheDocument()
-    expect(screen.getByText('$29.99 / month')).toBeInTheDocument()
-    expect(screen.queryByText('$300 / year ($25.00/mo)')).not.toBeInTheDocument()
+    expect(screen.getByText('$41.99 / month')).toBeInTheDocument()
+    expect(screen.queryByText('$420 / year ($35.00/mo)')).not.toBeInTheDocument()
   })
 
   it('labels the paid button Proceed to payment', () => {
@@ -510,7 +510,7 @@ describe('/checkout route (controller addition)', () => {
     expect(screen.getByText('Confirm your plan')).toBeInTheDocument()
     expect(screen.getByText('Unlimited')).toBeInTheDocument()
     expect(screen.getByText('Monthly')).toBeInTheDocument()
-    expect(screen.getByText('$29.99 / month')).toBeInTheDocument()
+    expect(screen.getByText('$41.99 / month')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Proceed to payment' })).toBeInTheDocument()
   })
 

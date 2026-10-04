@@ -190,3 +190,11 @@ def test_a_maximal_legitimate_attribution_is_recorded():
     att = {f"field_{i}": "x" * 100 for i in range(9)}
     resp, rec = _post(attribution=att)
     assert resp.json() == {"recorded": True}
+
+
+def test_accepts_the_owner_marker_visitor_id():
+    # ?me=1 (frontend/src/lib/analytics.ts) sends "me-" + the browser's usual ID; a
+    # refusal here would silently drop every event from a marked browser.
+    from models import AnalyticsEvent
+    ev = AnalyticsEvent(event="page_view", visitor_id="me-v-muu7m3cx-ezatcw8g")
+    assert events_router._rejection(ev) is None
