@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import { API_BASE as API } from '../lib/api'
+import { apiFetch } from '../lib/api'
 
 export default function Home() {
   const [tickers, setTickers] = useState('')
@@ -23,7 +23,7 @@ export default function Home() {
       if (tickerList.length > 0) body.tickers = tickerList
       if (useSheets) body.sheets_url = 'from_sheets'
 
-      const res = await fetch(`${API}/api/analyse`, {
+      const res = await apiFetch(`/api/analyse`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
