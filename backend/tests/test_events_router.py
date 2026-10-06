@@ -198,3 +198,65 @@ def test_accepts_the_owner_marker_visitor_id():
     from models import AnalyticsEvent
     ev = AnalyticsEvent(event="page_view", visitor_id="me-v-muu7m3cx-ezatcw8g")
     assert events_router._rejection(ev) is None
+
+
+# --- Bot and junk filtering (security review 2026-10-06) ---------------------------
+# Scanners that drive a real browser load /login, /admin and the like, get the page
+# and fire its events. Those rows polluted the funnel, so they are refused here.
+
+@pytest.mark.parametrize("landing", ["/", "/checkout", "/privacy", "/t/NVDA", "/t/brk-b",
+                                     "/checkout/"])
+def test_a_real_landing_page_is_recorded(landing):
+    resp, rec = _post(attribution={"channel": "x", "landing": landing})
+    assert resp.json() == {"recorded": True}
+
+
+@pytest.mark.parametrize("landing", ["/login", "/wp-admin/install.php", "/.env", "//login",
+                                     "/admin", "/app", "/database"])
+def test_a_visitor_who_landed_on_a_page_that_does_not_exist_is_refused(landing):
+    resp, rec = _post(attribution={"channel": "direct", "landing": landing})
+    assert resp.json() == {"recorded": False, "error": "unknown landing page"}
+    rec.assert_not_awaited()
+
+
+def _post_as(headers, **body):
+    base = {"event": "page_view", "visitor_id": "v-1"}
+    base.update(body)
+    with patch("routers.events.record_event", new=AsyncMock()) as rec:
+        resp = client.post("/api/events", json=base, headers=headers)
+    return resp, rec
+
+
+@pytest.mark.parametrize("ua", [
+    "",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+    "Mozilla/5.0 (compatible; ChatGLM-Spider/1.0; +https://zhipuai.cn/)",
+    "python-httpx/0.25.1",
+    "curl/8.4.0",
+    "Mozilla/5.0 (l9scan/2.0.1323e22333e2933323e2631323; +https://leakix.net)",
+])
+def test_automated_clients_are_refused(ua):
+    resp, rec = _post_as({"user-agent": ua})
+    assert resp.json() == {"recorded": False, "error": "automated client"}
+    rec.assert_not_awaited()
+
+
+@pytest.mark.parametrize("ua", [
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 26_6_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/154.0.8037.55 Mobile/15E148 Safari/604.1",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Linux; Android 10; CUBOT X30) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0 Mobile Safari/537.36",
+])
+def test_real_browsers_are_recorded_with_their_user_agent(ua):
+    resp, rec = _post_as({"user-agent": ua})
+    assert resp.json() == {"recorded": True}
+    assert rec.await_args.kwargs["user_agent"] == ua
+
+
+def test_an_event_posted_from_another_site_is_refused(monkeypatch):
+    monkeypatch.setenv("CORS_ORIGINS", "https://intrinsica.io")
+    resp, rec = _post_as({"origin": "https://evil.example"})
+    assert resp.json() == {"recorded": False, "error": "foreign origin"}
+    rec.assert_not_awaited()
+    ok, _ = _post_as({"origin": "https://intrinsica.io"})
+    assert ok.json() == {"recorded": True}

@@ -14,6 +14,7 @@ from landing.cache import seed
 from landing.tickers import list_available
 from spa import mount_spa
 from canonical import add_canonical_host_redirect
+from security_headers import add_security_headers
 from services.events_sheets import flush_events, flush_loop
 
 load_dotenv()
@@ -106,7 +107,10 @@ def create_app(*, public_mode: bool | None = None, static_dir: str | None = None
     if canonical_host is None:
         canonical_host = os.getenv("CANONICAL_HOST", "")
 
-    app = FastAPI(title="Intrinsica", lifespan=lifespan)
+    # Public mode publishes no API description (/docs, /redoc, /openapi.json): nobody
+    # outside needs it, and it maps the endpoints for scanners (security review 2026-10-06).
+    docs = {} if not public_mode else {"docs_url": None, "redoc_url": None, "openapi_url": None}
+    app = FastAPI(title="Intrinsica", lifespan=lifespan, **docs)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_cors_origins(),
@@ -114,6 +118,8 @@ def create_app(*, public_mode: bool | None = None, static_dir: str | None = None
         allow_headers=["*"],
     )
     add_canonical_host_redirect(app, canonical_host)
+    if public_mode:
+        add_security_headers(app)
 
     if not public_mode:
         app.include_router(analysis_router, prefix="/api")
@@ -129,7 +135,7 @@ def create_app(*, public_mode: bool | None = None, static_dir: str | None = None
         return {"status": "ok"}
 
     # Last: the SPA catch-all must not shadow any API route registered above.
-    mount_spa(app, static_dir)
+    mount_spa(app, static_dir, strict=public_mode)
 
     return app
 

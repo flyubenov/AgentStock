@@ -48,7 +48,7 @@ def test_root_serves_index_and_is_never_cached(client):
     assert r.headers["cache-control"] == "no-cache"
 
 
-@pytest.mark.parametrize("path", ["/checkout", "/privacy", "/t/AMZN", "/app", "/database"])
+@pytest.mark.parametrize("path", ["/checkout", "/privacy", "/t/AMZN"])
 def test_client_side_routes_fall_back_to_index(client, path):
     r = client.get(path)
     assert r.status_code == 200
@@ -192,3 +192,31 @@ def test_startup_warms_the_sec_list_and_a_failure_cannot_stop_startup():
 
 async def _noop():
     return None
+
+
+# --- Unknown paths are a real 404 in public mode (security review 2026-10-06) -------
+# Scanners probe /login, /.env, /wp-admin... A 200 with the app made them run the page
+# and fire funnel events; a plain 404 page has no script, so nothing is recorded.
+
+@pytest.mark.parametrize("path", ["/login", "/.env", "/wp-admin/install.php", "/admin",
+                                  "/app", "/database", "/index.html"])
+def test_an_unknown_path_is_a_404_page_without_the_app(client, path):
+    r = client.get(path)
+    assert r.status_code == 404
+    assert "text/html" in r.headers["content-type"]
+    assert "<script" not in r.text
+    assert 'href="/"' in r.text
+
+
+def test_head_on_an_unknown_path_is_a_404(client):
+    assert client.head("/login").status_code == 404
+
+
+@pytest.mark.parametrize("path", ["/checkout/", "/privacy/", "/t/NVDA/"])
+def test_a_trailing_slash_still_serves_the_page(client, path):
+    assert client.get(path).status_code == 200
+
+
+def test_outside_public_mode_every_path_still_gets_the_app(static_dir):
+    c = TestClient(create_app(public_mode=False, static_dir=str(static_dir), canonical_host=""))
+    assert c.get("/database").status_code == 200

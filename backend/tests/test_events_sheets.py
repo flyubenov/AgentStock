@@ -298,7 +298,7 @@ def test_a_row_carries_the_channel_and_the_attribution_after_the_original_column
 
 def test_an_event_without_attribution_has_an_empty_channel():
     row = events_sheets._to_row(AnalyticsEvent(event="page_view", visitor_id="v-1"))
-    assert row[4:] == ["", "{}"]
+    assert row[4:] == ["", "{}", ""]
 
 
 def test_a_non_text_channel_is_not_written_as_the_channel():
@@ -315,7 +315,7 @@ def test_an_existing_events_tab_gets_the_new_header_row_once_per_process(monkeyp
     assert update.call_count == 1
     assert update.call_args.kwargs["body"] == {"values": [events_sheets._EVENTS_HEADERS]}
     assert events_sheets._EVENTS_HEADERS == [
-        "Timestamp", "Event", "VisitorId", "Props", "Channel", "Attribution"]
+        "Timestamp", "Event", "VisitorId", "Props", "Channel", "Attribution", "UserAgent"]
 
 
 def test_the_channel_cell_is_cleaned_server_side():
@@ -328,3 +328,12 @@ def test_the_channel_cell_is_cleaned_server_side():
     assert events_sheets._to_row(ok)[4] == "x_ads-1.b"
     long = AnalyticsEvent(event="page_view", visitor_id="v-1", attribution={"channel": "a" * 300})
     assert len(events_sheets._to_row(long)[4]) == 100
+
+
+def test_the_user_agent_is_the_last_column_trimmed_and_without_control_characters():
+    ev = AnalyticsEvent(event="page_view", visitor_id="v-1")
+    assert events_sheets._to_row(ev, user_agent="Mozilla/5.0 (Mac)")[6] == "Mozilla/5.0 (Mac)"
+    assert events_sheets._to_row(ev)[6] == ""
+    long = events_sheets._to_row(ev, user_agent="a\n\tb" + "x" * 500)[6]
+    assert "\n" not in long and "\t" not in long
+    assert len(long) == 300

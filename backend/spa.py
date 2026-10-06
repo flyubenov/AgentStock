@@ -20,6 +20,27 @@ _SITE = "https://intrinsica.io"
 # the SEC list, so the page is served generic rather than late (spec §9).
 _LOOKUP_TIMEOUT = 2.0
 
+# The pages the public site has (frontend/src/App.tsx in public mode): /, /checkout,
+# /privacy and /t/<anything> (the page itself handles an unknown ticker), each with an
+# optional trailing slash. Without the leading slash, as the catch-all receives it.
+_PUBLIC_PAGE = re.compile(r"(checkout|privacy|t(/.*)?)?/?", re.S)
+
+# Served for every other path in public mode. Scanners probe /login, /.env, /wp-admin
+# and so on; answering those with the app (200) made the ones that drive a real
+# browser run it and fire funnel events (security review 2026-10-06). This page has
+# no script, so nothing is recorded, and the 404 tells the scanner there is nothing.
+_NOT_FOUND = """<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>Page not found · Intrinsica</title>
+<style>body{font:16px/1.6 system-ui,sans-serif;margin:0;display:grid;place-items:center;
+min-height:100vh;background:#fdfcf9;color:#141414}a{color:#0f5257}</style></head>
+<body><main><h1>Page not found</h1><p><a href="/">Go to Intrinsica</a></p></main></body></html>"""
+
+
+def is_public_page(path: str) -> bool:
+    """True for a page the public site has. Takes "/checkout" or "checkout"."""
+    return _PUBLIC_PAGE.fullmatch(path[1:] if path.startswith("/") else path) is not None
+
 
 def _ticker_page(index_html: str, t: str) -> str:
     """index.html with the preview tags swapped for ticker t (spec 2026-10-03 §5).
@@ -35,13 +56,15 @@ def _ticker_page(index_html: str, t: str) -> str:
     return out
 
 
-def mount_spa(app: FastAPI, static_dir: str) -> bool:
+def mount_spa(app: FastAPI, static_dir: str, *, strict: bool = False) -> bool:
     """Serve the built frontend from static_dir: real files as-is, every other non-/api
     path as index.html (React Router takes it from there -- /t/{TICKER}
     share links, which get per-ticker preview tags). /api/* never falls back to the page: an unknown API path is a JSON
     404, so the frontend never parses HTML as JSON. Register this LAST: its catch-all
     would otherwise shadow later routes. Returns False, registering nothing, when
-    static_dir is unset or has no index.html (local dev, where Vite serves the page)."""
+    static_dir is unset or has no index.html (local dev, where Vite serves the page).
+    strict (public mode): a path that is neither a real file nor a public page gets
+    the script-free 404 page instead of the app."""
     if not static_dir:
         return False
     root = Path(static_dir).resolve()
@@ -64,6 +87,8 @@ def mount_spa(app: FastAPI, static_dir: str) -> bool:
             if candidate.is_relative_to(root) and candidate.is_file() and candidate != index:
                 cache = _IMMUTABLE if candidate.is_relative_to(assets) else _SHORT
                 return FileResponse(candidate, headers={"Cache-Control": cache})
+        if strict and not is_public_page(path):
+            return HTMLResponse(_NOT_FOUND, status_code=404, headers={"Cache-Control": _SHORT})
         m = re.fullmatch(r"t/([^/]+)", path)
         if m:
             t = normalize(m.group(1))

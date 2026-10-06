@@ -145,6 +145,18 @@ describe('track', () => {
     vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})))
     expect(track(EVENTS.checkoutStarted, { plan: 'Pro' })).toBeUndefined()
   })
+
+  it('sends nothing from a browser driven by automation', () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true })
+    vi.stubGlobal('fetch', fetchMock)
+    Object.defineProperty(navigator, 'webdriver', { value: true, configurable: true })
+    try {
+      track(EVENTS.pageView)
+      expect(fetchMock).not.toHaveBeenCalled()
+    } finally {
+      Object.defineProperty(navigator, 'webdriver', { value: false, configurable: true })
+    }
+  })
 })
 
 /** The owner marker (2026-10-04): the founder opens intrinsica.io/?me=1 once in each

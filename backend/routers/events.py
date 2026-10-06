@@ -6,6 +6,7 @@ from fastapi import APIRouter, Request
 from models import AnalyticsEvent
 from services.events_sheets import record_event
 from services.rate_limit import RateLimiter, client_key
+from spa import is_public_page
 
 router = APIRouter()
 
@@ -39,6 +40,33 @@ _limiter = RateLimiter(int(os.getenv("EVENTS_RATE_LIMIT", "60")),
                        float(os.getenv("EVENTS_RATE_WINDOW_SECONDS", "60")))
 
 
+# Automated clients (security review 2026-10-06). Scanners and crawlers that run the
+# page in a real browser fire its events; none of them is a prospective customer.
+# "bot" only as a whole word or before "/" so a phone model like "CUBOT" still counts.
+_AUTOMATED = re.compile(
+    r"headless|\bbot\b|bot/|crawl|spider|slurp|scan|python|curl/|wget|httpx|go-http|"
+    r"java/|okhttp|scrapy|phantomjs|selenium|puppeteer|playwright|lighthouse",
+    re.I)
+
+
+def _allowed_origins() -> set[str]:
+    # The same setting, and default, as main.py's CORS list.
+    return {o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
+            if o.strip()}
+
+
+def _request_rejection(request: Request) -> str | None:
+    """Refusals that depend on who is calling, not on what they sent. Speed bumps, not
+    proof: a hand-made request can fake both headers."""
+    ua = request.headers.get("user-agent", "")
+    if not ua.strip() or _AUTOMATED.search(ua):
+        return "automated client"
+    origin = request.headers.get("origin")
+    if origin and origin not in _allowed_origins():
+        return "foreign origin"
+    return None
+
+
 def _rejection(ev: AnalyticsEvent) -> str | None:
     if ev.event not in FUNNEL_EVENTS:
         return "unknown event"
@@ -64,6 +92,12 @@ def _rejection(ev: AnalyticsEvent) -> str | None:
         return "invalid attribution"
     if size > _MAX_ATTRIBUTION_BYTES:
         return "attribution too large"
+    # Every event carries the visitor's first landing page. Only a page the public site
+    # has can be one: anything else is a scanner that ran the app on /login, /admin...
+    # (rows written before the 404 page existed) or a hand-made request.
+    landing = attribution.get("landing")
+    if landing is not None and (not isinstance(landing, str) or not is_public_page(landing)):
+        return "unknown landing page"
     return None
 
 
@@ -78,14 +112,14 @@ async def post_event(ev: AnalyticsEvent, request: Request):
     """
     if not ev.event.strip():
         return {"recorded": False, "error": "event name is required"}
-    reason = _rejection(ev)
+    reason = _rejection(ev) or _request_rejection(request)
     if reason:
         return {"recorded": False, "error": reason}
     if _limiter.limited(client_key(request)):
         return {"recorded": False, "error": "rate limited"}
     ev.ts = ev.ts or datetime.now(timezone.utc).isoformat()
     try:
-        await record_event(ev)
+        await record_event(ev, user_agent=request.headers.get("user-agent", ""))
     except Exception:
         # Don't leak sink internals (e.g. Sheets error text) to the client —
         # the funnel just needs to know the click wasn't recorded.

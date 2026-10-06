@@ -100,6 +100,9 @@ export type FunnelEvent = (typeof EVENTS)[keyof typeof EVENTS]
 export function track(event: FunnelEvent, props: Record<string, unknown> = {}): void {
   try {
     if (typeof fetch !== 'function') return
+    // A browser driven by automation (Puppeteer, Playwright, Selenium, headless scanners)
+    // says so here. None of them is a prospective customer (security review 2026-10-06).
+    if (typeof navigator !== 'undefined' && navigator.webdriver) return
     void fetch(`${API_BASE}/api/events`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -8,9 +8,13 @@ log = logging.getLogger(__name__)
 
 _EVENTS_TAB = "Events"
 # Channel and Attribution (launch checklist B1) come after the original four columns,
-# so rows written before them still line up.
-_EVENTS_HEADERS = ["Timestamp", "Event", "VisitorId", "Props", "Channel", "Attribution"]
-_EVENTS_RANGE = "A:F"
+# so rows written before them still line up. UserAgent (security review 2026-10-06)
+# comes last for the same reason: it lets the founder spot automated visitors that
+# the router's filter missed.
+_EVENTS_HEADERS = ["Timestamp", "Event", "VisitorId", "Props", "Channel", "Attribution",
+                   "UserAgent"]
+_EVENTS_RANGE = "A:G"
+_MAX_USER_AGENT = 300
 _EVENTS_SHEET_ENV = "INTRINSICA_EVENTS_SHEET_ID"
 
 
@@ -73,11 +77,15 @@ def _clean_channel(value: object) -> str:
     return _CHANNEL_JUNK.sub("", value.lower())[:100]
 
 
-def _to_row(ev: AnalyticsEvent) -> list[str]:
+_CONTROL = re.compile(r"[\x00-\x1f\x7f]+")
+
+
+def _to_row(ev: AnalyticsEvent, user_agent: str = "") -> list[str]:
     attribution = ev.attribution or {}
     channel = attribution.get("channel")
     return [ev.ts or "", ev.event, ev.visitor_id, json.dumps(ev.props or {}),
-            _clean_channel(channel), json.dumps(attribution)]
+            _clean_channel(channel), json.dumps(attribution),
+            _CONTROL.sub(" ", user_agent)[:_MAX_USER_AGENT]]
 
 
 def _ensure_events_sheet(svc, sheet_id: str) -> None:
@@ -112,8 +120,9 @@ def _append_sync(rows: list[list[str]]) -> None:
     ))
 
 
-async def record_event(ev: AnalyticsEvent) -> None:
-    """Queue one event. Flushes automatically once a batch has accumulated.
+async def record_event(ev: AnalyticsEvent, user_agent: str = "") -> None:
+    """Queue one event, with the browser's user agent (read by the router from the
+    request header, never from the client's JSON). Flushes automatically once a batch has accumulated.
 
     Returning normally means the event was accepted and queued — not that it
     was confirmed written to Sheets. flush_events() swallows sink failures and
@@ -121,7 +130,7 @@ async def record_event(ev: AnalyticsEvent) -> None:
     """
     global _oldest
     async with _lock:
-        _queue.append(_to_row(ev))
+        _queue.append(_to_row(ev, user_agent))
         _trim_locked()
         now = _now()
         if _oldest is None:

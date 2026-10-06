@@ -72,6 +72,11 @@ export default function PrivacyPage() {
               address).
             </li>
             <li>
+              <b>Your browser's name and version</b> (its user-agent string, for example
+              "Chrome 152 on Windows"), stored with each event so we can leave automated
+              traffic out of the results.
+            </li>
+            <li>
               <b>Your optional email</b>, only if you type it on the checkout page to hear
               about early access.
             </li>
