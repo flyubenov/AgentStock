@@ -34,7 +34,8 @@ async def require_api_token(request: Request, call_next):
     if request.method == "OPTIONS" or not path.startswith("/api") or path in OPEN_PATHS:
         return await call_next(request)
 
-    expected = os.getenv("API_TOKEN") or None
+    # strip(): secrets created via a shell pipe often carry a trailing newline.
+    expected = (os.getenv("API_TOKEN") or "").strip() or None
     if expected is None:
         if _on_cloud_run():
             return JSONResponse({"error": "Server auth not configured"}, status_code=503)

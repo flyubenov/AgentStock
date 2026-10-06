@@ -97,3 +97,12 @@ def test_docs_disabled_on_cloud_run(monkeypatch):
 def test_docs_enabled_locally(monkeypatch):
     monkeypatch.delenv("K_SERVICE", raising=False)
     assert docs_kwargs() == {}
+
+
+def test_configured_token_ignores_surrounding_whitespace(monkeypatch):
+    # A secret created through a PowerShell pipe ends in "\r\n"; the user types
+    # the bare token, which must still match.
+    monkeypatch.setenv("API_TOKEN", TOKEN + "\r\n")
+    with _rows():
+        resp = client.get("/api/database", headers={"X-Api-Key": TOKEN})
+    assert resp.status_code == 200
