@@ -1,4 +1,4 @@
-import { API_BASE as API } from './api'
+import { apiFetch } from './api'
 
 export type NumRange = { min: number | null; max: number | null }
 
@@ -19,14 +19,14 @@ export interface Watchlist {
 }
 
 export async function fetchWatchlists(): Promise<Watchlist[]> {
-  const res = await fetch(`${API}/api/watchlists`)
+  const res = await apiFetch(`/api/watchlists`)
   const data = await res.json()
   if (data.error) throw new Error(data.error)
   return (data.results ?? []) as Watchlist[]
 }
 
 export async function saveWatchlist(name: string, filter: SerializedFilters): Promise<void> {
-  const res = await fetch(`${API}/api/watchlists/${encodeURIComponent(name)}`, {
+  const res = await apiFetch(`/api/watchlists/${encodeURIComponent(name)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ filter }),
@@ -36,7 +36,7 @@ export async function saveWatchlist(name: string, filter: SerializedFilters): Pr
 }
 
 export async function deleteWatchlist(name: string): Promise<void> {
-  const res = await fetch(`${API}/api/watchlists/${encodeURIComponent(name)}`, {
+  const res = await apiFetch(`/api/watchlists/${encodeURIComponent(name)}`, {
     method: 'DELETE',
   })
   const data = await res.json()

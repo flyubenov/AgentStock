@@ -11,7 +11,7 @@ interface StreamState {
   tickerStatuses: Record<string, 'queued' | 'running' | 'done' | 'failed'>
 }
 
-import { API_BASE as API } from '../lib/api'
+import { apiFetch, streamUrl } from '../lib/api'
 
 export function useAnalysisStream(jobId: string | null) {
   const [state, setState] = useState<StreamState>({
@@ -27,7 +27,7 @@ export function useAnalysisStream(jobId: string | null) {
 
   useEffect(() => {
     if (!jobId) return
-    const es = new EventSource(`${API}/api/stream/${jobId}`)
+    const es = new EventSource(streamUrl(`/api/stream/${jobId}`))
     esRef.current = es
 
     es.addEventListener('ticker_done', (e) => {
@@ -68,7 +68,7 @@ export function useAnalysisStream(jobId: string | null) {
 
   const cancel = async () => {
     if (!jobId) return
-    await fetch(`${API}/api/cancel/${jobId}`, { method: 'POST' })
+    await apiFetch(`/api/cancel/${jobId}`, { method: 'POST' })
     esRef.current?.close()
   }
 

@@ -6,7 +6,7 @@ import FairValuePanel from '../components/FairValuePanel'
 import ScreenerPanel from '../components/ScreenerPanel'
 import RiskRewardPanel from '../components/RiskRewardPanel'
 
-import { API_BASE as API } from '../lib/api'
+import { apiFetch } from '../lib/api'
 
 export default function TickerDetail() {
   const location = useLocation()
@@ -18,13 +18,13 @@ export default function TickerDetail() {
 
   useEffect(() => {
     if (tab === 'screener' && !screener && result?.ticker) {
-      fetch(`${API}/api/screener/${result.ticker}`)
+      apiFetch(`/api/screener/${result.ticker}`)
         .then(r => r.json())
         .then(d => { if (!d.error) setScreener(d as ScreenerResult) })
         .catch(() => {})
     }
     if (tab === 'risk_reward' && !riskReward && result?.ticker) {
-      fetch(`${API}/api/risk-reward/${result.ticker}`)
+      apiFetch(`/api/risk-reward/${result.ticker}`)
         .then(r => r.json())
         .then(d => { if (!d.error) setRiskReward(d as RiskRewardResult) })
         .catch(() => {})

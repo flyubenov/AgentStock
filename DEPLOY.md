@@ -38,6 +38,7 @@ This repo ships configs for three hosting paths so you can compare them:
 | `GOOGLE_SHEETS_CREDS_JSON` | cloud | The **entire** service-account JSON, as one env value |
 | `GOOGLE_SHEETS_CREDS_PATH` | local only | Path to the key file (default `./credentials/service_account.json`); ignored when `GOOGLE_SHEETS_CREDS_JSON` is set |
 | `CORS_ORIGINS` | cloud | Comma-separated allowed frontend origin(s), e.g. `https://your-frontend.vercel.app` |
+| `API_TOKEN` | cloud | Shared secret every `/api` call must send (`X-Api-Key` header, or `?token=` for the SSE stream); `/api/health` stays open. Bind it from Secret Manager: `--set-secrets API_TOKEN=agent-stock-api-token:latest`. Unset locally → API open; unset on Cloud Run → every `/api` call returns 503 (fails closed). The frontend asks for it once per device and keeps it in localStorage. |
 
 ### Environment variable the frontend reads (build time)
 

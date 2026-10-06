@@ -7,7 +7,7 @@ import { fvGapColor, qualityScoreColor, moatScoreColor, riskRewardColor, riskRew
 import { fetchWatchlists, saveWatchlist, deleteWatchlist } from '../lib/watchlists'
 import type { Watchlist, SerializedFilters } from '../lib/watchlists'
 
-import { API_BASE as API } from '../lib/api'
+import { apiFetch } from '../lib/api'
 
 type SortKey = 'quality' | 'moat' | 'fair_value' | 'price_vs_fair_value_pct' | 'risk_reward'
 
@@ -350,7 +350,7 @@ export default function Database() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`${API}/api/database`)
+      const res = await apiFetch(`/api/database`)
       const data = await res.json()
       if (data.error) setError(data.error)
       else setResults(data.results)
@@ -367,7 +367,7 @@ export default function Database() {
   const recalcOne = async (ticker: string) => {
     setBusy(ticker)
     try {
-      await fetch(`${API}/api/ticker/${ticker}/recalculate`, { method: 'POST' })
+      await apiFetch(`/api/ticker/${ticker}/recalculate`, { method: 'POST' })
       await load()
     } catch {
       setError(`Failed to recalculate ${ticker}. Is the backend running?`)
@@ -381,7 +381,7 @@ export default function Database() {
     if (!confirm(`Delete ${label} from the database?\n\nIts Fair Value and Screener records are removed permanently and it will no longer be recalculated.`)) return
     setBusy(ticker)
     try {
-      const res = await fetch(`${API}/api/database/${ticker}`, { method: 'DELETE' })
+      const res = await apiFetch(`/api/database/${ticker}`, { method: 'DELETE' })
       const data = await res.json()
       if (data.error) setError(data.error)
       else setResults(prev => prev.filter(r => r.ticker !== ticker))
@@ -400,7 +400,7 @@ export default function Database() {
     setRecalcAll(true)
     try {
       const scoped = anyActive ? { tickers: sorted.map(r => r.ticker) } : null
-      const res = await fetch(`${API}/api/recalculate-all`, {
+      const res = await apiFetch(`/api/recalculate-all`, {
         method: 'POST',
         ...(scoped
           ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(scoped) }
